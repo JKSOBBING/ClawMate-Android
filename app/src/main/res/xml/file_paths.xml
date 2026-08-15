@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths for the .mobi-profile share/import flow.
+     Profile files are held in app-private external use to be shared to other
+     apps, or received into the app cache. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="shared_profiles" path="profile-share/" />
+    <cache-path name="inbox" path="profile-inbox/" />
+</paths>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mirrors the HarmonyOS network_config.json (base-config cleartextTrafficPermitted: true).
+
+  Local dev/networking in the HarmonyOS source uses plain HTTP for the model
+  download server and the PC HDC bridge (e.g. http://<lan-ip>:9124).
+  To preserve those flows on Android we allow cleartext for the debug variant.
+  RELEASE BUILDS: restrict this file to HTTPS endpoints only before shipping.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Back-up rules modeled on the HarmonyOS backup_config.json (allowBackup/restore).
+     Chat sessions and gallery analysis data should be backed up; model binaries are
+     re-downloadable and excluded. -->
+<full-backup-content>
+    <exclude domain="file" path="." />
+</full-backup-content>

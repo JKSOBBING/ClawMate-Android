@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClawMate</string>
+    <string name="main_tab_home">首页</string>
+    <string name="main_tab_summary">汇总</string>
+    <string name="main_tab_chat">聊天</string>
+    <string name="main_tab_task">任务</string>
+    <string name="main_tab_settings">设置</string>
+    <string name="profile_share_title">导入个人画像</string>
+    <string name="profile_share_message">正在导入 ClawMate 个人画像文件…</string>
+</resources>

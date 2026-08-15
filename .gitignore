@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+**/build/
+# Local configuration override (local.properties).
+local.properties
+
+# Android Studio / IDE
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+output-metadata.json
+
+# Kotlin
+.kotlin/
+
+# Local endpoint/credential config (see app/src/main/res/raw/config.example.properties).
+**/res/raw/local_config.properties
+
+# Secrets / signing keys / keystores — never commit.
+*.jks
+*.keystore
+*.p12
+signing/
+
+# OS / editor
+.DS_Store
+*.swp
