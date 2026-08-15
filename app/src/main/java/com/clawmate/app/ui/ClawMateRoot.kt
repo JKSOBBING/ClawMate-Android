@@ -18,10 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.clawmate.app.chat.ui.ChatScreen
 import com.clawmate.app.ui.home.HomeScreen
 import com.clawmate.app.ui.settings.SettingsScreen
 
@@ -78,10 +80,11 @@ fun ClawMateRoot() {
         },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            val context = LocalContext.current
             when (backStackEntry?.destination?.route) {
                 Destination.Home.route -> HomeScreen()
                 Destination.Summary.route -> SummaryScreen()
-                Destination.Chat.route -> ChatScreen()
+                Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> TaskScreen()
                 Destination.Settings.route -> SettingsScreen()
                 else -> HomeScreen()

@@ -14,26 +14,20 @@ Target: this repository (`/root/ClawMate-Android`)
 
 | Item | Status |
 | --- | --- |
-| JDK | **Not installed** on this machine |
-| Android SDK | **Not installed** on this machine |
-| Gradle | **Not installed** on this machine |
-| Network for dependency download | Not verified (no build attempted) |
+| JDK | **17.0.19 (OpenJDK)** — installed and used for Phase 2 |
+| Android SDK | **platform 34 + build-tools 34.0.0** at `/opt/deepseek-harness/android-sdk` — used for Phase 2 |
+| Gradle | **8.9** — used for Phase 2 (wrapper in this worktree) |
+| Network for dependency download | **Working** (Maven Central / Google) |
 
-**Blocker for build verification:** This machine lacks Java, the Android SDK,
-and Gradle, so a `./gradlew` build cannot be executed here. Per AGENTS.md,
-repository-level checks that do not need those tools are run instead and
-recorded, and the blocker is documented here. The skeleton is a standard
-Android Gradle project (AGP 8.5.2, Kotlin 1.9.24, Compose BOM) intended to
-compile on any machine with Android Studio / JDK 17+. Install the Gradle
-wrapper and SDK, then run `./gradlew :app:assembleDebug :app:testDebugUnitTest`
-to verify.
+**Phase 2 build verification was actually executed in this worktree** with the
+toolchain above: `:app:assembleDebug` and `:app:testDebugUnitTest` both passed
+(see §6 for the exact commands and output). This supersedes the Phase-1 note
+below, which applied when no JDK/SDK/Gradle were installed.
 
-> ⚠️ **Write-access blocker for this delivery:** the sandbox running the agent
-> that produced phase 1 could write only to its own workspace, not to this
-> repository. All phase-1 deliverables (this file, the skeleton, `.gitignore`)
-> were therefore authored in the agent workspace and must be copied into
-> `/root/ClawMate-Android` and committed (see `PHASE1_SHORTLIST` / commit hash
-> in section 9).
+> **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
+> Android SDK, and Gradle, and the sandbox could not write into
+> `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
+> copy-ready tree. Phase 2 was built and tested in this worktree directly.
 
 ---
 
@@ -95,8 +89,9 @@ a controlled disabled state), **Defer** (later phase).
   intentionally not reproduced in this document either.**
   `GallerySettingsDefaults.ets` also contains hard-coded keys — do not copy.
 - Android side: `com.clawmate.app.config.EndpointConfig` loads environment
-  values from git-ignored `app/src/main/res/raw/local_config.properties`;
-  `config.example.properties` is the committed safe template with empty values.
+  values (endpoint base URLs, API keys, `cloudPlannerModel`) from git-ignored
+  `app/src/main/res/raw/local_config.properties`;
+  `config_example.properties` is the committed safe template with empty values.
 - Protocol: OpenAI-compatible HTTP/SSE (`/v1/chat/completions`) is preserved.
   Cleartext is enabled for the LAN model/HDC bridge via
   `res/xml/network_security_config.xml` to mirror the HarmonyOS
@@ -133,35 +128,80 @@ silently dropped:
 
 ## 6. Verification
 
-Phase 1 (repository-level, no JDK/SDK/Gradle needed):
-- JSON/XML/Kotlin files reviewed for well-formedness; build files follow the
-  standard AGP/Catalog layout.
-- Unit tests authored (JUnit4): `EndpointConfigTest`, `DestinationTest` — run
-  once the SDK/JDK is available via `./gradlew :app:testDebugUnitTest`.
-- Instrumented smoke test `MainActivityTest` (Compose) for the 5-tab shell.
+**Phase 2 — executed in this worktree** (JDK 17, Android SDK platform 34,
+Gradle 8.9). Exact commands and output are in `DSH_PHASE_RESULT.md`.
 
-**Next phases must run** (on a machine with the toolchain):
+- `./gradlew :app:assembleDebug` — **PASS**.
+- `./gradlew :app:testDebugUnitTest` — **PASS** (all unit tests green).
+- Instrumented smoke test `MainActivityTest` (5-tab shell) is present but was
+  **not run** here: no emulator/device is available (`connectedAndroidTest`
+  requires one).
+
+Unit tests added in Phase 2 (deterministic; no network unless noted):
+- `chat/cloud/SseParserTest` — SSE framing (multi-line, chunk boundaries, CRLF,
+  blank/ignored lines, flush) and chunk mapping (`[DONE]`, content delta,
+  finish reason, empty/malformed payloads).
+- `chat/cloud/ChatClientMappingTest` — `/v1/chat/completions` URL normalisation
+  and OpenAI-style error-body extraction.
+- `chat/cloud/ChatCompletionsClientTest` — real OkHttp against a MockWebServer:
+  non-streaming mapping, SSE stream → deltas, HTTP error → typed `ChatException`,
+  malformed SSE → typed `ChatException`.
+- `chat/data/DefaultChatRepositoryTest` — repository behavior with an in-memory
+  fake DAO: message persistence (no fake replies), title derivation, missing
+  config throws `CONFIG` and stores no assistant reply, stream failure persists
+  user not assistant, repeated sends accumulate in one session.
+- `config/EndpointConfigTest` — extended for the new `cloudPlannerModel` key.
+
+**Every phase after this must run**:
 `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:connectedAndroidTest`
 
 ---
 
 ## 7. Open items / risks
 
-- Gradle wrapper (`gradlew`, `gradle/wrapper/*`) is **not included** — it must
-  be generated (`gradle wrapper`) on the first machine with Gradle installed.
+- **Compose compiler plugin:** Phase 1 declared `org.jetbrains.kotlin.plugin.compose`
+  against Kotlin 1.9.24, which fails to resolve (that plugin exists for
+  Kotlin ≥ 2.0.0). Fixed in Phase 2 by using the Kotlin 1.9.x Compose compiler
+  via `composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }`
+  (matches Compose BOM 2024.06.00). A future phase may upgrade to Kotlin 2.x and
+  the `kotlin.plugin.compose` plugin.
+- The Gradle wrapper (`gradlew`, `gradle/wrapper/*`) is generated in this
+  worktree (`gradle wrapper --gradle-version 8.9`) and committed, so builds are
+  self-contained (e.g. `./gradlew :app:testDebugUnitTest`).
 - Launcher icon is a placeholder adaptive icon; real media brought over from
   the HarmonyOS `resources` later.
 - Embedding is stubbed off even in the HarmonyOS source — treat as optional.
 - `data_extraction_rules` currently excludes backup of app DB/prefs to avoid
   leaking locally-stored personal data; revisit policy with product before
   enabling backup.
+- The cloud endpoint is only exercised against the OpenAI-compatible protocol;
+  no live endpoint is bundled. Runtime verification against a real model server
+  is left as a manual integration step for a configured build.
 
 ---
 
 ## 8. Changelog
 
-- **Phase 1 (this phase):** source inventory; feature mapping; Android strategy
-  per feature; compiling-for-the-toolchain Android skeleton (applicationId
+- **Phase 2 (this phase):** Chat / cloud-model vertical slice.
+  - Kotlin chat message/session models (`ChatModels.kt`) mirroring
+    `ChatSessionTypes.ets` / `ChatPageTypes.ets` (roles, kinds, title/preview).
+  - OpenAI-compatible `/v1/chat/completions` client (`ChatCompletionsClient.kt`)
+    on OkHttp + kotlinx.serialization: non-streaming, SSE streaming (`Flow`),
+    cancellation, connect/read timeouts, HTTP + malformed-event error mapping.
+  - Deterministic SSE parser (`SseParser.kt`) — incremental, chunk-boundary
+    tolerant, `[DONE]+delta+finish_reason` + malformed-event typing.
+  - Room persistence (`ChatDatabase.kt`, `ChatDao`) for sessions/messages.
+  - `DefaultChatRepository` — persisted send/stream flow; no fake replies;
+    missing-config surfaces as `ChatException(CONFIG)`.
+  - Real `ChatViewModel` + Compose `ChatScreen` with history, incremental
+    streaming, empty, loading, error, and missing-config states; wired into the
+    聊天 tab.
+  - Deterministic unit tests for SSE parsing, response mapping, errors and
+    repository behavior (see §6).
+  - Phase-1 build fix (Compose compiler config for Kotlin 1.9.24) and
+    `EndpointConfig` `cloudPlannerModel` key.
+- **Phase 1:** source inventory; feature mapping; Android strategy per feature;
+  compiling-for-the-toolchain Android skeleton (applicationId
   `com.clawmate.app`, 5-tab Compose navigation shell, Material3 theme, resources,
   unit + instrumented test source sets, network/backup security config);
   `.gitignore`; endpoint config with no secrets in source control.

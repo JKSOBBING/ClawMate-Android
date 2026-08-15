@@ -24,12 +24,19 @@ class ClawMateApplication : Application() {
      * Load environment-specific endpoints/keys from the git-ignored
      * `raw/local_config.properties` when present. Safe empty defaults
      * otherwise. See config/EndpointConfig.kt.
+     *
+     * `resources.getIdentifier(...)` is used (rather than a compile-time
+     * `R.raw.local_config_properties`) so the app builds even when the
+     * git-ignored override file is absent.
      */
     private fun loadEndpointConfig() {
         val props = Properties()
-        runCatching {
-            val input = resources.openRawResource(R.raw.local_config_properties)
-            input.use { props.load(it) }
+        val id = resources.getIdentifier("local_config_properties", "raw", packageName)
+        if (id != 0) {
+            runCatching {
+                val input = resources.openRawResource(id)
+                input.use { props.load(it) }
+            }
         }
         EndpointConfig.load(props)
     }

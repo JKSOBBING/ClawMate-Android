@@ -1,0 +1,171 @@
+package com.clawmate.app.chat.ui
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.clawmate.app.chat.cloud.ChatErrorKind
+import com.clawmate.app.chat.cloud.ChatException
+import com.clawmate.app.chat.model.ChatMessage
+import com.clawmate.app.chat.model.ChatMessageKind
+import com.clawmate.app.chat.model.ChatMessageRole
+import com.clawmate.app.chat.data.ChatRepository
+import com.clawmate.app.chat.data.ChatSendEvent
+import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/** UI state for the chat screen. */
+data class ChatUiState(
+    val sessionId: String = "",
+    val title: String = "",
+    val messages: List<ChatMessage> = emptyList(),
+    val inputText: String = "",
+    val isSending: Boolean = false,
+    val isConfigured: Boolean = true,
+    val error: String? = null,          // user-facing error banner text when send fails
+)
+
+/**
+ * ViewModel for a single chat session. Owns the active session, message list,
+ * input text, and the sending coroutine. Receives incremental assistant deltas
+ * from [ChatRepository.sendMessage] and reflects them live in [state].
+ *
+ * Missing-config and error states are surfaced via [ChatUiState.isConfigured] /
+ * [ChatUiState.error] so the screen can render the right controls (per AGENTS.md,
+ * "do not silently drop" — a missing cloud endpoint is shown, not faked).
+ */
+class ChatViewModel(
+    private val repository: ChatRepository,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(ChatUiState())
+    val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private var sendingJob: kotlinx.coroutines.Job? = null
+
+    /** Active session id; a session is created lazily on first send/persist. */
+    val sessionId: String get() = _state.value.sessionId
+
+    init {
+        load()
+    }
+
+    /** Loads session history and marks whether the cloud model is configured. */
+    fun load() {
+        viewModelScope.launch {
+            val configured = com.clawmate.app.chat.cloud.ChatServerConfig
+                .isConfigured(com.clawmate.app.config.EndpointConfig.cloudPlannerBaseUrl)
+            _state.update { it.copy(isConfigured = configured) }
+
+            val sessions = runCatching { repository.sessions() }.getOrDefault(emptyList())
+            val active = sessions.firstOrNull()
+            if (active != null) {
+                _state.update { it.copy(sessionId = active.id, title = active.displayTitle, messages = active.messages) }
+            }
+        }
+    }
+
+    fun onInputChange(text: String) {
+        _state.update { it.copy(inputText = text) }
+    }
+
+    /**
+     * Sends the current input through [ChatRepository.sendMessage], streaming
+     * the assistant reply into [ChatUiState.messages] as it arrives.
+     */
+    fun send() {
+        val text = _state.value.inputText.trim()
+        if (text.isEmpty() || _state.value.isSending) return
+
+        sendingJob?.cancel()
+        sendingJob = viewModelScope.launch {
+            _state.update { it.copy(isSending = true, error = null) }
+            val sessionId = repository.ensureActiveSession()
+            try {
+                repository.sendMessage(text).collect { event ->
+                    when (event) {
+                        is ChatSendEvent.UserMessageAccepted -> {
+                            _state.update {
+                                it.copy(
+                                    sessionId = sessionId,
+                                    messages = it.messages + event.message,
+                                    inputText = "",
+                                    isConfigured = true,
+                                )
+                            }
+                        }
+                        is ChatSendEvent.AssistantDelta -> {
+                            _state.update { current ->
+                                val streaming = current.messages
+                                    .toMutableList()
+                                    .also { list ->
+                                        val last = list.lastOrNull()
+                                        if (last != null && last.isStreaming && last.role == ChatMessageRole.ASSISTANT) {
+                                            val merged = last.copy(
+                                                content = last.content + event.delta,
+                                                streamingVersion = last.streamingVersion + 1,
+                                            )
+                                            list[list.size - 1] = merged
+                                        } else {
+                                            list += ChatMessage(
+                                                id = "msg-" + UUID.randomUUID(),
+                                                role = ChatMessageRole.ASSISTANT,
+                                                kind = ChatMessageKind.CHAT,
+                                                content = event.delta,
+                                                trace = emptyList(),
+                                                collapsed = false,
+                                                createdAt = System.currentTimeMillis(),
+                                                streamingVersion = 1,
+                                            )
+                                        }
+                                    }
+                                current.copy(messages = streaming)
+                            }
+                        }
+                        is ChatSendEvent.Completed -> {
+                            _state.update { current ->
+                                val finalized = current.messages
+                                    .toMutableList()
+                                    .also { list ->
+                                        val idx = list.indexOfLast { it.isStreaming && it.role == ChatMessageRole.ASSISTANT }
+                                        if (idx >= 0) {
+                                            list[idx] = list[idx].copy(streamingVersion = 0)
+                                        }
+                                    }
+                                current.copy(messages = finalized, isSending = false)
+                            }
+                        }
+                    }
+                }
+            } catch (e: ChatException) {
+                // Roll back the tentative assistant bubble (if any) and show the error.
+                _state.update { current ->
+                    current.copy(
+                        isSending = false,
+                        isConfigured = current.isConfigured && e.kind != ChatErrorKind.CONFIG,
+                        error = e.userMessage,
+                        messages = current.messages.filterNot {
+                            it.isStreaming && it.role == ChatMessageRole.ASSISTANT
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(isSending = false, error = "发送失败：${e.message ?: "未知错误"}")
+                }
+            }
+        }
+    }
+
+    /** Cancels an in-flight send. */
+    fun cancelSend() {
+        sendingJob?.cancel()
+        _state.update { it.copy(isSending = false) }
+    }
+
+    fun clearError() {
+        _state.update { it.copy(error = null) }
+    }
+}

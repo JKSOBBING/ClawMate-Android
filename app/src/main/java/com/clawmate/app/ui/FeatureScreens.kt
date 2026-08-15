@@ -31,24 +31,6 @@ fun SummaryScreen(modifier: Modifier = Modifier) {
 }
 
 /**
- * Chat tab placeholder (Phase 1).
- * Maps to the HarmonyOS 聊天 tab. Streaming/agent-loop buildout is a later
- * phase (see MIGRATION_STATUS.md -> Chat & Agent Loop).
- */
-@Composable
-fun ChatScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-    ) {
-        Text("聊天", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "Chat / agent loop — phase 2",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-}
-
-/**
  * Task / workflow tab placeholder (Phase 1).
  * Maps to the HarmonyOS 任务 tab backed by the WorkflowRunner.
  *

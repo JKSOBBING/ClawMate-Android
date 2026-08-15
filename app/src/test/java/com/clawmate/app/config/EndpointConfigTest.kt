@@ -19,6 +19,7 @@ class EndpointConfigTest {
 
         assertTrue(EndpointConfig.cloudPlannerBaseUrl.isEmpty())
         assertTrue(EndpointConfig.cloudPlannerApiKey.isEmpty())
+        assertTrue(EndpointConfig.cloudPlannerModel.isEmpty())
         assertTrue(EndpointConfig.cloudDeciderBaseUrl.isEmpty())
         assertTrue(EndpointConfig.cloudDeciderApiKey.isEmpty())
     }
@@ -28,6 +29,7 @@ class EndpointConfigTest {
         val props = Properties()
         props.setProperty("cloudPlannerBaseUrl", "  https://planner.example.com  ")
         props.setProperty("cloudPlannerApiKey", "  key-123  ")
+        props.setProperty("cloudPlannerModel", "  qwen-max  ")
         props.setProperty("cloudDeciderBaseUrl", "https://decider.example.com")
         props.setProperty("cloudDeciderApiKey", "key-456")
 
@@ -35,6 +37,7 @@ class EndpointConfigTest {
 
         assertEquals("https://planner.example.com", EndpointConfig.cloudPlannerBaseUrl)
         assertEquals("key-123", EndpointConfig.cloudPlannerApiKey)
+        assertEquals("qwen-max", EndpointConfig.cloudPlannerModel)
         assertEquals("https://decider.example.com", EndpointConfig.cloudDeciderBaseUrl)
         assertEquals("key-456", EndpointConfig.cloudDeciderApiKey)
     }
