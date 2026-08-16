@@ -1,8 +1,8 @@
-# Phase 23 result: real serial opt-in Android boundary for Harmony GalleryAutoScanner/GalleryMemorySync/background gallery behaviour; typed NOT_CONFIGURED/BLOCKED/READY/RUNNING/SUCCESS/PARTIAL/ERROR states; explicit user setting + runtime media permission gate; bounded/cancellable/idempotent coordinator; cloud memory-sync calls ONLY the explicitly configured GalleryCloudAdapter and never sends when unconfigured; Photo Picker + local insights preserved; Settings control/status; BUILD SUCCESSFUL; 644 tests, 0 failures, 0 errors.
+# Phase 23 result: real serial opt-in Android boundary for Harmony GalleryAutoScanner/GalleryMemorySync/background gallery behaviour; typed NOT_CONFIGURED/BLOCKED/READY/RUNNING/SUCCESS/PARTIAL/ERROR states; explicit user setting + runtime media permission gate; bounded/cancellable/idempotent coordinator; cloud memory-sync calls ONLY the explicitly configured GalleryCloudAdapter and never sends when unconfigured; Photo Picker + local insights preserved; Settings control/status; production fix: MediaStoreGalleryMediaSource builds a valid content URI from the row _ID without requiring the scoped-storage-omittable filesystem DATA column; BUILD SUCCESSFUL; 649 tests, 0 failures, 0 errors.
 
 ---
 
-# DSH_PHASE_RESULT — ClawMate Android, Phase 23 (serial opt-in Gallery background scan/sync coordinator)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 23 (serial opt-in Gallery background scan/sync coordinator + scoped-storage-safe MediaStore content-URI fix)
 
 ## Worktree
 
@@ -25,13 +25,13 @@
 
 This session delivered a clean phase worktree at target HEAD `1b482c4` (Phase 22). The
 Phase-23 changes are committed in this delivery worktree at commit
-**4ff3bd7** (branch `phase23-gallery-background`) on top of `1b482c4`. To keep a clean
+**2578897** (branch `phase23-gallery-background`) on top of `1b482c4`. To keep a clean
 commit without writing to the target's own `.git` (sandbox-denied, the same class of
 blocker documented for Phases 12/22), this worktree is a **standalone repo** rooted at
 `/opt/deepseek-harness/clawmate-phase23-gallery-background` whose parent is the target
 Phase-22 commit `1b482c4` and which alternates to the target's object store
 (`/root/ClawMate-Android/.git/objects`). To integrate onto the target, re-create the
-worktree and cherry-pick `4ff3bd7` (or use this worktree's branch). The Phase-23 diff is
+worktree and cherry-pick `2578897` (or use this worktree's branch). The Phase-23 diff is
 exactly the files listed below.
 
 ## Scope delivered (Phase 23)
@@ -86,15 +86,16 @@ ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
     --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Result: **BUILD SUCCESSFUL** (exit code `0`).
-- `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk` including the new
+Final result (with the production URI fix applied): **BUILD SUCCESSFUL** (exit code `0`).
+- `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk` including the fixed
   `gallery/background/` slice plus all prior Phase 1–22 code.
-- `:app:testDebugUnitTest` ran fresh in this worktree: **644 tests, 0 failures, 0 errors**
-  (623 prior phases + **21 new Phase-23 tests**: `GalleryBackgroundCoordinatorTest` 13,
-  `GallerySyncPolicyTest` 7, `SettingsCodecTest` +1 opt-in round-trip).
+- `:app:testDebugUnitTest` ran fresh in this worktree: **649 tests, 0 failures, 0 errors**
+  (623 prior phases + **21 Phase-23 tests** from the original delivery — `GalleryBackgroundCoordinatorTest` 13,
+  `GallerySyncPolicyTest` 7, `SettingsCodecTest` +1 opt-in round-trip — + **5 `MediaStoreUriBuilderTest`**
+  device-free tests added for the fix).
 
 Evidence: aggregated from `app/build/test-results/testDebugUnitTest/*.xml`
-(`tests=644 failures=0 errors=0`).
+(`tests=649 failures=0 errors=0`).
 
 ## Files changed (Phase 23)
 
@@ -107,8 +108,9 @@ New:
 - `app/src/main/java/com/clawmate/app/gallery/background/AndroidGalleryMediaBoundary.kt`
 - `app/src/test/java/com/clawmate/app/gallery/background/GalleryBackgroundCoordinatorTest.kt`
 - `app/src/test/java/com/clawmate/app/gallery/background/GallerySyncPolicyTest.kt`
+- `app/src/test/java/com/clawmate/app/gallery/background/MediaStoreUriBuilderTest.kt`
 
-Modified:
+Modified (this production fix):
 - `app/src/main/AndroidManifest.xml` (declares READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE as the grant prerequisite only)
 - `app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt` (+ galleryBackgroundSyncEnabled)
 - `app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt` (+ GALLERY_BACKGROUND_SYNC_ENABLED)
@@ -134,6 +136,30 @@ Docs (this phase): `README.md`, `MIGRATION_STATUS.md` (row D3 + Phase 23 section
 - `SettingsCodecTest` (1 new): `gallery_background_sync_enabled` round-trips and defaults
   false; corrupt value degrades to off.
 
+## Production bug fix (delivery review): scoped-storage-safe content-URI construction
+
+**Bug:** `MediaStoreGalleryMediaSource.scanNewest` projected `MediaStore.Images.Media.DATA` and
+`?: continue`d any row whose filesystem path was null. On modern Android scoped storage the
+`DATA` path is frequently **omitted/null** for a valid image, so a completely usable row was
+silently skipped and its content URI never surfaced. It also referenced `dateCol` (not `dataCol`)
+in the DATA check, so the guard was wrong as well.
+
+**Fix (in this worktree, committed as described below):**
+- The query no longer requests `MediaStore.Images.Media.DATA` at all. The projection is now only
+  `_ID` + `DATE_ADDED`.
+- Every row yields a content URI purely from its `_ID` via a new pure, device-free helper
+  `MediaStoreUriBuilder.contentUriFor(baseUri, id)` (`content://media/external/images/media/<id>`),
+  with defensive blank/blank-base and non-numeric-id guards (returns `""`, which the source skips,
+  instead of fabricating a URI). No filesystem `DATA` path is read, written, or relied upon.
+- Defensive column handling is kept: `_ID` via `getColumnIndexOrThrow`, `DATE_ADDED` via a
+  `getColumnIndex` check that falls back to epoch-0 (empty date string) when absent.
+- Permission gate and bounded-scan behaviour (`limit <= 0` short-circuit, no-scan-without-grant,
+  stop-at-limit) are unchanged and preserved.
+
+**Device-free coverage:** `MediaStoreUriBuilderTest` (5 tests) asserts the _ID-only URI is derived
+correctly, trailing-slash robustness on the base, and the defensive refusals (blank id, blank base,
+non-numeric / traversal-like ids).
+
 ## Known gaps / platform blockers
 
 - The Harmony periodic full-library auto-run loop is intentionally exposed as an
@@ -146,9 +172,11 @@ Docs (this phase): `README.md`, `MIGRATION_STATUS.md` (row D3 + Phase 23 section
 ## Git log (actual)
 
 ```
-4ff3bd7 Phase 23 add serial opt-in Gallery background scan/sync coordinator (D3)
+ed6327b fix(phase23): MediaStoreGalleryMediaSource builds content URI from _ID without requiring DATA
+2578897 Phase 23 add serial opt-in Gallery background scan/sync coordinator (D3)
 ```
 
-The clean Phase-23 delivery commit in this worktree is **4ff3bd7** (branch
-`phase23-gallery-background`, parent `1b482c4` = Phase 22). No fabricated success, no
-network/cloud calls during tests, no media scan/copy during the build, no servers/emulators.
+The clean Phase-23 delivery commit is **2578897** (branch `phase23-gallery-background`, parent
+`1b482c4` = Phase 22). The delivery-review **production fix** is the second commit (hash recorded
+at commit time above). No fabricated success, no network/cloud calls during tests, no media
+scan/copy during the build, no servers/emulators.

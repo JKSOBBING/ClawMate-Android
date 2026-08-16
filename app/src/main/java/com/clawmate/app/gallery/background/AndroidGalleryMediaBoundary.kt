@@ -63,11 +63,15 @@ class MediaStoreGalleryMediaSource(
     override suspend fun scanNewest(limit: Int): List<GalleryPhotoInput> {
         if (limit <= 0) return emptyList()
         if (!permission.isPhotoAccessGranted()) return emptyList()
+        // Do NOT project MediaStore.Images.Media.DATA: modern SDKs' scoped
+        // storage may omit the filesystem path for a row, and the content URI is
+        // always derivable from the row _ID alone. Each column is read
+        // defensively (optional/absent columns fall back to a safe default).
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DATA,
             MediaStore.Images.Media.DATE_ADDED,
         )
+        val baseUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI.toString()
         val out = ArrayList<GalleryPhotoInput>()
         val resolver = context.contentResolver
         runCatching {
@@ -79,21 +83,13 @@ class MediaStoreGalleryMediaSource(
                 "${MediaStore.Images.Media.DATE_ADDED} DESC",
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                val dataCol = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
                 val dateCol = cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
                 while (out.size < limit && cursor.moveToNext()) {
-                    val id = if (cursor.isNull(idCol)) "" else cursor.getString(idCol)
-                    val data = if (dateCol >= 0 && !cursor.isNull(dataCol)) cursor.getString(dataCol) else null
+                    val id = if (!cursor.isNull(idCol)) cursor.getString(idCol) else null
                         ?: continue
+                    val uri = MediaStoreUriBuilder.contentUriFor(baseUri, id)
+                    if (uri.isEmpty()) continue
                     val dateAdded = if (dateCol >= 0 && !cursor.isNull(dateCol)) cursor.getLong(dateCol) else 0L
-                    val uri = try {
-                        android.net.Uri.withAppendedPath(
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            id,
-                        ).toString()
-                    } catch (t: Throwable) {
-                        continue
-                    }
                     val date = GalleryAndroidDateFormatter.formatDate(dateAdded)
                     out.add(
                         GalleryPhotoInput(
@@ -108,6 +104,29 @@ class MediaStoreGalleryMediaSource(
             }
         }
         return out
+    }
+}
+
+/**
+ * Pure, device-free content-URI builder so the source stays host-testable.
+ *
+ * Modern scoped storage may omit the filesystem `DATA` path entirely, but every
+ * MediaStore image row still has a stable `_ID`, so a valid
+ * `content://.../media/<id>` URI is always derivable from the id alone. The
+ * builder never reads, writes, or fabricates filesystem paths.
+ */
+internal object MediaStoreUriBuilder {
+    /**
+     * Builds a `content://<base>/<id>` URI string from a base media URI and the
+     * row `_ID`, or returns `""` when the base is blank or the id is not a
+     * plain numeral (defensive: refuse malformed/traversal ids rather than
+     * fabricate a URI).
+     */
+    fun contentUriFor(baseUri: String, id: String): String {
+        val cleanBase = baseUri.trim().removeSuffix("/")
+        val cleanId = id.trim()
+        if (cleanBase.isEmpty() || cleanId.isEmpty() || !cleanId.all { it.isDigit() }) return ""
+        return "$cleanBase/$cleanId"
     }
 }
 
