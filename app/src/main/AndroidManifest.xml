@@ -28,6 +28,20 @@
     -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!--
+        Phase 23 (row D3) — background gallery scan/sync media boundary.
+        Declaring READ_MEDIA_IMAGES (API 33+) / READ_EXTERNAL_STORAGE (API <=32)
+        is the manifest prerequisite so the honest GallerySyncGate can report
+        whether the user has granted the photo/library read permission. Nothing
+        requests or uses these permissions automatically: the Photo Picker
+        least-privilege path stays untouched (per-URI grants, no broad request),
+        and the background coordinator only ever runs from an explicit user
+        action after the gate is READY (opt-in setting AND this grant held).
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <application
         android:name=".ClawMateApplication"
         android:allowBackup="true"

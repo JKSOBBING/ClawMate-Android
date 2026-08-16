@@ -165,6 +165,47 @@ fun DataCollectionSection(state: SettingsUiState, vm: SettingsViewModel) {
     }
 
     SettingsGroupCard(
+        title = "后台图库同步",
+        subtitle = "显式开启的可选后台扫描/同步（Phase 23）：需勾选开启，且 Android 系统授予图库读取权限；不会静默扫描或上传",
+    ) {
+        SettingToggle(
+            "启用后台图库扫描/同步",
+            "显式开启受控扫描（默认关闭；开启还需授予图库读取权限，且只从显式动作触发）",
+            state.draft.galleryBackgroundSyncEnabled,
+            onValueChange = vm::setGalleryBackgroundSyncEnabled,
+        )
+
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val permissionGranted = runCatching {
+            val permission = if (android.os.Build.VERSION.SDK_INT >= 33)
+                android.Manifest.permission.READ_MEDIA_IMAGES
+            else
+                android.Manifest.permission.READ_EXTERNAL_STORAGE
+            androidx.core.content.ContextCompat.checkSelfPermission(context, permission) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+        val gate = com.clawmate.app.gallery.background.GallerySyncGate(
+            optedIn = state.draft.galleryBackgroundSyncEnabled,
+            photoAccessGranted = permissionGranted,
+        )
+        val status = when (gate.status) {
+            com.clawmate.app.gallery.background.GallerySyncGateStatus.NOT_CONFIGURED ->
+                SettingsAction("未启用 — NOT_CONFIGURED", SettingsActionKind.Secondary, enabled = false, onClick = {})
+            com.clawmate.app.gallery.background.GallerySyncGateStatus.BLOCKED ->
+                SettingsAction("需授予图库读取权限 — BLOCKED", SettingsActionKind.Warning, enabled = false, onClick = {})
+            com.clawmate.app.gallery.background.GallerySyncGateStatus.READY ->
+                SettingsAction("已就绪 — READY（仅显式触发）", SettingsActionKind.Success, enabled = false, onClick = {})
+        }
+        SettingsActionRow(actions = listOf(status))
+        Text(
+            "本设置只是边界开关：开启后仍需在系统「应用权限」中授予图库读取权限，且后台协调器只会从显式用户动作串行运行，单次受限批量/时长，可取消且可去重；未经配置的云端适配器不会收任何图库数据，图库 AI 总结/向量仍走既有显式触发路径。Photo Picker 无感最低权限导入不受影响。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+
+    SettingsGroupCard(
         title = "地图服务",
         subtitle = "图片位置解析和分析缩放参数",
     ) {

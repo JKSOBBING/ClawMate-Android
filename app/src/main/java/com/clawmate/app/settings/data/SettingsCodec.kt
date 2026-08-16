@@ -58,6 +58,7 @@ object SettingsCodec {
         out[SettingsKeys.GALLERY_EMBEDDING_API_KEY] = s.galleryEmbeddingApiKey.trim()
         out[SettingsKeys.GALLERY_EMBEDDING_MODEL] = SettingsNormalizers.normalizeModel(s.galleryEmbeddingModel)
         out[SettingsKeys.GALLERY_AI_SUMMARY_ENABLED] = s.galleryAiSummaryEnabled.toString()
+        out[SettingsKeys.GALLERY_BACKGROUND_SYNC_ENABLED] = s.galleryBackgroundSyncEnabled.toString()
         out[SettingsKeys.GALLERY_IMAGE_SCALE] = s.galleryImageScale.toString()
         out[SettingsKeys.GALLERY_AMAP_WEB_KEY] = s.galleryAmapWebKey.trim()
 
@@ -139,6 +140,8 @@ object SettingsCodec {
             galleryEmbeddingModel = SettingsNormalizers.normalizeModel(s(SettingsKeys.GALLERY_EMBEDDING_MODEL)),
             galleryAiSummaryEnabled =
                 SettingsNormalizers.boolean(s(SettingsKeys.GALLERY_AI_SUMMARY_ENABLED), false),
+            galleryBackgroundSyncEnabled =
+                SettingsNormalizers.boolean(s(SettingsKeys.GALLERY_BACKGROUND_SYNC_ENABLED), false),
             galleryImageScale = SettingsNormalizers.normalizedDouble(s(SettingsKeys.GALLERY_IMAGE_SCALE), 0.9, 0.1, 1.0),
             galleryAmapWebKey = s(SettingsKeys.GALLERY_AMAP_WEB_KEY).trim(),
             cloudPlannerBaseUrl = SettingsNormalizers.normalizeUrl(s(SettingsKeys.CLOUD_PLANNER_BASE_URL)),

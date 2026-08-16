@@ -36,6 +36,13 @@ data class AppSettings(
     // (reuses the OpenAI-compatible Planner endpoint/model/key). Off by default;
     // on alone is not sufficient: the planner endpoint must also be configured.
     val galleryAiSummaryEnabled: Boolean = false,
+    // Phase 23 — explicit user opt-in to background gallery scan/sync (row D3).
+    // Off by default. On alone is not sufficient: the Android runtime
+    // photo/media-read permission must also be granted (see the background
+    // GallerySyncGate). Turning this on never starts a scan by itself; the
+    // serial coordinator only runs from an explicit user action and otherwise
+    // reports NOT_CONFIGURED/BLOCKED.
+    val galleryBackgroundSyncEnabled: Boolean = false,
     val galleryImageScale: Double = 0.9,
     val galleryAmapWebKey: String = "",
     // Model & agents — 模型与智能体

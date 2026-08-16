@@ -104,6 +104,24 @@ class SettingsCodecTest {
     }
 
     @Test
+    fun `gallery background sync opt-in round trips and defaults to false`() {
+        // Phase 23 — the background scan/sync opt-in is persisted and decodes
+        // deterministically (off by default; safe).
+        assertFalse(AppSettings.defaults().galleryBackgroundSyncEnabled)
+        val flat = SettingsCodec.encode(AppSettings.defaults().copy(galleryBackgroundSyncEnabled = true))
+        assertEquals("true", flat[SettingsKeys.GALLERY_BACKGROUND_SYNC_ENABLED])
+        assertTrue(SettingsCodec.decode(emptyMap()).galleryBackgroundSyncEnabled ==
+            false && SettingsCodec.decode(flat).galleryBackgroundSyncEnabled)
+
+        // Corrupt value degrades to the safe off default.
+        assertFalse(
+            SettingsCodec.decode(
+                mapOf(SettingsKeys.GALLERY_BACKGROUND_SYNC_ENABLED to "not-a-bool"),
+            ).galleryBackgroundSyncEnabled,
+        )
+    }
+
+    @Test
     fun `decode degrades corrupt values instead of throwing`() {
         val corrupt: Map<String, String> = SettingsKeys.ALL_KEYS.associateWith { "not-a-number-or-bool" } +
             mapOf(

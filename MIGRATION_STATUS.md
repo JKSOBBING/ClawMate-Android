@@ -1160,7 +1160,7 @@ Legend — **Status**:
 | C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
 | D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Config gate (Phase 21) | **Done (configurable)** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent → honest **UNSUPPORTED**. **Phase 21** adds a config-driven remote-embedding client (`gallery/cloud/GalleryEmbeddingClient.kt`, port of `CloudModelClient.createEmbedding`/`normalizeEmbeddingUrl`) using the existing OkHttp + kotlinx stack and the existing gallery embedding settings (mode/baseURL/key/model — no new credentials). It validates endpoint/model/key presence before use, bounds request text (512) and response (body bytes + vector dimension), redacts secrets, and reports NOT_CONFIGURED/UNSUPPORTED/ERROR/READY. No call fires when not configured / opt-in off; `huawei_local` stays UNSUPPORTED. |
 | D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Done (Phase 15) + cloud adapter (Phase 21) | **Done** | `gallery/insights/GalleryMonthlyInsights.kt` ports the pure bucketing / tag-count / local-summary / LLM-input builder over the real room-backed `GalleryPhotoItem`s (Phases 3/9/11). **Phase 21** wires the config-driven cloud AI month summary (`gallery/cloud/GalleryMonthlySummaryClient.kt`, port of `summarizeGalleryMonth`) reusing the existing OpenAI-compatible `ChatCompletionsClient` + Planner config, behind an explicit `galleryAiSummaryEnabled` opt-in setting (no new credentials). The Gallery insights panel shows the real gate (NOT_CONFIGURED/UNSUPPORTED/ERROR/READY) and only invokes the cloud from an explicit button tap; the deterministic local insight path always remains (row D2 pure part = Done). |
-| D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Defer / boundary | **Defer** | Background scan + cloud memory sync need storage permission + configured vision key; both deliberately not backgrounded on Android. No silent scanning. |
+| D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Background sync boundary (Phase 23) | **Partial (serial opt-in boundary + local scan; cloud only via configured adapter)** | **Phase 23** realises the Harmony `GalleryAutoScanner` + `GalleryMemorySync` boundary as a serial, opt-in, cancellable, bounded coordinator (`gallery/background/GalleryBackgroundCoordinator`) on the existing coroutine + Room stack — no new WorkManager/JobScheduler/Service dependency. It requires BOTH an explicit `galleryBackgroundSyncEnabled` user setting AND a runtime photo/media-read grant (`GallerySyncGate`: NOT_CONFIGURED / BLOCKED / READY); nothing is scanned until READY. Runs are single-flight (`Mutex.tryLock`), bounded (scan-limit + batch cap + wall-clock cap), cancellable (`cancelActive()` → honest PARTIAL) and idempotent (Room URI-unique upsert — no duplicates). The optional "memory sync" calls ONLY the explicitly configured `GalleryCloudAdapter` (`generateMonthlySummary` on a bounded aggregate of actually-stored content); with no configured adapter or nothing meaningful stored, NO bytes are sent (`SKIPPED_NOT_CONFIGURED`), and no embeddings/AI summaries are invented. Honest typed states: NOT_CONFIGURED / BLOCKED / READY / RUNNING / SUCCESS / PARTIAL / ERROR. The Photo Picker least-privilege path and the deterministic local `GalleryMonthlyInsights` derivation are preserved. Manifest now declares `READ_MEDIA_IMAGES`(33+)/`READ_EXTERNAL_STORAGE`(≤32) only as the grant prerequisite; nothing requests or auto-uses them. Gap: the Harmony full-library auto-run loop (periodic background execution) is intentionally exposed as an explicit-run, not auto-scheduled (no silent scanning). |
 | E1 | **WeChat auto-summary settings + validation** | `utils/wechat/WechatAutoSummaryTypes.ets` (pure normalizers + validation) | Done (Phase 13) | **Done** | `wechat/domain/WechatAutoSummaryTypes.kt` ports the constants, bounded normalizers (`days` 1..90, `max_contacts` 1..50, `swipe_speed` 0..20000, ratio 0.1..0.95, `stable_swipes` 1..10, `max_history_swipes` 1..300, `wait` 0..10, mode) and the `validateWechatAutoSummaryRequest` validator. A real Settings center section (微信自动汇总) exposes the fields via DataStore (`SettingsKeys.WECHAT_*`, `SettingsCodec`) with normalization, masking affinity for any sensitive keys, and honest saved/error states. Gap: no actual collection (see E2). |
 | E2 | **WeChat auto-summary collection** | `utils/wechat/WechatAutoSummaryClient.ets`, `WechatAutoSummaryStorage.ets`, `entry/src/main/python/wechat_collect/*` | Boundary (BLOCKED) | **Boundary (BLOCKED)** | A typed `wechat/domain/WechatCollectionGate.kt` derives a truthful BLOCKED / NOT_CONFIGURED state from the Phase-8 verified bridge. It never drives WeChat, never sends arbitrary commands, and `collect()` never fabricates a summary: the Android `WorkflowDeviceAdapter` exposes no safe `wechat_collect` action, so a verified bridge still reports BLOCKED. The Settings section renders this status live. Real collection remains a PC-side Python/HDC service gap. |
 
@@ -1270,3 +1270,69 @@ domains are touched" invariant, completeness rise, and backward compatibility
 — remains valid and imports zero). Build: `:app:assembleDebug` +
 `:app:testDebugUnitTest` `--max-workers=1` → **BUILD SUCCESSFUL**, 521 tests,
 0 failures, 0 errors.
+
+## 13. Phase 23 — D3: serial opt-in Gallery background scan/sync boundary
+
+Phase 23 realises the **Harmony `GalleryAutoScanner` + `GalleryMemorySync`
+background scan/sync** boundary (migration row D3) as a genuinely safe Android
+coordinator that **never scans or uploads silently**.
+
+### Delivered
+
+- `gallery/background/GalleryBackgroundState.kt` — the single honest typed
+  state set `NOT_CONFIGURED / BLOCKED / READY / RUNNING / SUCCESS / PARTIAL /
+  ERROR`, a `GallerySyncRunSummary` (candidates / scanned-new / skipped /
+  local-stored / elapsed) and `GalleryCloudSyncStatus` (`RUN` /
+  `SKIPPED_NOT_CONFIGURED` / `FAILED`).
+- `gallery/background/GallerySyncPolicy.kt` — pure bounds (scan-limit 60,
+  batch cap 20, work-duration cap 60 s, coalescing floor 10 min), `batchSizes`,
+  `clampScanLimit`, and a pure `decideRun` scheduling gate with an honest
+  `GallerySchedulingDecision` (NotConfigured / Blocked / Coalesced / Run).
+- `gallery/background/GalleryMediaPermission.kt` — `GalleryMediaPermission`
+  contract + a deterministic `GallerySyncGate` (explicit opt-in AND runtime
+  photo-access grant ⇒ NOT_CONFIGURED / BLOCKED / READY).
+- `gallery/background/GalleryMediaSource.kt` — `GalleryMediaSource` (`scanNewest`)
+  + `GalleryPhotoInput` (port of the Harmony type).
+- `gallery/background/GalleryBackgroundCoordinator.kt` — THE serial coordinator:
+  single-flight `Mutex.tryLock`, bounded batches, cooperative `cancelActive()`,
+  wall-clock deadline, Room URI-unique upsert (idempotent), and a cloud
+  memory-sync step that calls **only** the explicitly configured
+  `GalleryCloudAdapter.generateMonthlySummary` on a bounded aggregate of
+  actually-stored content, else sends nothing.
+- `gallery/background/AndroidGalleryMediaBoundary.kt` — `AndroidGalleryMediaPermission`
+  (ContextCompat read of `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE`),
+  `MediaStoreGalleryMediaSource` (newest-first, refuses to query without a
+  grant) and `FakeGalleryMediaPermission` for host tests.
+- Settings: `galleryBackgroundSyncEnabled` (default off) persisted via
+  `SettingsCodec`, `GALLERY_BACKGROUND_SYNC_ENABLED` key, a
+  `setGalleryBackgroundSyncEnabled` ViewModel setter, and a 后台图库同步 card in
+  数据采集 showing the toggle + the live gate status.
+- Manifest: declares `READ_MEDIA_IMAGES` (33+) / `READ_EXTERNAL_STORAGE` (≤32)
+  **only as the honest grant-observation prerequisite** — nothing requests or
+  auto-uses these permissions; the Photo Picker least-privilege flow is
+  untouched.
+
+### Honest boundaries preserved (no fake capability, no silent work)
+
+- **No silent scan/sync**: the coordinator never auto-runs; it executes only
+  from an explicit user action after `GallerySyncGate` is READY. The Harmony
+  periodic background run loop is deliberately surfaced as an explicit-run
+  (documented), not a background timer — no silent scanning.
+- **No upload when unconfigured**: with no explicitly configured
+  `GalleryCloudAdapter` (or nothing meaningful stored), the cloud step is
+  `SKIPPED_NOT_CONFIGURED` and **zero bytes are sent**. No embeddings / AI
+  summaries are invented by the coordinator.
+- **Gap**: the full periodic auto-run and any aggregated "memory" export beyond
+  the existing Room + configured-adapter summary path remain future work /
+  explicitly invoked only.
+
+### Verification (Phase 23)
+
+- `:app:assembleDebug` + `:app:testDebugUnitTest` with
+  `--no-daemon --max-workers=1` → **BUILD SUCCESSFUL** (see `DSH_PHASE_RESULT`).
+- New device-free tests: `GalleryBackgroundCoordinatorTest` (scheduling gate,
+  permission gate, dedup/idempotency, cancellation → PARTIAL, bounded batches /
+  scan-limit, cloud no-call behaviour, configured-adapter RUN once, failing-cloud
+  PARTIAL, single-flight refusal), `GallerySyncPolicyTest` (scheduling gate +
+  coalescing + bounded batches), and a `SettingsCodecTest` opt-in round-trip.
+

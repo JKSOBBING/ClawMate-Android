@@ -1,4 +1,4 @@
-# ClawMate Android — Gallery Cloud Adapter (Ph21) + Profile Share Import (Ph17) + Profile→Home (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Gallery Background Sync (Ph23) + Gallery Cloud Adapter (Ph21) + Profile Share Import (Ph17) + Profile→Home (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -303,6 +303,74 @@ boundary, under a minimal explicit **semantic allowlist** (migration row B1):
   `SettingsSafeAccessibilityExecutorTest` (5) cover allowlist, bounded inputs,
   package mismatch, disabled/not-configured, and success/failure mapping with no
   fake success. **623 unit tests, 0 failures, 0 errors.**
+
+**Phase 23** realises the **Harmony `GalleryAutoScanner` + `GalleryMemorySync`
+background scan/sync boundary** (migration row D3) as a **serial, opt-in,
+cancellable, bounded background coordinator** that never scans or uploads
+silently:
+- **Serial coordinator** (`gallery/background/GalleryBackgroundCoordinator`) on
+  the existing coroutine + Room stack — **no new WorkManager / JobScheduler /
+  Service dependency** (the smallest existing platform-compatible mechanism).
+  At most one run executes at a time (`Mutex.tryLock` single-flight).
+- **Explicit user setting + runtime media permission**: an opt-in
+  `galleryBackgroundSyncEnabled` setting (off by default, persisted via
+  `SettingsCodec`) **plus** a runtime photo/media-read grant. The
+  `GallerySyncGate` reads them honestly and reports `NOT_CONFIGURED` /
+  `BLOCKED` / `READY`; nothing is scanned until READY. The manifest now merely
+  *declares* `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` (the prerequisite so
+  the gate can truthfully read a grant) — nothing requests or auto-uses them.
+- **Bounded + cancellable + idempotent**: scan limit (`clampScanLimit`), batch
+  cap (`batchSizes`), wall-clock cap (`MAX_WORK_DURATION_MS`), cooperative
+  `cancelActive()`, and Room URI-unique upsert (re-runs never duplicate). A
+  cancelled or time-bound run returns an honest `PARTIAL`.
+- **Never silent, never uploads when unconfigured**: the optional "memory sync"
+  step calls **only** the explicitly configured `GalleryCloudAdapter`
+  (`generateMonthlySummary` on a bounded aggregate of actually-stored content).
+  If no adapter is configured — or nothing meaningful is stored — **no bytes are
+  sent** (`SKIPPED_NOT_CONFIGURED`). No embeddings/AI summaries are invented.
+- **Honest typed states**: `NOT_CONFIGURED` / `BLOCKED` / `READY` / `RUNNING` /
+  `SUCCESS` / `PARTIAL` / `ERROR`; a failed cloud step downgrades a run to
+  `PARTIAL`, and progress is reported through `GallerySyncState.Running`.
+- **Photo Picker least-privilege path preserved and local deterministic
+  gallery insights preserved**: the per-URI Photo Picker flow and the
+  `GalleryMonthlyInsights` local derivation are untouched by this boundary.
+- **Settings control/status**: a 后台图库同步 card in 数据采集 shows the toggle,
+  the live gate status (NOT_CONFIGURED / BLOCKED / READY) and the honest note.
+- **Device-free tests** (new): `GalleryBackgroundCoordinatorTest` +
+  `GallerySyncPolicyTest` + a `SettingsCodecTest` round-trip cover scheduling
+  gate, permission gate, dedup/idempotency, cancellation, bounded batches, cloud
+  no-call behaviour and honest state mapping.
+
+## Layout — features added in Phase 23
+
+```
+app/src/main/java/com/clawmate/app/gallery/background/
+├── GalleryBackgroundState.kt      # GallerySyncState (NOT_CONFIGURED / BLOCKED / READY /
+│                                  #   RUNNING / SUCCESS / PARTIAL / ERROR) + run summary +
+│                                  #   GalleryCloudSyncStatus (RUN / SKIPPED_NOT_CONFIGURED / FAILED)
+├── GallerySyncPolicy.kt           # Pure bounds + batch sizes + scheduling gate (decideRun +
+│                                  #   GallerySchedulingDecision) — device-free
+├── GalleryMediaPermission.kt      # GalleryMediaPermission interface + deterministic GallerySyncGate
+│                                  #   (opt-in + runtime photo-access grant) + GallerySyncGateStatus
+├── GalleryMediaSource.kt          # GalleryMediaSource (scanNewest) + GalleryPhotoInput (Harmony port)
+├── GalleryBackgroundCoordinator.kt# Serial opt-in coordinator: gate + bounded batches + cancellation +
+│                                  #   idempotent Room upsert + cloud-sync ONLY via configured adapter
+└── AndroidGalleryMediaBoundary.kt # AndroidGalleryMediaPermission (ContextCompat) + MediaStore source
+                                  #   (newest-first, refuses without a grant) + FakeGalleryMediaPermission
+
+(mod) app/src/main/AndroidManifest.xml                      # declares READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE (grant prerequisite only)
+(mod) app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt    # + galleryBackgroundSyncEnabled
+(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt   # + GALLERY_BACKGROUND_SYNC_ENABLED
+(mod) app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt    # encode/decode of the opt-in
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt  # + setGalleryBackgroundSyncEnabled
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt   # 后台图库同步 card + live gate status
+
+app/src/test/java/com/clawmate/app/gallery/background/
+├── GalleryBackgroundCoordinatorTest.kt   # gate / permission / dedup / cancellation / bounds /
+│                                         #   cloud no-call / honest status — device-free
+└── GallerySyncPolicyTest.kt              # scheduling gate + coalescing + bounded batches
+(mod) app/src/test/java/com/clawmate/app/settings/SettingsCodecTest.kt    # opt-in round-trip
+```
 
 ## Layout — features added in Phase 17
 
