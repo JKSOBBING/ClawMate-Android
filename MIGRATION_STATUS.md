@@ -1055,7 +1055,7 @@ Legend — **Status**:
 | A1 | **Profile snapshot & local profile** | `datamanager/avatar/AvatarTypes.ets`, `AvatarPromptBuilder.ets`, `pages/home/HomePage.ets` | Direct port + DataStore | **Done** | `profile/avatar/` ports the typed AvatarTypes contracts and provides a locally-editable, device-persisted profile (display name / summary / gender / age / 吃穿住行 domains) with a pure completeness reducer. **Phase 16 closes the A1 recommendation gap**: the persisted profile now flows into the Home pipeline via `ProfileBackedHomeProfileSource` + `HomeProfileBuilder` (a faithful `DataManagerFacade.homeProfileDomains/homeProfileDomainDescription/homeProfileDomainFullDescription/domainClaimStatements` port that maps the four curated domain snapshots onto the Home pillars / completeness). The recommendation list stays honestly empty (the Harmony `homeRecommendations` indexed-todo source is deferred) and avatar generation stays a documented boundary — no fabricated recommendations, images, cloud calls or secrets. |
 | A2 | **Avatar generation (image)** | `SeedreamAvatarProvider.ets`, `AvatarService.ets`, `AvatarStorage.ets`, `AvatarForeground*.ets` | Boundary (NOT_CONFIGURED) | **Boundary** | Real generation needs a Seedream base URL + API key + wired provider. `AvatarGenerationGate` reports honest `NOT_CONFIGURED`/`CONFIGURED_BUT_NO_PROVIDER`; it never generates or fakes an image. Gaps: cloud provider adapter, foreground crop/thumbnail processing, avatar version history persistence. |
 | A3 | **Home avatar card** | `pages/home/HomePage.ets` | Real screen entry | **Done** | The Home avatar card now opens the 数字分身 screen (was a dead disabled button). Gap: displaying a real generated avatar image (awaiting A2). |
-| A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (Phase 1)** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. Gap: import/merge pipeline + Android NFC "knock" approximation (documented, deferred). |
+| A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (Phase 17 portable part)** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. **Phase 17** adds the portable import/merge pipeline: pure `profile/share/ProfileShareImporter` (parse + validate malformed/oversized/unsupported-version/missing-field; deterministic local-first merge of the four persona-domain summaries into `LocalAvatarProfile`), a byte-capped content read, DataStore persist and an honest success/error result dialog. Gap (remainder of A4, non-portable / would be a fake): Harmony "knock" NFC approximation + the cloud "同频报告" affinity analysis — neither implemented (documented, deferred). |
 | B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Blocked** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). AutoAgentAbility itself is not portable; kept as a doc'd platform blocker. |
 | C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Blocked → controlled state | **Blocked** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay needs Android `SYSTEM_ALERT_WINDOW` runtime permission. Not wired; documented controlled disabled state (§5 #2) — no fake overlay. |
 | C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
@@ -1112,3 +1112,62 @@ Unit tests (new): `HomeProfileBuilderTest` + `ProfileBackedHomeProfileSourceTest
 cover pillar mapping, short-summary / summary-only / no-data desc resolution,
 claims extraction cap, event-count sums, completeness, the honest empty state
 and source-level behaviour over the fake profile repository.
+
+## 12. Phase 17 — A4: portable profile-share import/merge pipeline
+
+Phase 17 closes the **portable part** of migration row **A4** (Profile knock
+share) that Phase 1 deliberately left behind: the **import/merge pipeline**
+around the existing `ProfileShareActivity` and `.mobi-profile` /
+`application/vnd.mobiinfra.profile+json` intent handling. Only the *local,
+on-device* part is ported; no NFC and no cloud behaviour is faked.
+
+Delivered:
+- `profile/share/ProfileShareTypes.kt` — the `.mobi-profile` wire model
+  (port of `ProfileShareEnvelope` / `ProfileShareSnapshot` /
+  `ProfileShareDomainSnapshot` in `utils/ProfileKnockShareService.ets` +
+  `Index.ets`), constants (UTD `com.mobiinfra.profile-json`, MIME, `.mobi-profile`,
+  `MAX_RECEIVED_PROFILE_BYTES` = `512*1024`, `PROFILE_SHARE_SCHEMA_VERSION` = `1`,
+  `PROFILE_SHARE_APP_ID` = `com.clawmate.app`), the stable
+  `ProfileShareErrorCode` and the typed `ProfileShareParseResult`.
+- `profile/share/ProfileShareImporter.kt` — a pure, side-effect-free
+  parse/validate/merge:
+  * `parseAndValidate` rejects (with a stable error code) **malformed** JSON,
+    **oversized** payloads (byte cap, default `512 KB`, overridable), an
+    **unsupported schemaVersion**, and **missing-field / unrecognized** payloads
+    (no `profileText` body, or identity matches neither the UTD `typeId` nor
+    `appId`+version). Identity + envelope rules are a direct port of
+    `ProfileKnockShareService.isProfileShareEnvelope`.
+  * `mergeIntoLocal` applies **deterministic local-first precedence** into the
+    `LocalAvatarProfile`: a shared persona-domain summary fills a local field
+    **only when the local `shortSummary` is blank**; existing local values are
+    never overwritten. `fullDesc` is preferred over `desc`, values are trimmed
+    and capped (300 chars), unknown domain keys are ignored, first duplicate
+    wins. Only the four persona domains (吃/穿/住/行) are ever touched — no
+    displayName/gender/age import, no secrets.
+- (mod) `profile/ProfileShareActivity.kt` — now performs a real import: reads the
+  `content://` URI through the `ContentResolver` with a bounded sink (an
+  oversized file is rejected before it is buffered), runs `parseAndValidate` +
+  `mergeIntoLocal`, persists via the existing app-private
+  `DataStoreProfileAvatarRepository`, and shows an **honest** success dialog
+  (list of imported dimensions + resulting local completeness) or a typed error
+  dialog. Also resolves `ACTION_SEND` / `EXTRA_STREAM` / `clipData` URIs. Kept a
+  plain, lifecycle-safe `Activity` intact (existing architecture).
+
+Honest boundaries preserved (no fake capability):
+- **No NFC**: the Harmony "knock-to-knock" approximation is documented as
+  deferred, not implemented.
+- **No cloud**: the Harmony cloud-affinity "同频报告" LLM analysis
+  (`runProfileShareAffinityAnalysis` / Planner) is **not** ported and never
+  claimed; the import is purely local.
+- No secret is imported; no network call is made by `ProfileShareActivity`.
+
+Unit tests (new): `ProfileShareImporterTest` (`profile/share/`, 19 tests) cover
+valid-envelope parsing, each validation error code (malformed / oversized /
+unsupported-version / missing-field / unrecognized), local-first merge
+precedence, unknown-domain / blank-summary ignores, `fullDesc`-over-`desc`
+choice, duplicate determinism, the summary size cap, the "only four persona
+domains are touched" invariant, completeness rise, and backward compatibility
+(a schema-v1 ClawMate envelope with only `profileText` — no structured `profile`
+— remains valid and imports zero). Build: `:app:assembleDebug` +
+`:app:testDebugUnitTest` `--max-workers=1` → **BUILD SUCCESSFUL**, 521 tests,
+0 failures, 0 errors.

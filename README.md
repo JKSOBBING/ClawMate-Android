@@ -1,4 +1,4 @@
-# ClawMate Android — Profile→Home Pipeline (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Profile Share Import (Ph17) + Profile→Home (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -244,6 +244,54 @@ marked Portable-pending in the Phase 12 inventory D2, based on Harmony
   fallback, the 6-representative cap, the 80-line LLM-input cap + determinism +
   "无" empty block, the ViewModel Loading→Loaded/Empty/Error state machine, and
   repository-item-driven derivation. 490 unit tests, 0 failures, 0 errors.
+
+## Layout — features added in Phase 17
+
+```
+app/src/main/java/com/clawmate/app/profile/share/
+├── ProfileShareTypes.kt            # .mobi-profile wire model (ProfileShareEnvelopeDto /
+│                                   #   ProfileShareSnapshotDto / ProfileShareDomainDto),
+│                                   #   constants (UTD / MIME / size cap / schemaVersion / appId),
+│                                   #   ProfileShareErrorCode + ProfileShareParseResult
+└── ProfileShareImporter.kt         # Pure parse/validate (malformed / oversized /
+                                    #   unsupported-version / missing-field) + deterministic
+                                    #   local-first merge into LocalAvatarProfile
+(mod) app/src/main/java/com/clawmate/app/profile/ProfileShareActivity.kt
+                                    # Reads the content URI (byte-capped), runs the import,
+                                    # persists via DataStoreProfileAvatarRepository, shows an
+                                    # HONEST success/error result dialog (no NFC / no cloud)
+
+app/src/test/java/com/clawmate/app/profile/share/ProfileShareImporterTest.kt
+                                    # 19 device-free tests: parsing, all validation codes,
+                                    #   merge precedence, backward compatibility
+```
+
+**Phase 17** closes the *portable* part of migration row **A4** (Profile knock
+share) that Phase 1 deliberately left behind: the **import/merge pipeline**
+around the existing `ProfileShareActivity` and `.mobi-profile` /
+`application/vnd.mobiinfra.profile+json` intent handling.
+- A pure `ProfileShareImporter` decodes a shared envelope (port of
+  `ProfileKnockShareService.ets` + `buildProfileShareSnapshot` in `Index.ets`)
+  and validates it with stable error codes: **malformed** JSON, **oversized**
+  (byte cap `512 KB`), **unsupported schemaVersion** (not `1`), and
+  **missing-field / unrecognized identity** (no `profileText` body, or neither
+  the UTD `typeId` nor `appId`+version identity). It never silently accepts a
+  bad payload.
+- **Local-first merge precedence**: only the *allowed local profile fields* —
+  the four persona-domain summaries (吃/穿/住/行) — are merged, and only into
+  blank local fields; existing local values are **never overwritten**.
+  `fullDesc` is preferred over `desc`, values are trimmed + capped, unknown
+  domain keys are ignored, and first duplicate wins deterministically.
+- `ProfileShareActivity` now actually imports: it reads the `content://` URI
+  through the `ContentResolver` with a bounded sink (rejects oversized files
+  before buffering), parses + validates, merges into the persisted
+  `DataStoreProfileAvatarRepository` profile, and shows an **honest** success
+  dialog (list of imported dimensions + resulting completeness) or a typed
+  error dialog. `ACTION_SEND` / `EXTRA_STREAM` / `clipData` URIs are handled.
+- **No NFC** (the Harmony "knock-to-knock" approximation), **no cloud**
+  affinity / "同频报告" LLM analysis, and **no fake capability**: the import is
+  purely local and never sends or fabricates anything (19 new device-free unit
+  tests; 521 total, 0 failures).
 
 ## Layout — features added in Phase 16
 

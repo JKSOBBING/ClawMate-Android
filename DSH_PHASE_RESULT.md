@@ -1,3 +1,4 @@
+# Phase 17 result: A4 profile-share import/merge; compile and unit-test verification completed; 521 tests, 0 failures, 0 errors; commit follows.
 # Phase 16 result: A1 profile-to-Home pipeline; :app:testDebugUnitTest --rerun-tasks BUILD SUCCESSFUL; 502 tests, 0 failures, 0 errors; commit follows.
 # DSH_PHASE_RESULT — ClawMate Android, Phase 15 (Gallery monthly insights: pure bucketing / tag-count / LLM-input port + real Loading/Empty insights panel)
 
