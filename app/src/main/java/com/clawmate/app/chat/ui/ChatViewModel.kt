@@ -9,7 +9,11 @@ import com.clawmate.app.chat.model.ChatMessageKind
 import com.clawmate.app.chat.model.ChatMessageRole
 import com.clawmate.app.chat.data.ChatRepository
 import com.clawmate.app.chat.data.ChatSendEvent
+import com.clawmate.app.chat.voice.ChatVoiceController
+import com.clawmate.app.chat.voice.VoiceActionResult
+import com.clawmate.app.chat.voice.VoiceControllerState
 import java.util.UUID
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +46,7 @@ data class ChatUiState(
  */
 class ChatViewModel(
     private val repository: ChatRepository,
+    private val voiceController: ChatVoiceController,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -53,8 +58,62 @@ class ChatViewModel(
     val sessionId: String get() = _state.value.sessionId
 
     init {
+        voiceController.setHost(
+            activeInputProvider = { _state.value.inputText },
+            setInputSink = { text -> _state.update { it.copy(inputText = text) } },
+            isBusyProvider = { _state.value.isSending || _state.value.agentRunning },
+        )
         load()
     }
+
+    override fun onCleared() {
+        voiceController.dispose()
+        super.onCleared()
+    }
+
+    // ------------------------------------------------------------------
+    // Voice interaction surface for [ChatScreen].
+    // ------------------------------------------------------------------
+
+    /** Voice session + capability state driven by [ChatVoiceController]. */
+    val voiceState: StateFlow<VoiceControllerState> = voiceController.state
+
+    /** One-shot human-readable voice badge derived from the controller session. */
+    val voiceBadge: kotlinx.coroutines.flow.Flow<String?> = voiceController.state.map { state ->
+        when (state.session.status) {
+            com.clawmate.app.chat.voice.VoiceInteractionStatus.LISTENING -> "正在聆听..."
+            com.clawmate.app.chat.voice.VoiceInteractionStatus.TRANSCRIBING -> "正在转写..."
+            com.clawmate.app.chat.voice.VoiceInteractionStatus.SPEAKING -> "正在朗读..."
+            com.clawmate.app.chat.voice.VoiceInteractionStatus.PAUSED -> "已暂停朗读"
+            com.clawmate.app.chat.voice.VoiceInteractionStatus.ERROR ->
+                state.session.error.ifEmpty { "语音出错" }
+            else -> null
+        }
+    }
+
+    fun beginVoiceInput() {
+        val result = voiceController.toggleVoiceInput()
+        if (result is VoiceActionResult.PermissionRequired) {
+            _state.update { it.copy(error = null) }
+        }
+    }
+
+    fun stopVoiceInput() {
+        voiceController.stopVoiceInput()
+    }
+
+    fun speakMessage(messageId: String, text: String) {
+        voiceController.speakMessage(messageId, text)
+    }
+
+    fun replayMessage(messageId: String, text: String) {
+        voiceController.replayMessage(messageId, text)
+    }
+
+    fun stopVoicePlayback() {
+        voiceController.stopPlayback()
+    }
+
 
     /** Loads session history and marks whether the cloud model is configured. */
     fun load() {

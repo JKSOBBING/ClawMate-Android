@@ -49,6 +49,13 @@ worktree** with the same toolchain (JDK 17.0.19, SDK platform 34, Gradle 8.9,
 Phases 1–5 + **36 new Phase-6 Home/Onboarding tests**; exact count recorded in
 `DSH_PHASE_RESULT.md`).
 
+**Phase 7 (Voice interaction) build verification was actually executed in this
+worktree** with the same toolchain (JDK 17.0.19, SDK platform 34, Gradle 8.9,
+`--no-daemon --max-workers=1`): `:app:assembleDebug` and
+`:app:testDebugUnitTest` both pass — **254 unit tests / 0 failures** (199 prior
+Phases 1–6 + **55 new Phase-7 voice tests**). Exact commands and exit codes are
+recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -92,7 +99,7 @@ a controlled disabled state), **Defer** (later phase).
 | 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
-| 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | TTS = MiMO cloud (OpenAI-compatible, WAV + PCM16 SSE streaming) via OkHttp; also Android `TextToSpeech` as fallback. ASR = source uses Harmony CoreSpeechKit → Android `android.speech.SpeechRecognizer`. Playback via `AudioTrack`. Digital avatar = layered 2.5D static image + animated ring/wave (Compose `animateFloatAsState`), text fallback. |
+| 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | **Phase 7 shipped** the chat voice-interaction vertical slice (`chat/voice/`): typed domain models + deterministic normalization (`VoiceInteractionTypes.kt`), ASR transcript merge + duplicate-final suppression (`VoiceTranscriptLogic.kt`), PCM16→WAV builder (`PcmWav.kt`), voice presets (`VoiceTtsPresets.kt`), voice-input start/stop guards (`VoiceOrchestratorLogic.kt`). ASR = Android `android.speech.SpeechRecognizer` adapter with explicit permission/unavailable/error/cancel states and **no hidden mic access** (RECORD_AUDIO surfaced in the UI, requested only on the mic tap). Output = Android `TextToSpeech` adapter (lifecycle-safe init, speak/pause/stop/replay, typed unavailable/error states). Cloud MiMO streaming/TTS stays behind an explicit **NOT_CONFIGURED** interface (`CloudMimoVoiceClient`) — never claimed configured or faked. Chat UI gained mic/listening/transcript + speak/stop/replay controls; a real final ASR transcript becomes ordinary editable chat input. Digital avatar remains DISABLED (not part of this slice). |
 | 9 | **Local model** | `entry/src/main/cpp/*` (napi_init.cpp, HIAIModelManager.cpp, MNN headers), `docs/local_mnn/prompt-loading.md` | **Blocked → Adapt later** | Source loads an `MNN` LLM via N-API (`libentry.so`) and a HiAI/NNRT path (`HIAIModelManager`). MNN has Android builds → port the C++ LLM via JNI; drop the Harmony-only HiAI/OMC pieces. In-app model download flow (`ModelDownloadConfig`) → Android DownloadManager. Controlled disabled state until JNI model loader lands. |
 | 10 | **Cloud model** | `utils/CloudModelClient.ets`, `CloudDeciderPrompt.ets`, `CloudLogOutput.ets`, `gallery/GalleryEmbeddingService.ets` | Direct/Adapt | OpenAI-compatible `/v1/chat/completions` already used → OkHttp + kotlinx.serialization. Supports Planner/Decider separate base URLs, `/v1/chat/completions`, cancellation, retries. Preserve streaming + error states. |
 | 11 | **HDC / GUI automation** | `utils/MobileGuiTask*.ets`, `HdcWorkflowBridge.ets`, `PcServerMonitor.ets`; `python/hdc_server.py`, `python/harmony_agent.py` | **Blocked → Adapter** | Harmony auto-agent drives a physical device via **PC-side Python over HDC** (`hdc fport` + HTTP bridge on :9124, in-app TCP :9126). On Android: UIAutomator / adb over `adb reverse` or a PC-side Appium/adb service. Arbitrary cross-app GUI automation on Android requires either root / Shizuku / AccessibilityService — implement a cloud/PC bridge adapter first, plus a controlled disabled state. |
@@ -254,6 +261,36 @@ Unit tests added in Phase 6 (deterministic; no network):
   (never a fabricated image/label), status-token parsing, four default pillars,
   completeness, recommendation colors, empty-profile honesty.
 
+**Phase 7 — executed in this worktree** (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands
+and exit codes (including the final unit-test count) are recorded in
+`DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0).
+- **254 unit tests green** (199 prior + **55 new Phase-7 voice tests**).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available).
+
+Unit tests added in Phase 7 (deterministic; no network/device):
+- `chat/voice/VoiceInteractionTypesTest` — metadata normalization (kind/status/
+  provider/transcript/confidence clamp), transcript append to input, replay
+  guards (`voiceReplayAvailable` / `voiceReplayGlobalBlockNeeded`), status
+  labels, ASR metadata factory.
+- `chat/voice/VoiceSessionControllerTest` — idle/listening/transcribing/save-to-
+  idle/speaking/paused/fail transitions and busy semantics.
+- `chat/voice/VoiceTranscriptLogicTest` — cumulative-final replacement, clause
+  append, punctuation compaction, partial merge, duplicate-final suppression
+  (port of `HarmonySpeechRecognizerAsrProvider`).
+- `chat/voice/VoiceOrchestratorLogicTest` — voice-input start/stop generation
+  and can-proceed guards.
+- `chat/voice/VoiceTtsPresetsTest` — MiMO voice whitelist + normalisation, role
+  presets, selection snapshot.
+- `chat/voice/VoiceUnavailableMappingTest` — unavailable/permission/error
+  mapping into typed pure statuses (error metadata, TTS synthesizing→ready,
+  error labels).
+- `chat/voice/PcmWavTest` — PCM16→WAV header + chunk concat correctness.
+- `chat/voice/CloudMimoVoiceTruthTest` — cloud MiMO synthesis always returns
+  **NOT_CONFIGURED** and never fabricates audio; streaming is explicitly
+  unconfigured.
+
 ---
 
 ## 7. Open items / risks
@@ -281,6 +318,52 @@ Unit tests added in Phase 6 (deterministic; no network):
 
 ## 8. Changelog
 
+- **Phase 7 (this phase):** Voice interaction vertical slice.
+  - Typed voice domain models + deterministic normalization
+    (`chat/voice/VoiceInteractionTypes.kt`, port of
+    `pages/chat/VoiceInteractionTypes.ets`): `VoiceInteractionStatus`,
+    `ChatVoiceInputKind`, `ChatVoiceMetadataStatus`, `TtsVoiceRuntimeStatus`,
+    `VoiceSessionSnapshot`, `ChatVoiceMetadata`,
+    `appendVoiceTranscriptToInput`, normalize/present helpers, the factory
+    `createAsr/Tts/VoiceError` metadata builders, `voiceStatusLabel`,
+    `voiceReplayAvailable` / `voiceReplayGlobalBlockNeeded`, and a pure
+    `VoiceSessionController` state machine.
+  - ASR transcript normalization (`chat/voice/VoiceTranscriptLogic.kt`, port of
+    `HarmonySpeechRecognizerAsrProvider.ets`): cumulative/committed merge,
+    punctuation compaction, duplicate-final suppression.
+  - Android ASR adapter (`chat/voice/asr/AndroidSpeechRecognizerAsrAdapter.kt`)
+    around `android.speech.SpeechRecognizer` with explicit
+    **permission / unavailable / error / cancel** states, **no hidden mic access**:
+    it never auto-requests RECORD_AUDIO — it returns `PermissionDenied` until the
+    UI has surfaced and the user granted the runtime permission; partial/final
+    transcripts only ever carry bytes from the platform recognizer.
+  - Android TTS adapter (`chat/voice/tts/AndroidTextToSpeechTtsAdapter.kt`)
+    around `android.speech.TextToSpeech`: lifecycle-safe init (waits for
+    `onInit`/SUCCESS), speak / pause / stop / replay, typed unavailable/error
+    states; no permission required.
+  - Pure PCM16→WAV builder (`PcmWav.kt`) and MiMO TTS voice presets
+    (`VoiceTtsPresets.kt`), voice-input start/stop generation guards
+    (`VoiceOrchestratorLogic.kt`).
+  - Cloud streaming/TTS MiMO voice is kept behind an explicit
+    **NOT_CONFIGURED** interface (`CloudMimoVoiceClient`): `synthesizeSpeech`
+    always returns `NotConfigured`, `streamingConfigured()` is `false` — no fake
+    audio is ever produced or claimed.
+  - Orchestration (`chat/voice/ChatVoiceController.kt`) wires ASR + Android TTS
+    into the chat session: toggling mic starts a real on-device ASR turn; a real
+    **final** transcript is appended to the editable chat input via
+    `appendVoiceTranscriptToInput`; speak/pause/stop/replay drive TTS with
+    lifecycle-safe init and typed states.
+  - Chat UI integration (`ChatViewModel` + `ChatScreen`): mic button (requests
+    RECORD_AUDIO only on tap), hearing/transcribing banner with live partial
+    transcript, and speak/stop/replay controls on assistant bubbles. Existing
+    streaming/agent/chat behavior preserved; missing-cloud-config still shown;
+    no fake transcript or audio.
+  - Deterministic unit tests (`chat/voice/*Test`, 55 new) covering
+    status/metadata normalization, transcript append, replay guards, ASR merge/
+    duplicate suppression, orchestration start/stop guards, TTS presets,
+    unavailable/permission/error mappings, PCM→WAV, and MiMO NOT_CONFIGURED
+    truthfulness (see §6). Instrumented voice tests are documented as
+    unavailable without a device (no emulator).
 - **Phase 6 (this phase):** Home / Onboarding vertical slice.
   - First-launch onboarding gate (`home/domain/OnboardingTypes.kt` ports the
     pure contract from `pages/onboarding/OnboardingTypes.ets` — 4 slides,

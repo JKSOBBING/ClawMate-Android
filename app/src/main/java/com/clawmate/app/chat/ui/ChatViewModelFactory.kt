@@ -5,8 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.clawmate.app.chat.ChatComponent
 import com.clawmate.app.chat.data.ChatRepository
+import com.clawmate.app.chat.voice.ChatVoiceController
 
-/** [ViewModelProvider.Factory] that wires the real [ChatRepository] into [ChatViewModel]. */
+/** [ViewModelProvider.Factory] that wires the real [ChatRepository] + [ChatVoiceController] into [ChatViewModel]. */
 class ChatViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -15,6 +16,7 @@ class ChatViewModelFactory(private val context: Context) : ViewModelProvider.Fac
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
         val repository: ChatRepository = ChatComponent.repository(context)
-        return ChatViewModel(repository) as T
+        val voiceController = ChatVoiceController(context.applicationContext)
+        return ChatViewModel(repository, voiceController) as T
     }
 }

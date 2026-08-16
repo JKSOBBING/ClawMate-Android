@@ -1,4 +1,4 @@
-# ClawMate Android — Home (Ph6) + Chat (Ph2) + Agent (Ph3) + Task/Workflow (Ph4) + Settings (Ph5)
+# ClawMate Android — Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -31,6 +31,41 @@ to app-private DataStore) and a truthful Home screen (four persona pillars,
 completeness bar, recommendation list with completion toggles + pagination, and
 an honest NOT_CONFIGURED avatar section — avatar generation is DISABLED on
 Android and never fabricated).
+**Phase 7** adds a truthful chat **voice-interaction vertical slice**
+(`chat/voice/`): typed voice domain models / status / metadata with
+deterministic normalization (port of `VoiceInteractionTypes.ets`), ASR
+transcript merge + duplicate suppression (port of
+`HarmonySpeechRecognizerAsrProvider.ets`), an Android `SpeechRecognizer` ASR
+adapter with explicit **permission / unavailable / error / cancel** states and
+**no hidden microphone access** (RECORD_AUDIO is surfaced in the UI and only
+requested on the mic tap), a lifecycle-safe Android `TextToSpeech` adapter
+(speak / pause / stop / replay, typed unavailable/error states), a PCM16→WAV
+builder and MiMO voice presets, and cloud MiMO streaming/TTS kept behind an
+explicit **NOT_CONFIGURED** interface — never claimed configured or faked. The
+chat UI gains mic / listening / transcript and speak / stop / replay controls;
+a real final ASR transcript becomes ordinary editable chat input.
+
+## Layout — features added in Phase 7
+
+```
+app/src/main/java/com/clawmate/app/chat/voice/
+├── VoiceInteractionTypes.kt      # Typed status/metadata + normalization, VoiceSessionController [Phase 7]
+├── VoiceTranscriptLogic.kt       # ASR cumulative/committed merge + duplicate-final suppression
+├── VoiceOrchestratorLogic.kt     # Voice-input start/stop generation guards
+├── VoiceTtsPresets.kt            # MiMO TTS voice whitelist + role presets
+├── PcmWav.kt                     # PCM16 → WAV bytes + chunk concat
+├── ChatVoiceController.kt        # Orchestrator: real ASR input + Android TTS output → chat draft
+├── asr/
+│   └── AndroidSpeechRecognizerAsrAdapter.kt   # android.speech.SpeechRecognizer; permission/unavailable/error/cancel
+└── tts/
+    ├── AndroidTextToSpeechTtsAdapter.kt       # android.speech.TextToSpeech; lifecycle-safe init, speak/pause/stop/replay
+    └── CloudMimoVoiceClient.kt                # MiMO cloud STREAMING/TTS — NOT_CONFIGURED (never faked)
+
+app/src/main/java/com/clawmate/app/chat/ui/ChatViewModel.kt   (modified: hosts ChatVoiceController; voice state/badge + actions)
+app/src/main/java/com/clawmate/app/chat/ui/ChatViewModelFactory.kt (modified: wires ChatVoiceController(context))
+app/src/main/java/com/clawmate/app/chat/ui/ChatScreen.kt      (modified: mic/permission, listening/transcript banner, speak/stop/replay)
+app/src/test/java/com/clawmate/app/chat/voice/*Test.kt        (8 new test classes, 55 tests)
+```
 
 ## Layout — features added in Phase 6
 
@@ -181,13 +216,19 @@ generated with `gradle wrapper`).
                                         # repository persistence, unsupported GUI/HDC, runner cancel/bounds
                                         # Phase 6: onboarding version/section nav, persistence round-trips,
                                         # recommendation completion + pagination, empty/disabled states
-./gradlew :app:connectedAndroidTest     # instrumented (device/emulator)
+                                        # Phase 7: voice status/metadata normalization, transcript append,
+                                        # replay guards, ASR merge/duplicate suppression, orchestration
+                                        # guards, TTS presets, unavailable/permission/error mappings,
+                                        # PCM→WAV, MiMO NOT_CONFIGURED truthfulness
+./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS (device/emulator; not run in this worktree)
 ```
 
-In this worktree the Phase-2, Phase-3, Phase-4, Phase-5 and Phase-6 builds and
-unit tests were actually executed with a local JDK 17 / Android SDK (platform
-34) / Gradle 8.9 — commands and results (including the Phase-6 commands and exit
-codes) are recorded in `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`.
+In this worktree the Phase-2 through Phase-7 builds and unit tests were actually
+executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 — commands
+and results (including the Phase-7 commands and exit codes) are recorded in
+`MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`. `connectedAndroidTest` was
+not run because no emulator/device is available (the instrumented voice tests
+are documented as unavailable without a device).
 
 ## No secrets
 
@@ -196,7 +237,11 @@ Endpoints/keys are not in this tree. Copy
 `app/src/main/res/raw/local_config.properties` (git-ignored) and fill in real
 values (`cloudPlannerBaseUrl` / `cloudPlannerApiKey` / `cloudPlannerModel`).
 With no configuration the chat tab shows a "尚未配置云端模型" state instead of
-faking a reply. The first-launch onboarding and the Home profile/avatar sections
-read no network and never invent successful data: onboarding works on a fresh,
-configuration-free install, and Home reports the honest empty / NOT_CONFIGURED
-(avatar DISABLED) states until real Android data sources exist.
+faking a reply. The first-launch onboarding, Home profile/avatar sections and
+the Phase-7 voice interaction read no network or never invent successful data:
+onboarding works on a fresh, configuration-free install; Home reports the honest
+empty / NOT_CONFIGURED (avatar DISABLED) states until real Android data sources
+exist; and voice ASR uses the on-device `SpeechRecognizer` (RECORD_AUDIO surfaced
+and requested only on the mic tap — no fake transcript), with output via the
+on-device `TextToSpeech` engine — cloud MiMO streaming/TTS stays explicitly
+**NOT_CONFIGURED** and never claims to be connected.
