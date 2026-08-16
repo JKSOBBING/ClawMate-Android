@@ -42,4 +42,23 @@ object EndpointConfig {
         cloudDeciderApiKey =
             properties.getProperty("cloudDeciderApiKey", "").trim()
     }
+
+    /**
+     * Apply normalized cloud endpoint values persisted through the Settings
+     * center (Phase 5). This is the single seam where Settings edits flow into
+     * the runtime [EndpointConfig] that ChatServerConfig / the cloud client
+     * read. Only non-masked, normalized values are applied; anything still
+     * carrying a mask marker is ignored (never written back as a literal key).
+     */
+    fun applyCloudEndpoint(
+        plannerBaseUrl: String,
+        plannerApiKey: String,
+        plannerModel: String,
+    ) {
+        cloudPlannerBaseUrl = plannerBaseUrl.trim().trimEnd('/')
+        if (!isMasked(plannerApiKey)) cloudPlannerApiKey = plannerApiKey.trim()
+        cloudPlannerModel = plannerModel.trim()
+    }
+
+    fun isMasked(value: String): Boolean = value.contains('•')
 }

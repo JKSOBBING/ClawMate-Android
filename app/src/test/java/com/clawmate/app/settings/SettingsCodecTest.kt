@@ -1,0 +1,80 @@
+package com.clawmate.app.settings
+
+import com.clawmate.app.settings.data.SettingsCodec
+import com.clawmate.app.settings.domain.AppSettings
+import com.clawmate.app.settings.domain.AutoConfirmMode
+import com.clawmate.app.settings.domain.EmbeddingMode
+import com.clawmate.app.settings.domain.SettingsKeys
+import com.clawmate.app.settings.domain.SensitiveValueUtils
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Persistence round-trips: encode/decode and repository save/snapshot must be
+ * deterministic and must never persist a masked secret verbatim.
+ */
+class SettingsCodecTest {
+
+    @Test
+    fun `encode then decode is a deterministic round trip`() {
+        val original = AppSettings.defaults().copy(
+            cloudPlannerBaseUrl = " https://planner.test/ ",
+            cloudPlannerApiKey = "sk-secret",
+            cloudPlannerModel = " planner-model ",
+            galleryEmbeddingMode = EmbeddingMode.Remote,
+            agentLocalConfirm = AutoConfirmMode.AutoApprove,
+            gallerySkipOcr = true,
+            chatCompressionThresholdPercent = 70,
+            chatRecentRounds = 12,
+        )
+        val flat = SettingsCodec.encode(original)
+        val decoded = SettingsCodec.decode(flat)
+        assertEquals("https://planner.test", decoded.cloudPlannerBaseUrl)
+        assertEquals("sk-secret", decoded.cloudPlannerApiKey)
+        assertEquals("planner-model", decoded.cloudPlannerModel)
+        assertEquals(EmbeddingMode.Remote, decoded.galleryEmbeddingMode)
+        assertEquals(AutoConfirmMode.AutoApprove, decoded.agentLocalConfirm)
+        assertTrue(decoded.gallerySkipOcr)
+        assertEquals(70, decoded.chatCompressionThresholdPercent)
+        assertEquals(12, decoded.chatRecentRounds)
+    }
+
+    @Test
+    fun `decode of empty map yields safe empty defaults`() {
+        val decoded = SettingsCodec.decode(emptyMap())
+        assertEquals(AppSettings.defaults(), decoded)
+        assertEquals("", decoded.cloudPlannerBaseUrl)
+        assertEquals("", decoded.cloudPlannerApiKey)
+        assertTrue(decoded.workflowAutomationEnabled)
+        assertEquals(85, decoded.chatCompressionThresholdPercent)
+    }
+
+    @Test
+    fun `decode degrades corrupt values instead of throwing`() {
+        val corrupt: Map<String, String> = SettingsKeys.ALL_KEYS.associateWith { "not-a-number-or-bool" } +
+            mapOf(
+                SettingsKeys.CLOUD_PLANNER_BASE_URL to "https://planner.test",
+                SettingsKeys.CHAT_COMPRESSION_THRESHOLD_PERCENT to "999",
+            )
+        // total function: never throws
+        val decoded = SettingsCodec.decode(corrupt)
+        assertEquals("https://planner.test", decoded.cloudPlannerBaseUrl)
+        assertEquals(95, decoded.chatCompressionThresholdPercent) // clamped
+        // String fields are kept verbatim (unless masked); corrupt numerics clamp.
+        assertEquals("not-a-number-or-bool", decoded.cloudPlannerApiKey)
+    }
+
+    @Test
+    fun `sanitizeForWrite drops masked secrets before persistence`() {
+        val flat = mapOf(
+            SettingsKeys.CLOUD_PLANNER_API_KEY to SensitiveValueUtils.maskSensitiveValue("sk-masked"),
+            SettingsKeys.CLOUD_PLANNER_BASE_URL to "https://planner.test",
+        )
+        val clean = SettingsCodec.sanitizeForWrite(flat)
+        // The masked secret must not survive as a literal value.
+        assertNull("masked key should be removed", clean[SettingsKeys.CLOUD_PLANNER_API_KEY])
+        assertEquals("https://planner.test", clean[SettingsKeys.CLOUD_PLANNER_BASE_URL])
+    }
+}

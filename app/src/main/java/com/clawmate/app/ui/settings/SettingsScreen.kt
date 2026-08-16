@@ -14,6 +14,10 @@ import androidx.compose.ui.unit.dp
  * HarmonyOS settings are organized into five sections:
  *   个人与隐私 | 数据采集 | 模型与智能体 | 任务与自动化 | 存储与关于
  *
+ * NOTE: Phase 5 wires the 设置 tab to the real
+ * [com.clawmate.app.settings.ui.SettingsScreen]; this composable is retained
+ * only as a reference doc and is no longer routed.
+ *
  * HarmonyOS source reference:
  *   entry/src/main/ets/pages/settings/SettingsCenterPage.ets
  *   entry/src/main/ets/pages/settings/SettingsCenterTypes.ets

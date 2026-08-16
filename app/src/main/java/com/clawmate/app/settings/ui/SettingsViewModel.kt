@@ -1,0 +1,215 @@
+package com.clawmate.app.settings.ui
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.clawmate.app.config.EndpointConfig
+import com.clawmate.app.settings.config.EndpointBridge
+import com.clawmate.app.settings.data.SettingsRepository
+import com.clawmate.app.settings.domain.AppSettings
+import com.clawmate.app.settings.domain.AutoConfirmMode
+import com.clawmate.app.settings.domain.EmbeddingMode
+import com.clawmate.app.settings.domain.SensitiveValueUtils
+import com.clawmate.app.settings.domain.SettingsSectionId
+import com.clawmate.app.settings.domain.SettingsNormalizers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * ViewModel for the Settings center.
+ *
+ * Owns the persistent store ([SettingsRepository]), a working [SettingsUiState
+ * .draft] that the section UI edits, section navigation, sensitive-value
+ * reveal/edit state, and save/reset actions. Connectivity (HDC, planner,
+ * gallery) is reported as NOT_CONFIGURED / DISABLED until a real endpoint is
+ * configured — never assumed connected.
+ */
+class SettingsViewModel(
+    private val repository: SettingsRepository,
+    private val versionName: String = "1.0.0",
+    private val versionCode: Long = 1L,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
+    val state: StateFlow<SettingsUiState> = _state.asStateFlow()
+
+    init {
+        load()
+    }
+
+    fun load() {
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            val persisted = runCatching { repository.snapshot() }.getOrDefault(AppSettings.defaults())
+            // Seed from runtime EndpointConfig (git-ignored local_config) if no
+            // user override has been saved yet.
+            val seed = EndpointBridge.seeded(persisted)
+            val draft = seed.copy(
+                // Display masked secrets from persisted key; never leak plaintext
+                // of a non-seeded secret unless the user reveals it.
+                cloudPlannerApiKey = safeSecret(persisted.cloudPlannerApiKey, seed.cloudPlannerApiKey),
+            )
+            _state.update {
+                it.copy(
+                    loading = false,
+                    draft = draft,
+                    appSettings = draft,
+                    dirty = false,
+                )
+            }
+        }
+    }
+
+    private fun safeSecret(persisted: String, seeded: String): String =
+        if (SensitiveValueUtils.isMaskedSensitiveValue(persisted)) {
+            // persisted value is a stale mask; start clean
+            if (seeded.isNotBlank() && !seeded.equals(persisted, ignoreCase = true)) seeded else ""
+        } else {
+            // prefer the user's persisted plaintext; else seeded runtime value
+            if (persisted.isNotBlank()) persisted else seeded
+        }
+
+    // ---------------------------------------------------------------- sections
+
+    fun selectSection(section: SettingsSectionId) {
+        closeRevealedSensitive()
+        _state.update { it.copy(selectedSectionId = SettingsSectionId.normalize(section.ordinalIndex)) }
+    }
+
+    fun closeSection() {
+        closeRevealedSensitive()
+        _state.update { it.copy(selectedSectionId = SettingsSectionId.NONE) }
+    }
+
+    // --------------------------------------------------------------- sensitive
+
+    /** Reveal one sensitive field so its real value can be edited. */
+    fun reveal(key: String) {
+        _state.update { it.copy(revealedSensitiveKeys = setOf(key)) }
+    }
+
+    fun hide(key: String) {
+        _state.update { it.copy(revealedSensitiveKeys = emptySet()) }
+    }
+
+    private fun closeRevealedSensitive() {
+        _state.update { it.copy(revealedSensitiveKeys = emptySet()) }
+    }
+
+    // ------------------------------------------------------------------ fields
+
+    fun updateDraft(transform: (AppSettings) -> AppSettings) {
+        _state.update { it.copy(draft = transform(it.draft), dirty = true) }
+    }
+
+    fun setCloudPlannerBaseUrl(value: String) = updateDraft { it.copy(cloudPlannerBaseUrl = value) }
+    fun setCloudPlannerModel(value: String) = updateDraft { it.copy(cloudPlannerModel = value) }
+    fun setCloudPlannerApiKey(value: String) = updateDraft { it.copy(cloudPlannerApiKey = value) }
+
+    fun setCloudDeciderBaseUrl(value: String) = updateDraft { it.copy(cloudDeciderBaseUrl = value) }
+    fun setCloudDeciderApiKey(value: String) = updateDraft { it.copy(cloudDeciderApiKey = value) }
+    fun setCloudDeciderModel(value: String) = updateDraft { it.copy(cloudDeciderModel = value) }
+
+    fun setAvatarBaseUrl(value: String) = updateDraft { it.copy(avatarImageBaseUrl = value) }
+    fun setAvatarApiKey(value: String) = updateDraft { it.copy(avatarImageApiKey = value) }
+    fun setAvatarModel(value: String) = updateDraft { it.copy(avatarTextToImageModel = value) }
+    fun setAvatarSize(value: String) = updateDraft { it.copy(avatarImageSize = value) }
+
+    fun setGalleryBaseUrl(value: String) = updateDraft { it.copy(galleryApiBaseUrl = value) }
+    fun setGalleryApiKey(value: String) = updateDraft { it.copy(galleryApiKey = value) }
+    fun setGalleryModel(value: String) = updateDraft { it.copy(galleryModel = value) }
+    fun setGallerySkipOcr(value: Boolean) = updateDraft { it.copy(gallerySkipOcr = value) }
+    fun setGalleryOcrFilter(value: Boolean) = updateDraft { it.copy(galleryUseOcrKeywordFilter = value) }
+    fun setGalleryParallel(value: Boolean) = updateDraft { it.copy(galleryParallelFieldRequests = value) }
+    fun setGalleryOcrConcurrency(value: String) {
+        val n = SettingsNormalizers.concurrency(value, _state.value.draft.galleryOcrConcurrency)
+        updateDraft { it.copy(galleryOcrConcurrency = n) }
+    }
+    fun setGalleryModelConcurrency(value: String) {
+        val n = SettingsNormalizers.concurrency(value, _state.value.draft.galleryModelConcurrency)
+        updateDraft { it.copy(galleryModelConcurrency = n) }
+    }
+    fun setGalleryEmbeddingConcurrency(value: String) {
+        val n = SettingsNormalizers.concurrency(value, _state.value.draft.galleryEmbeddingConcurrency)
+        updateDraft { it.copy(galleryEmbeddingConcurrency = n) }
+    }
+    fun setGalleryEmbeddingMode(mode: EmbeddingMode) = updateDraft { it.copy(galleryEmbeddingMode = mode) }
+    fun setGalleryEmbeddingBaseUrl(value: String) = updateDraft { it.copy(galleryEmbeddingBaseUrl = value) }
+    fun setGalleryEmbeddingApiKey(value: String) = updateDraft { it.copy(galleryEmbeddingApiKey = value) }
+    fun setGalleryEmbeddingModel(value: String) = updateDraft { it.copy(galleryEmbeddingModel = value) }
+    fun setGalleryImageScale(value: String) {
+        val n = SettingsNormalizers.normalizedDouble(value, _state.value.draft.galleryImageScale, 0.1, 1.0)
+        updateDraft { it.copy(galleryImageScale = n) }
+    }
+    fun setGalleryAmapWebKey(value: String) = updateDraft { it.copy(galleryAmapWebKey = value) }
+
+    fun setHdcServerUrl(value: String) = updateDraft { it.copy(hdcServerUrl = value) }
+    fun setWirelessHdcTarget(value: String) = updateDraft { it.copy(wirelessHdcTarget = value) }
+    fun setCompressionThreshold(value: String) {
+        val n = SettingsNormalizers.compressionThresholdPercent(value)
+        updateDraft { it.copy(chatCompressionThresholdPercent = n) }
+    }
+    fun setRecentRounds(value: String) {
+        val n = SettingsNormalizers.recentRounds(value)
+        updateDraft { it.copy(chatRecentRounds = n) }
+    }
+
+    fun setLocalAutoConfirm(mode: AutoConfirmMode) = updateDraft { it.copy(agentLocalConfirm = mode) }
+    fun setCloudAutoConfirm(mode: AutoConfirmMode) = updateDraft { it.copy(agentCloudConfirm = mode) }
+
+    fun setWorkflowAutomationEnabled(value: Boolean) = updateDraft { it.copy(workflowAutomationEnabled = value) }
+    fun setWorkflowHardwareSteps(value: Boolean) = updateDraft { it.copy(workflowHardwareStepsEnabled = value) }
+    fun setPcServerUrl(value: String) = updateDraft { it.copy(pcServerUrl = value) }
+
+    // ------------------------------------------------------------------ actions
+
+    fun save() {
+        val draft = _state.value.draft
+        viewModelScope.launch {
+            _state.update { it.copy(saveBusy = true, saved = false, error = null) }
+            val clean = runCatching { repository.save(draft) }
+                .getOrElse { e ->
+                    _state.update { it.copy(saveBusy = false, error = "保存失败：${e.message}") }
+                    return@launch
+                }
+            // Push normalized cloud endpoint into runtime config for the chat/gallery.
+            runCatching { EndpointBridge.applyToRuntime(clean) }
+
+            _state.update {
+                it.copy(
+                    saveBusy = false,
+                    saved = true,
+                    appSettings = clean,
+                    draft = clean,
+                    dirty = false,
+                    revealedSensitiveKeys = emptySet(), // lock secrets again after save
+                )
+            }
+        }
+    }
+
+    fun resetToDefaults() {
+        _state.update { it.copy(dirty = true, draft = AppSettings.defaults()) }
+    }
+
+    fun dismissSaved() {
+        _state.update { it.copy(saved = false) }
+    }
+
+    fun clearError() {
+        _state.update { it.copy(error = null) }
+    }
+
+    /** No-op safety gate — destructive cleanup actions are surfaced but never run. */
+    fun onDestructiveAction(key: String) {
+        // Deliberately a no-op: code paths that would delete real directories or
+        // user data are never wired here without a distinct, explicit UI action.
+    }
+
+    /** Restore a masked value to its known default (only when mask == default mask). */
+    fun normalizeMaskedSecretIfDefault(persistedKey: String, defaultValue: String): String =
+        SensitiveValueUtils.restoreMaskedSensitiveSettingDefault(persistedKey, defaultValue)
+}

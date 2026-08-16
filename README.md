@@ -1,4 +1,4 @@
-# ClawMate Android — Chat / cloud-model slice (Phase 2) + Agent/ReAct slice (Phase 3) + Task/Workflow slice (Phase 4)
+# ClawMate Android — Chat (Ph2) + Agent (Ph3) + Task/Workflow (Ph4) + Settings (Ph5)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -18,6 +18,42 @@ app-private persistence, a real Compose Task screen (scene/filter bar, cards,
 expandable step summary), and a bounded, honest `WorkflowRunner` that reports
 every GUI/HDC/device-control step as `UNSUPPORTED/BLOCKED` (and VLM tools as
 `NOT_CONFIGURED`) instead of fabricating a result.
+**Phase 5** replaces the Settings-tab placeholder with a truthful five-section
+Settings/Configuration vertical slice: a typed DataStore-backed repository with
+safe/default normalization, sensitive-value masking/reveal/edit (masked values
+are never persisted), the `EndpointBridge` seam into the runtime `EndpointConfig`
+the chat/gallery read, and honest NOT_CONFIGURED / DISABLED states for any
+unconfigured endpoint — never claiming connectivity.
+
+## Layout — features added in Phase 5
+
+```
+app/src/main/java/com/clawmate/app/settings/
+├── SettingsComponent.kt            # Manual DI (DataStore repository)            [Phase 5]
+├── config/EndpointBridge.kt        # Seam: Settings <-> runtime EndpointConfig (mask-guarded)
+├── domain/
+│   ├── SettingsSection.kt          # SettingsSectionId + 5 section descriptors
+│   ├── SettingsKeys.kt             # Typed key inventory (sensitive subset flagged)
+│   ├── AppSettings.kt              # Typed snapshot + configured/connectivity facts
+│   ├── SettingsNormalizers.kt      # Deterministic URL/model/int/double/bool/enum normalizers
+│   └── SensitiveValueUtils.kt      # Mask/isMasked/restore port (SensitiveValueUtils.ets)
+├── data/
+│   ├── SettingsRepository.kt       # Repository interface
+│   ├── SettingsCodec.kt            # Encode/decode + sanitizeForWrite (mask never persisted)
+│   ├── DataStoreSettingsRepository.kt # Preferences-backed store
+│   └── FakeSettingsRepository.kt   # In-memory store used by tests/previews
+└── ui/
+    ├── SettingsScreen.kt           # Section list + detail navigation + save/reset/loading/error
+    ├── SettingsSections.kt         # The five section composables
+    ├── SettingsControls.kt         # Group cards, inputs, sensitive input, toggles, actions
+    ├── SettingsTheme.kt            # SettingsCenterTheme palette
+    ├── SettingsViewModel.kt        # Draft editing, sensitive reveal, save/reset
+    ├── SettingsViewModelFactory.kt
+    └── SettingsUiState.kt          # UI state + StorageSummary
+
+config: app/src/main/java/com/clawmate/app/config/EndpointConfig.kt  (modified:
+        added applyCloudEndpoint, mask-guarded)
+```
 
 ## Layout — features added in Phase 4
 

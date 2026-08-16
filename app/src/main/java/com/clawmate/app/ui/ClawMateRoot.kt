@@ -27,7 +27,7 @@ import com.clawmate.app.chat.ui.ChatScreen
 import com.clawmate.app.gallery.ui.GalleryScreen
 import com.clawmate.app.task.ui.TaskScreen as WorkflowTaskScreen
 import com.clawmate.app.ui.home.HomeScreen
-import com.clawmate.app.ui.settings.SettingsScreen
+import com.clawmate.app.settings.ui.SettingsScreen
 
 /**
  * Bottom-navigation host that mirrors the HarmonyOS main tab set:
@@ -88,7 +88,7 @@ fun ClawMateRoot() {
                 Destination.Summary.route -> GalleryScreen()
                 Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> WorkflowTaskScreen(context)
-                Destination.Settings.route -> SettingsScreen()
+                Destination.Settings.route -> SettingsScreen(context)
                 else -> HomeScreen()
             }
         }

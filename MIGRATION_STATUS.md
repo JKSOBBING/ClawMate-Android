@@ -35,6 +35,13 @@ worktree** with the same toolchain (JDK 17, SDK platform 34, Gradle 8.9,
 all 129 unit tests pass (33 new Phase-4 tests). Exact commands and exit codes
 are recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 5 (Settings/Configuration) build verification was actually executed in
+this worktree** with the same toolchain (JDK 17.0.19, SDK platform 34, Gradle
+8.9, `--no-daemon --max-workers=1`): `:app:assembleDebug` and
+`:app:testDebugUnitTest` both pass — **163 unit tests / 0 failures** (129 prior
+Phases 1–4 + **34 new Phase-5 Settings tests**). Exact commands and exit codes
+are recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -77,7 +84,7 @@ a controlled disabled state), **Defer** (later phase).
 | 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore; on-device OCR via ML Kit (source: Harmony textRecognition); cloud vision LLM (MiniCPM-V) server call; Room + JSON for gallery-log; search via Room FTS; reverse geocoding via a map provider (source: AMap). |
 | 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
-| 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → Android DataStore/SharedPreferences. Sensitive value masking ported from `utils/SensitiveValueUtils.ets`. |
+| 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
 | 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | TTS = MiMO cloud (OpenAI-compatible, WAV + PCM16 SSE streaming) via OkHttp; also Android `TextToSpeech` as fallback. ASR = source uses Harmony CoreSpeechKit → Android `android.speech.SpeechRecognizer`. Playback via `AudioTrack`. Digital avatar = layered 2.5D static image + animated ring/wave (Compose `animateFloatAsState`), text fallback. |
 | 9 | **Local model** | `entry/src/main/cpp/*` (napi_init.cpp, HIAIModelManager.cpp, MNN headers), `docs/local_mnn/prompt-loading.md` | **Blocked → Adapt later** | Source loads an `MNN` LLM via N-API (`libentry.so`) and a HiAI/NNRT path (`HIAIModelManager`). MNN has Android builds → port the C++ LLM via JNI; drop the Harmony-only HiAI/OMC pieces. In-app model download flow (`ModelDownloadConfig`) → Android DownloadManager. Controlled disabled state until JNI model loader lands. |
 | 10 | **Cloud model** | `utils/CloudModelClient.ets`, `CloudDeciderPrompt.ets`, `CloudLogOutput.ets`, `gallery/GalleryEmbeddingService.ets` | Direct/Adapt | OpenAI-compatible `/v1/chat/completions` already used → OkHttp + kotlinx.serialization. Supports Planner/Decider separate base URLs, `/v1/chat/completions`, cancellation, retries. Preserve streaming + error states. |
@@ -243,6 +250,33 @@ Unit tests added in Phase 4 (deterministic; no network):
 
 ## 8. Changelog
 
+- **Phase 5 (this phase):** Settings / Configuration vertical slice.
+  - Android settings domain (`settings/domain/`): typed `AppSettings` snapshot,
+    `SettingsSectionId` + `SETTINGS_SECTIONS` (the five sections 个人与隐私 /
+    数据采集 / 模型与智能体 / 任务与自动化 / 存储与关于), full `SettingsKeys`
+    inventory, deterministic normalizers (URLs, models, bounded ints/doubles,
+    booleans, embedding mode), and a `SensitiveValueUtils` port of the source's
+    masking/restore rules.
+  - DataStore-backed repository (`settings/data/DataStoreSettingsRepository.kt`)
+    with `SettingsCodec` round-trips and `FakeSettingsRepository` for tests:
+    values are typed and normalized; **a value still carrying the mask marker is
+    never persisted as a literal secret** and connectivity flags are never
+    stored (always derived at runtime).
+  - Integration seam `EndpointBridge` + `EndpointConfig.applyCloudEndpoint`:
+    editing the cloud planner base URL/model/API key in Settings updates the
+    runtime config that `ChatServerConfig` / the chat cloud client reads, and a
+    masked value is never pushed to runtime config.
+  - Real Compose `SettingsScreen` + section detail composables (grouped cards,
+    text fields, switches, sensitive reveal/edit, save/reset bar, loading /
+    error / saved states, app version + storage summary). Missing/unconfigured
+    endpoints (Planner, Decider, HDC, gallery vision, PC backend) are shown as
+    NOT_CONFIGURED / DISABLED — never claimed connected. Destructive cleanups are
+    surfaced as explicit disabled buttons and never delete directories.
+  - Deterministic unit tests (see §6): normalization, masking/restore,
+    persistence round-trips, section selection, and safe disabled/unconfigured
+    states.
+  - Phase-1 `ui/settings/SettingsScreen.kt` placeholder retained as a non-routed
+    reference (same pattern as the Summary/Task placeholders).
 - **Phase 4 (this phase):** Task / Workflow vertical slice.
   - Android workflow domain models (`task/model/WorkflowModels.kt`,
     `WorkflowSceneConfig.kt`) ported from `utils/WorkflowTypes.ets` /
