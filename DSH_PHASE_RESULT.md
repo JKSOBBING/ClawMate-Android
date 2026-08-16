@@ -5,39 +5,26 @@
 - Path: `/opt/deepseek-harness/clawmate-phase14-logviewer`
 - Branch: `phase14-log-viewer`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
-- This recovery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
-  Android SDK platform 34 / build-tools 34.0.0 at
-  `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
+- Built and tested in this worktree (JDK 17.0.19 OpenJDK, Android SDK platform
+  34 / build-tools 34.0.0 at `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
   `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
 - Build state used: `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
   `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (both discarded,
-  never committed), and the exact same Gradle 8.9 release binary used in Phases
-  2–13 (the wrapper distribution URL is unreachable here). `/root/mobiinfra-oh`
-  was not modified. All Phase 1–13 code is preserved.
+  never committed), and the same Gradle 8.9 release binary used in Phases 2–13
+  (the wrapper distribution URL is unreachable here). `/root/mobiinfra-oh` was
+  not modified. All Phase 1–13 code is preserved.
 - Working policy: serial only, single worker, no parallel Gradle processes, no
-  servers/emulators, one Gradle build at a time.
-
-## Recovery context
-
-The prior run started Phase 14 in this worktree (created an untracked `log/`
-slice, wired the new 运行日志 Settings section, and edited several ViewModels /
-`ClawMateApplication` / the docs) but **never ran the build or committed** — it
-paused for ~15 minutes without producing a commit. This recovery:
-
-- Reviewed the full prior-run change set against the working tree head
-  (`425f9dc`, i.e. Phase 13) and preserved it.
-- Fixed the only failing tests (the `LogFilterTest` `samples` fixture was
-  ordered oldest-first while the `filterLogs` contract preserves newest-first,
-  exactly the order the ring buffer `snapshot()` returns — reordered the fixture
-  so all 7 filter assertions hold), cleaned up the vestigial `LogSource.System`
-  constant (now `SYSTEM`), removed a redundant always-false null check in
-  `AppLogger`, and switched `LogScreen` to the auto-mirrored `ArrowBack` icon.
-- Ran the actual project checks (see **Command executed**).
+  servers/emulators, one Gradle build at a time. No logcat/`adb`/`hdc` is read —
+  the Log viewer surfaces only real in-app records.
 
 ## Commit
 
-The Phase-14 changes are committed on `phase14-log-viewer`. See `git log -1` for
-the real commit hash after committing.
+The Phase-14 changes are committed on branch `phase14-log-viewer`.
+
+## Commit hash
+
+- `Phase 14 in-app log viewer (bounded ring buffer + AppLogger + Log screen)` →
+  **38938d552966ee0e4012ae2d5b5f173109db79a6**.
 
 ## Command executed (actual, in this worktree)
 
@@ -52,14 +39,15 @@ ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
 
 Result: **BUILD SUCCESSFUL** (exit code `0`).
 - `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk`
-  (regenerated fresh in this worktree) including the new `log/` slice and the
-  existing bundled ML Kit OCR + local-model native stub (all three NDK ABIs
-  rebuilt).
-- `:app:testDebugUnitTest` ran to completion: **472 tests, 0 failures,
+  including the new `log/` slice and the existing bundled ML Kit OCR +
+  local-model native stub.
+- `:app:testDebugUnitTest` was re-run fresh in this worktree
+  (`:app:cleanTestDebugUnitTest :app:testDebugUnitTest`) so the unit tests
+  actually executed, not just replayed from cache: **472 tests, 0 failures,
   0 errors** (448 prior Phases 1–13 + **24 new Phase-14 log tests**:
   `SensitiveLogRedactorTest` 10, `RingBufferInAppLogRepositoryTest` 7,
   `LogFilterTest` 7; the `SettingsSectionTest` section/badge assertions were
-  extended within its existing 5 test methods).
+  extended within its existing test methods).
 - `:app:connectedAndroidTest` was **not run** — no device/emulator is available
   in this worktree.
 
@@ -71,7 +59,7 @@ Result: **BUILD SUCCESSFUL** (exit code `0`).
    previously Portable-pending).
 2. **Bounded ring buffer** (`log/data/RingBufferInAppLogRepository.kt`):
    in-memory, capacity-bounded (`capacity` 512 default, 4096 max) FIFO ring
-   buffer with minimal-level retention gate, message length truncation, and a
+   buffer with minimal-level retention gate, message-length truncation, and a
    `StateFlow` projecting the newest-first list for Compose. Only **real events
    written by actual app code paths** are stored; nothing is fabricated.
 3. **Actual event wiring** (real code runs only): app launch
@@ -133,7 +121,8 @@ Modified:
 ## Verification summary
 
 - `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**, exit `0`.
-- Fresh test execution in this worktree → **472 tests, 0 failures, 0 errors**.
+- Unit test re-run in this worktree (`cleanTestDebugUnitTest` then test) →
+  **472 tests, 0 failures, 0 errors**.
 - No secrets / large files in the source tree (scan: none; gitignore already
   excludes `*.jks/*.keystore/*.p12`, `local.properties`, build output, APKs).
 - `:app:connectedAndroidTest` not run (no device/emulator).
@@ -145,15 +134,10 @@ Modified:
   strings. Neither has an Android equivalent this app owns, so the Android
   viewer surfaces the real wired in-app sources (application / cloud-Agent /
   gallery / workflow) and the empty state stays truthful — it never claims
-  events that did not happen.
+  events that did not happen. Nothing is read from logcat/`adb`/`hdc`.
 - **In-memory only (no disk persistence).** The ring buffer is deliberately a
   process-lifetime in-memory buffer (app-private, bounded, redacted) so a raw
   secret can never touch storage; it is not persisted across app restarts.
 - **Only the wired code paths emit events.** Other modules still use `Log.i`
   directly; a broader migration to the in-app `AppLogger` across all modules is
   a natural follow-up, not part of Phase 14.
-
-## Commit hash
-
-Committed on `phase14-log-viewer` — record the real hash from `git log -1` after
-committing.
