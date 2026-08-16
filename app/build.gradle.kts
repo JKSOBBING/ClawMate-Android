@@ -20,6 +20,24 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Phase 10 — local-model native stub (clawmate_local_model). Only the
+        // ABIs we actually build against; more can be added when a real MNN
+        // Android build is linked.
+        ndk {
+            abiFilters += setOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+        ndkVersion = "25.2.9519653"
+    }
+
+    // Phase 10 — build the local-model JNI stub from app/src/main/cpp. The
+    // stub links no model runtime (see CMakeLists.txt) so it always compiles
+    // with the installed Android NDK toolchain.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {

@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.clawmate.app.localmodel.LocalModelPanel
 import com.clawmate.app.settings.domain.AutoConfirmMode
 import com.clawmate.app.settings.domain.EmbeddingMode
 import com.clawmate.app.settings.domain.SettingsKeys
@@ -266,6 +267,10 @@ fun ModelAgentsSection(state: SettingsUiState, vm: SettingsViewModel, context: C
             modifier = Modifier.padding(top = 6.dp),
         )
     }
+
+    // Phase 10 — local model capability boundary. Shows the typed status and an
+    // explicit load/test action; READY only ever follows a real native load.
+    LocalModelPanel()
 
     SettingsGroupCard(
         title = "上下文压缩",

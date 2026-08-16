@@ -63,6 +63,21 @@ build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`):
 / 0 failures** (254 prior Phases 1–7 + **49 new Phase-8 HDC-bridge tests**).
 Exact commands and exit codes are recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 9 (Gallery detail & local analysis) build verification** was also
+executed in this worktree — **342 unit tests / 0 failures** (303 prior +
+39 new Phase-9 gallery tests); see `DSH_PHASE_RESULT.md`.
+
+**Phase 10 (Local model capability boundary) build verification was actually
+executed in this worktree** with the same toolchain (JDK 17.0.19, Android SDK
+platform 34 / build-tools 34.0.0, **Android NDK 25.2.9519653 + system CMake
+3.22.1 installed via the SDK's `sdkmanager`**, Gradle 8.9,
+`--no-daemon --max-workers=1`): `:app:assembleDebug` and
+`:app:testDebugUnitTest` both pass — **380 unit tests / 0 failures** (342 prior
+Phases 1–9 + **38 new Phase-10 local-model tests**). The APK packages
+`libclawmate_local_model.so` (the truthful native stub) for arm64-v8a /
+armeabi-v7a / x86_64. Exact commands and exit codes are recorded in
+`DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -107,11 +122,11 @@ a controlled disabled state), **Defer** (later phase).
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
 | 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | **Phase 7 shipped** the chat voice-interaction vertical slice (`chat/voice/`): typed domain models + deterministic normalization (`VoiceInteractionTypes.kt`), ASR transcript merge + duplicate-final suppression (`VoiceTranscriptLogic.kt`), PCM16→WAV builder (`PcmWav.kt`), voice presets (`VoiceTtsPresets.kt`), voice-input start/stop guards (`VoiceOrchestratorLogic.kt`). ASR = Android `android.speech.SpeechRecognizer` adapter with explicit permission/unavailable/error/cancel states and **no hidden mic access** (RECORD_AUDIO surfaced in the UI, requested only on the mic tap). Output = Android `TextToSpeech` adapter (lifecycle-safe init, speak/pause/stop/replay, typed unavailable/error states). Cloud MiMO streaming/TTS stays behind an explicit **NOT_CONFIGURED** interface (`CloudMimoVoiceClient`) — never claimed configured or faked. Chat UI gained mic/listening/transcript + speak/stop/replay controls; a real final ASR transcript becomes ordinary editable chat input. Digital avatar remains DISABLED (not part of this slice). |
-| 9 | **Local model** | `entry/src/main/cpp/*` (napi_init.cpp, HIAIModelManager.cpp, MNN headers), `docs/local_mnn/prompt-loading.md` | **Blocked → Adapt later** | Source loads an `MNN` LLM via N-API (`libentry.so`) and a HiAI/NNRT path (`HIAIModelManager`). MNN has Android builds → port the C++ LLM via JNI; drop the Harmony-only HiAI/OMC pieces. In-app model download flow (`ModelDownloadConfig`) → Android DownloadManager. Controlled disabled state until JNI model loader lands. |
+| 9 | **Local model** | `entry/src/main/cpp/*` (napi_init.cpp, HIAIModelManager.cpp, MNN headers, llm.hpp), `entry/src/main/ets/config/ModelDownloadConfig.ets`, model-scan/validation in `pages/Index.ets` | **Adapter (Phase 10 shipped the capability boundary + native stub)** | Source loads an `MNN` LLM via N-API (`libentry.so`) exports `loadModel`/`generate`/`chat`/`reset`/`unloadModel` and a HiAI (`HIAIModelManager`) path; a model dir is loadable when it has `config.json` + a weight file (`.mnn`/`.om`/`.safetensors`/`.weight`) under `filesDir/model` (legacy) or `filesDir/modelscope/{owner}__{repo}`. **Phase 10 shipped** an Android local-model capability boundary (`localmodel/`): typed states NOT_CONFIGURED / UNSUPPORTED / LOADING / READY / ERROR with typed error kinds, an app-private path validator (no traversal / no arbitrary deletion), a deterministic inventory scanner (probe seam), and an explicit "加载/测试" action in the 模型与智能体 Settings panel that reports **READY only on a real native load success**. Android MNN/HiAI runtime is absent → the JNI/CMake adapter (`app/src/main/cpp/`, `libclawmate_local_model.so`) is a truthful stub returning typed NOT_CONFIGURED/UNSUPPORTED; it **never fabricates** model output. Real MNN Android prebuilts + an `Llm`-equivalent C++ adapter are documented as the missing pieces. |
 | 10 | **Cloud model** | `utils/CloudModelClient.ets`, `CloudDeciderPrompt.ets`, `CloudLogOutput.ets`, `gallery/GalleryEmbeddingService.ets` | Direct/Adapt | OpenAI-compatible `/v1/chat/completions` already used → OkHttp + kotlinx.serialization. Supports Planner/Decider separate base URLs, `/v1/chat/completions`, cancellation, retries. Preserve streaming + error states. |
 | 11 | **HDC / GUI automation** | `utils/MobileGuiTask*.ets`, `HdcWorkflowBridge.ets`, `PcServerMonitor.ets`; `python/hdc_server.py`, `python/harmony_agent.py` | **Blocked → Adapter (Phase 8 shipped the safe client + adapter)** | Harmony auto-agent drives a physical device via **PC-side Python over HDC** (`hdc fport` + HTTP bridge on :9124, in-app TCP :9126). On Android **Phase 8** ships a safe PC HDC bridge client: a typed OkHttp `HdcBridgeClient` for `GET /api/health` + `POST /api/workflow` (normalized URLs, bounded timeouts, cancellation, tolerant parsing, typed errors) and a `WorkflowDeviceAdapter` boundary (`app_start`/`screenshot`/`gui_action`/`execute_decider_action` only). **No** `Runtime.exec`/`ProcessBuilder`/shell/adb/hdc/AccessibilityService/`/api/run_cmd`. `TaskComponent` starts DISABLED (default `DisabledWorkflowDeviceAdapter`) and only an explicitly injected, health-verified adapter makes protocol calls; the settings UI runs a health check **only on an explicit button tap** and connects only after a real `ok` + control-ready reply. Workflow `gui_action` steps return honest bridge results/errors only when a configured adapter is registered; otherwise they stay `BLOCKED`. |
 | 12 | **Python bridge** | `entry/src/main/python/*` (hdc_server.py :9124, harmony_agent.py, serve_model.py :9123, wechat_collect/*) | **Blocked → Adapter (Phase 8 HTTP-over-LAN client)** | Not runnable on-device on Android. Keep as a PC-side component; Android app talks to it over HTTP (localhost/LAN) via the Phase-8 `OkHttpHdcBridgeClient`. Do not bundle Python in the APK. A verified bridge + adapter is required for workflow GUI steps; until then they are `BLOCKED`. |
-| 13 | **Native C++ / MNN** | `entry/src/main/cpp/**` (CMakeLists, MNN/llm includes, libentry N-API), `entry/libs/arm64-v8a` | Adapt (later) | Reuse the MNN C++ sources via NDK/CMake + JNI instead of N-API. Need Android prebuilt MNN library + NDK. Defer to the local-model phase. |
+| 13 | **Native C++ / MNN** | `entry/src/main/cpp/**` (CMakeLists, MNN/llm includes, libentry N-API), `entry/libs/arm64-v8a` | **Adapt → stub (Phase 10)** | **Phase 10** added an Android JNI/CMake scaffold (`app/src/main/cpp/CMakeLists.txt` + `local_model_jni.cpp`) that compiles the `libclawmate_local_model.so` stub via the Android NDK (25.2.9519653) + system CMake. **No MNN-for-Android prebuilt or OHOS N-API/HiAI library is vendored** (the OHOS `.so`/headers are not copyable and MNN-for-Android is a sizeable external dependency), so the stub returns typed NOT_CONFIGURED/UNSUPPORTED and documents exactly what a real adapter needs: `libMNN.so` + MNN headers per ABI plus an `Llm`-equivalent C++ loader. The stub verifiably packages into `app-debug.apk` (all three ABIs). |
 | 14 | **Profile share / knock** | `utils/ProfileKnockShareService.ets`, `module.json5` (UTD `com.mobiinfra.profile-json`, MIME `application/vnd.mobiinfra.profile+json`, `.mobi-profile`) | Adapt | Android `ACTION_VIEW`/`ACTION_SEND` + `<intent-filter>` + `FileProvider`. Phase 1 ships `ProfileShareActivity` (intent receivable stub); import/merge pipeline later. Source uses ShareKit knock-to-knock → Android NFC as a coarse approximation (defer). |
 | 15 | **Float window / overlay** | `entryability/EntryAbility.ets`, `pages/EdgeFlowWindow.ets`, `pages/FloatWindow.ets`, `utils/AgentExecutionController.ets` | **Blocked → Adapter** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay during active agent → Android needs `SYSTEM_ALERT_WINDOW` (overlay permission) + MediaProjection for capture-safe hiding. Requires user opt-in; controlled disabled state until then. **Defer to agent-loop phase.** |
 | 16 | **Background / notifications** | `entryability/EntryAbility.ets` (backgroundTaskManager DATA_TRANSFER + wantAgent) | Adapt | Android foreground service + notification channel (`FOREGROUND_SERVICE_DATA_SYNC`, POST_NOTIFICATIONS) while an agent/workflow is running. |
@@ -164,7 +179,12 @@ silently dropped:
 2. System float overlay during agent execution (`SYSTEM_FLOAT_WINDOW`) → needs
    `SYSTEM_ALERT_WINDOW` runtime permission; gate behind user consent.
 3. Harmony CoreSpeechKit → `android.speech.SpeechRecognizer`.
-4. HiAI/NNRT NPU path for local model → unavailable on Android; use MNN CPU.
+4. HiAI/NNRT NPU path for local model 
+   **Phase 10:** neither the OHOS N-API/HiAI runtime nor MNN-for-Android is
+   vendored, so the native adapter is a truthful stub returning typed
+   NOT_CONFIGURED/UNSUPPORTED; the capability boundary still fully validates
+   model inventory + app-private paths and reports a typed ERROR/UNSUPPORTED
+   state instead of fabricating output.
 5. ShareKit "knock-to-knock" share → approximate with Android Share sheet / NFC.
 
 ---
@@ -364,10 +384,51 @@ Unit tests added in Phase 9 (deterministic; no device, no live geocoder):
 - `gallery/analysis/CapabilityEnginesTest` (extended) — `CapabilitySummary`
   `hasUnsupported`/`hasUnconfigured` and the typed `Resolved` outcome mapping.
 
+**Phase 10 — Local model capability boundary — executed in this worktree**
+(JDK 17.0.19, Android SDK platform 34 / build-tools 34.0.0, Android NDK
+25.2.9519653 + system CMake 3.22.1 installed via the SDK's `sdkmanager`,
+Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands and exit codes are
+recorded in `DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0)**; the
+  APK packages `libclawmate_local_model.so` (the truthful native stub) for
+  arm64-v8a / armeabi-v7a / x86_64.
+- **380 unit tests green** (342 prior + **38 new Phase-10 local-model tests**).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available;
+  native load smoke tests are documented as unavailable on device).
+
+Unit tests added in Phase 10 (deterministic; no device, no live model, no .so):
+- `localmodel/LocalModelTypesTest` — typed-state normalization
+  (NOT_CONFIGURED / UNSUPPORTED / ERROR), READY-never-assumed-from-disk,
+  status/error labels, honest default state.
+- `localmodel/LocalModelPathValidatorTest` — app-private path validation:
+  `filesDir/model` + `filesDir/modelscope/<repo>` accepted; `..`/`.`/escape/
+  non-whitelisted base / filesDir-root rejected; safe `resolveModelDir`.
+- `localmodel/LocalModelInventoryTest` — deterministic inventory scan via an
+  in-memory probe seam: config.json + weight-file detection, recursion, ABI/
+  extensions (`.mnn`/`.om`/`.safetensors`/`.weight`), ModelScope repo decoding.
+- `localmodel/LocalModelCapabilityTest` — **no-fake-output** boundary: READY
+  only on a genuine native load Success; missing native library → UNSUPPORTED;
+  missing config/weight → ERROR; invalid path → ERROR; unknown model honest.
+- `localmodel/LocalModelNativeTest` — native result-token parsing
+  (`READY`/`OK`→Success, `UNSUPPORTED`/`NATIVE_LIBRARY_MISSING`→Unsupported,
+  unknown→Failed), and the JVM fallback that never throws and never fakes READY
+  when the .so is absent.
+
 ---
 
 ## 7. Open items / risks
 
+- **MNN-for-Android absent build:** the local-model native adapter is a
+  truthful stub (`libclawmate_local_model.so`). A real on-device model load
+  requires linking a prebuilt MNN Android library (per ABI) plus an
+  `Llm`-equivalent C++ loader; until then the capability boundary reports
+  typed NOT_CONFIGURED / UNSUPPORTED and never fabricates output. See
+  `app/src/main/cpp/CMakeLists.txt` and `local_model_jni.cpp` for the exact
+  missing pieces.
+- **NDK installed for this worktree:** Android NDK 25.2.9519653 + CMake 3.22.1
+  were installed into `/opt/deepseek-harness/android-sdk` via `sdkmanager`.
+  This is build infrastructure only (never committed); the project pins
+  `ndkVersion` so any NDK 25.2.x satisfies the build.
 - **Compose compiler plugin:** Phase 1 declared `org.jetbrains.kotlin.plugin.compose`
   against Kotlin 1.9.24, which fails to resolve (that plugin exists for
   Kotlin ≥ 2.0.0). Fixed in Phase 2 by using the Kotlin 1.9.x Compose compiler
@@ -390,6 +451,52 @@ Unit tests added in Phase 9 (deterministic; no device, no live geocoder):
 ---
 
 ## 8. Changelog
+
+- **Phase 10 (this phase):** Local model capability boundary + native stub.
+  - **Typed local-model domain** (`localmodel/LocalModelTypes.kt`): the Android
+    boundary ports the Harmony local-model decision logic (`Index.ets`
+    `modelLoadableStatus`/`isModelWeightFile`/`hasModelWeightFile` +
+    `entry/src/main/cpp/*` N-API surface) into typed states
+    **NOT_CONFIGURED / UNSUPPORTED / LOADING / READY / ERROR** with typed error
+    kinds (INVALID_PATH / MISSING_CONFIG / MISSING_MODEL_FILE / NOT_READY /
+    NATIVE_LIBRARY_MISSING / LOAD_FAILED). Pure normalization never reports
+    READY from disk state alone.
+  - **App-private path validation** (`localmodel/LocalModelPathValidator.kt`):
+    model dirs must live under `filesDir/model` or
+    `filesDir/modelscope/{owner}__{repo}`; `..`/`.`/escape/non-whitelisted
+    base/filesDir-root are rejected before any load; no arbitrary file/dir
+    deletion is ever offered. Keep model files app-private, never committed.
+  - **Inventory scanner** (`localmodel/LocalModelInventory.kt`): discovers
+    loadable model dirs (config.json + a weight file `.mnn`/`.om`/
+    `.safetensors`/`.weight`) via an injectable `ModelFolderProbe` seam so
+    scanning is deterministic and device-free. No model output is fabricated.
+  - **Honest capability boundary** (`localmodel/LocalModelCapability.kt`):
+    reconciles inventory + path validation + the native adapter; the explicit
+    `loadAndTest(modelId)` reaches **READY only when the native load returns a
+    genuine Success**, otherwise UNSUPPORTED / typed ERROR. Missing MNN/LLM on
+    Android always yields UNSUPPORTED — never a fake loaded model.
+  - **JNI/CMake native adapter** (`app/src/main/cpp/`, build via AGP
+    `externalNativeBuild cmake`): `local_model_jni.cpp` + `CMakeLists.txt`
+    compile `libclawmate_local_model.so` with the installed Android NDK
+    (25.2.9519653, CMake 3.22.1) for arm64-v8a / armeabi-v7a / x86_64. Because
+    MNN-for-Android and the OHOS N-API/HiAI runtime are absent it is a
+    **truthful stub** returning typed `UNSUPPORTED`/`NATIVE_LIBRARY_MISSING`
+    results; the docs note exactly what a real adapter needs (MNN prebuilt +
+    an `Llm`-equivalent loader). The `.so` is verified packaged into
+    `app-debug.apk`.
+  - **Settings panel** (`localmodel/LocalModelViewModel.kt` +
+    `LocalModelPanel.kt`, wired into the 模型与智能体 section): shows the typed
+    status, the discovered model inventory, and an explicit **"加载/测试 …"**
+    action per loadable model; READY is reported only after a real native load
+    success. Cloud chat endpoint usage is unchanged. App launch performs no
+    network and no model load.
+  - **Deterministic unit tests** (38 new, see §6): state normalization,
+    path validation, inventory mapping, missing-library/missing-file
+    no-fake-output guarantees, and native result-token parsing. Device/native
+    smoke tests documented as unavailable (no emulator, no on-device MNN).
+  - **Environment:** Android NDK 25.2.9519653 + system CMake 3.22.1 installed
+    via the SDK's `sdkmanager` (single compatible NDK; no model binaries, no
+    parallel installs). All Phase 1–9 code and cloud chat paths preserved.
 
 - **Phase 9 (this phase):** Gallery detail flow + local analysis boundaries.
   - **Real gallery item detail flow** from the existing gallery list

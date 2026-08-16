@@ -1,4 +1,4 @@
-# ClawMate Android — Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -89,6 +89,54 @@ messages. Room schema bumped to v2 (adds `address` / `locationProvider` /
 `analysisState`) via an explicit non-destructive migration. Deterministic unit
 tests (39 new) cover detail mapping, edit/delete persistence, geocoder
 result/error mapping, capability states and group recomputation.
+
+**Phase 10** adds a truthful **local model capability boundary** for the Harmony
+on-device MNN/HiAI LLM (`entry/src/main/cpp/*` + `ModelDownloadConfig.ets` +
+model-scan logic in `pages/Index.ets`):
+- A typed domain (`localmodel/`) with states **NOT_CONFIGURED / UNSUPPORTED /
+  LOADING / READY / ERROR** and typed error kinds. Model inventory is discovered
+  under the app-private `filesDir/model` (legacy) and `filesDir/modelscope/
+  {owner}__{repo}` (ModelScope), requiring `config.json` + a weight file
+  (`.mnn`/`.om`/`.safetensors`/`.weight`) to be considered loadable — ported
+  directly from `Index.ets`.
+- An app-private **path validator** that rejects `..`/`.`/escape/non-whitelisted
+  bases so model files stay in the sandbox and no arbitrary file/dir deletion is
+  ever offered.
+- A **JNI/CMake native adapter** (`app/src/main/cpp/`, built by AGP CMake) that
+  compiles `libclawmate_local_model.so` with the Android NDK (25.2.9519653,
+  CMake 3.22.1) for arm64-v8a / armeabi-v7a / x86_64. Because MNN-for-Android
+  and the OHOS N-API/HiAI runtime are absent it is a **truthful stub** returning
+  typed `UNSUPPORTED`/`NATIVE_LIBRARY_MISSING` results — it never fabricates a
+  loaded model or output.
+- An explicit **"加载/测试" action** in the 模型与智能体 Settings section: the
+  selected model dir is re-validated and READY is reported **only after a real
+  native load returns success**. With the stub this honestly reports
+  NOT_CONFIGURED / UNSUPPORTED / ERROR. Cloud chat paths are unchanged and app
+  launch performs no network and no model load.
+- Deterministic unit tests (38 new) covering state normalization, path
+  validation, inventory scanning, and the no-fake-output guarantee
+  (missing library / missing file mapping).
+
+## Layout — features added in Phase 10
+
+```
+app/src/main/java/com/clawmate/app/localmodel/
+├── LocalModelTypes.kt        # Typed status/error domain + normalization + labels
+├── LocalModelPathValidator.kt# App-private model-dir path validation (no traversal/deletion)
+├── LocalModelInventory.kt    # App-private inventory scan (config.json + weight file) via probe seam
+├── LocalModelCapability.kt   # Honest boundary: READY only on real native load success
+├── LocalModelNative.kt       # JNI binding to the native stub (typed results, no fake output)
+├── LocalModelViewModel.kt    # ViewModel backing the Settings local-model panel
+└── LocalModelPanel.kt        # Settings panel: status + inventory + explicit 加载/测试
+
+app/src/main/cpp/
+├── CMakeLists.txt            # Android CMake build of the native stub
+└── local_model_jni.cpp       # JNI stub: status()/nativeLoad() return typed UNSUPPORTED
+
+(modified) app/build.gradle.kts                     # externalNativeBuild cmake + ndkVersion 25.2.9519653 + abiFilters
+(modified) settings/ui/SettingsSections.kt          # LocalModelPanel wired into the 模型与智能体 section
+app/src/test/java/com/clawmate/app/localmodel/      # 5 deterministric test classes (38 tests)
+```
 
 ## Layout — features added in Phase 9
 
@@ -291,8 +339,9 @@ The Phase-1 `ui/FeatureScreens.kt` chat placeholder was replaced by the real
 
 ## Build & verify
 
-Prereqs: JDK 17+, Android SDK (compileSdk 34), Gradle 8.9 (a wrapper can be
-generated with `gradle wrapper`).
+Prereqs: JDK 17+, Android SDK (compileSdk 34), **Android NDK (the local-model
+native stub pins `ndkVersion = "25.2.9519653"`) + Google CMake**, Gradle 8.9 (a
+wrapper can be generated with `gradle wrapper`).
 
 ```bash
 ./gradlew :app:assembleDebug
@@ -310,18 +359,22 @@ generated with `gradle wrapper`).
                                         # disabled adapter, OkHttp health/workflow mapping, timeouts,
                                         # cancellation, runner <-> adapter integration, settings
                                         # explicit health flow (no network on launch)
-                                       # Phase 9: geocoder mapping/error mapping, detail labels,
-                                       # edit/delete persistence, capability states, group recomputation
+                                        # Phase 9: geocoder mapping/error mapping, detail labels,
+                                        # edit/delete persistence, capability states, group recomputation
+                                       # Phase 10: local-model state normalization, path validation,
+                                       # inventory scanning, no-fake-output (missing lib/model) mapping
 ./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS (device/emulator; not run in this worktree)
 ```
 
-In this worktree the Phase-2 through Phase-9 builds and unit tests were actually
-executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 — commands
-and results (including the Phase-9 commands and exit codes) are recorded in
-`MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`. `connectedAndroidTest` was
-not run because no emulator/device is available (the instrumented voice tests
-are documented as unavailable without a device; the platform Geocoder reverse
-lookup runs on-device only and is not faked in unit tests).
+In this worktree the Phase-2 through Phase-10 builds and unit tests were actually
+executed with a local JDK 17 / Android SDK (platform 34) / **Android NDK
+25.2.9519653 + CMake 3.22.1** / Gradle 8.9 — commands and results (including the
+Phase-10 commands and exit codes) are recorded in `MIGRATION_STATUS.md` §6 and
+`DSH_PHASE_RESULT.md`. `connectedAndroidTest` was not run because no
+emulator/device is available (the instrumented voice tests are documented as
+unavailable without a device; the platform Geocoder reverse lookup runs on-device
+only and is not faked in unit tests). Device/native local-model smoke tests are
+similarly unavailable here.
 
 ## No secrets
 
@@ -346,3 +399,12 @@ GUI/HDC workflow step stays `BLOCKED` until a user explicitly taps the settings
 `GET /api/health` `ok` + control-ready reply, and the bridge-backed adapter
 performs only the safe protocol calls (never `/api/run_cmd`, shell/adb/hdc,
 `ProcessBuilder`, `Runtime.exec`, or AccessibilityService).
+
+The **local model** capability performs **no network and no model load on app
+launch**; the Settings 模型与智能体 section scans app-private `filesDir` and the
+"加载/测试" action is explicit. Model files must live under `filesDir/model` /
+`filesDir/modelscope` and are validated by an app-private path checker (no
+arbitrary file/dir deletion). Because MNN-for-Android and the OHOS N-API/HiAI
+runtime are not vendored, the native stub returns typed
+NOT_CONFIGURED / UNSUPPORTED — the app never fabricates a loaded model or
+output.
