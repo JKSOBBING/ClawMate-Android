@@ -42,6 +42,13 @@ this worktree** with the same toolchain (JDK 17.0.19, SDK platform 34, Gradle
 Phases 1–4 + **34 new Phase-5 Settings tests**). Exact commands and exit codes
 are recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 6 (Home + Onboarding) build verification was actually executed in this
+worktree** with the same toolchain (JDK 17.0.19, SDK platform 34, Gradle 8.9,
+`--no-daemon --max-workers=1`): `:app:assembleDebug` and
+`:app:testDebugUnitTest` both pass — **199 unit tests / 0 failures** (163 prior
+Phases 1–5 + **36 new Phase-6 Home/Onboarding tests**; exact count recorded in
+`DSH_PHASE_RESULT.md`).
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -78,8 +85,8 @@ a controlled disabled state), **Defer** (later phase).
 
 | # | Feature | Source of truth (file) | Strategy | Android plan |
 | --- | --- | --- | --- | --- |
-| 1 | **Onboarding** | `pages/onboarding/FirstLaunchOnboarding.ets`, `OnboardingTypes.ets`, spec `docs/superpowers/specs/2026-07-02-first-launch-onboarding-design.md` | Adapt | 3-fixed-pages + usage guide; versioned completion key `firstLaunchOnboardingVersion` (`2026-07-core-preview`) → DataStore boolean/version. UI gate before the tab shell. |
-| 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt | Compose Home. Persona pillars (理解你/守护你/陪伴你/成就你) become static Card sections. Recommendation cards from `home-todo` index (deadline/no-deadline logic) → ViewModel + Room query. |
+| 1 | **Onboarding** | `pages/onboarding/FirstLaunchOnboarding.ets`, `OnboardingTypes.ets`, spec `docs/superpowers/specs/2026-07-02-first-launch-onboarding-design.md` | Adapt | **Phase 6 shipped** an Android `first-launch` gate before the 5-tab shell: a real Compose `FirstLaunchOnboardingScreen` with the three capability preview slides + a usage-guide page (`home/domain/OnboardingTypes.kt` ports the pure contract; version key `firstLaunchOnboardingVersion` = `2026-07-core-preview-usage-guide`). Completion version persisted to an app-private DataStore `clawmate_home` preferences file via `home/data/DataStoreOnboardingRepository.kt`; works on a configuration-free fresh install with no network. |
+| 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt + **data source Defer** | **Phase 6 shipped** the Compose Home UI (`home/domain/HomeDomain.kt`, `home/ui/HomeScreen.kt`): four persona pillars (理解你/守护你/陪伴你/成就你 as 吃/穿/住/行), honest profile loading/empty/error states, recommendation list with completion toggles + 未完成/全部 filter + pagination + expand, and an **honest NOT_CONFIGURED avatar section** (avatar generation is DISABLED on Android — never fabricated). Recommendation *content* still requires the upstream data-manager pipeline (a later phase); completion flags persist via `home/data/DataStoreHomeRecRepository.kt`. |
 | 3 | **Chat & agent loop** | `pages/chat/*` (ChatPage, ChatPageTypes, ChatMessageDataSource, ChatSessionController); `chat/ChatSessionTypes.ets`; `utils/CloudModelClient.ets` (SSE at :725); `utils/AgentLoopRunner.ets`, `ChatReactAgent.ets`, `ChatToolRegistry.ets`, `AgentActionParser.ets`, `AgentExecutionController.ets`; spec `docs/superpowers/specs/2026-06-10-chat-session-management-design.md` | Adapt | Compose `LazyColumn` chat; Repository + ViewModel; OpenAI-compatible `/v1/chat/completions` via OkHttp SSE exposed as `Flow<String>`; ReAct tool loop; Markdown renderer; Room persistence (source uses JSON files in `filesDir/chat-sessions/`). |
 | 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore; on-device OCR via ML Kit (source: Harmony textRecognition); cloud vision LLM (MiniCPM-V) server call; Room + JSON for gallery-log; search via Room FTS; reverse geocoding via a map provider (source: AMap). |
 | 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
@@ -223,6 +230,30 @@ Unit tests added in Phase 4 (deterministic; no network):
   config metadata (title=description, source=name), and persists user edits /
   enabled toggles / run status deterministically across repository instances.
 
+**Phase 6 — executed in this worktree** (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands
+and exit codes (including the final unit-test count) are recorded in
+`DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available).
+
+Unit tests added in Phase 6 (deterministic; no network):
+- `home/OnboardingTypesTest` — 4 slides (3 capability + usage guide), versioned
+  completion key, `shouldShowFirstLaunchOnboarding`, last-page detection,
+  button text, index clamping.
+- `home/OnboardingViewModelTest` — starts on first slide, next/skip/finish,
+  completion persists the version, section navigation.
+- `home/HomePersistenceRoundTripTest` — onboarding + recommendation-completion
+  round-trips, fresh-install defaults, blank-id rejection, apply-flags without
+  inventing recommendations.
+- `home/RecommendationListLogicTest` — empty list, pending-only filter,
+  show-all ordering, 4-per-page pagination, index clamping, completion grouping.
+- `home/HomeViewModelTest` — empty profile ready state, loaded flags applied,
+  toggle persistence, error state on loader failure.
+- `home/HomeModelMappingTest` — avatar NOT_CONFIGURED/disabled guarantees
+  (never a fabricated image/label), status-token parsing, four default pillars,
+  completeness, recommendation colors, empty-profile honesty.
+
 ---
 
 ## 7. Open items / risks
@@ -250,6 +281,47 @@ Unit tests added in Phase 4 (deterministic; no network):
 
 ## 8. Changelog
 
+- **Phase 6 (this phase):** Home / Onboarding vertical slice.
+  - First-launch onboarding gate (`home/domain/OnboardingTypes.kt` ports the
+    pure contract from `pages/onboarding/OnboardingTypes.ets` — 4 slides,
+    versioned completion key `firstLaunchOnboardingVersion`
+    (`2026-07-core-preview-usage-guide`), `shouldShow…`, button text, skip
+    target). Real Compose `FirstLaunchOnboardingScreen`
+    (`home/ui/onboarding/`) renders the three capability preview slides
+    (ClawMate / 数字分身 / 自动执行) + a usage-guide page with 跳过 / 下一页 /
+    进入首页. Completion version persists via `DataStoreOnboardingRepository`
+    (app-private `clawmate_home` Preferences); the shell (`ClawMateRoot`) gates
+    the 5-tab root behind it, and onboarding works on a configuration-free fresh
+    install with no network.
+  - Android home domain (`home/domain/`): `HomeDomain.kt` (four honest default
+    pillars 吃/穿/住/行 + `homeProfileCompleteness`), `HomeRecommendation.kt`
+    (view model + persisted state + per-domain colors),
+    `HomeProfile.kt` (aggregate with loading/ready/error states),
+    `RecommendationListLogic.kt` (pure pagination/filter/completion reductions),
+    and `AvatarStatus.kt` (statuses + an honest `AvatarSection.notConfigured`).
+  - App-private persistence (`home/data/`): `OnboardingRepository` +
+    `HomeRecRepository` interfaces, DataStore-backed implementations
+    (`DataStoreOnboardingRepository`, `DataStoreHomeRecRepository`), and
+    deterministic fakes for tests. Recommendation completion flags are
+    persisted per-id; only flags are stored, never content/endpoints/secrets.
+  - Real Compose Home (`home/ui/HomeScreen.kt` + `HomeViewModel`): the
+    avatar section (honestly NOT_CONFIGURED/DISABLED, never fabricated), the
+    completeness bar, the four persona pillars, and the recommendation list
+    with completion toggles, 未完成/全部 filter, 4-per-page pagination and
+    expand. Profile loading/empty/error states are surfaced.
+    Recommendation content is loaded through a `HomeProfileSource` seam whose
+    current implementation returns the honest empty profile until the
+    data-manager pipeline lands.
+  - The obsolete Phase-1 `ui/home/HomeScreen.kt` placeholder was removed and the
+    首页/聊天/汇总/任务/设置 routes are preserved (only the Home tab content and
+    the pre-tab onboarding gate changed in `ClawMateRoot.kt`).
+  - Deterministic unit tests (`home/`): onboarding version/section navigation,
+    skip/finish, persistence round-trips, recommendation completion +
+    pagination, empty/disabled and not-configured guarantees, and stable model
+    mapping (see §6).
+  - Avatar generation/import and recommendation *content* remain out of scope
+    for this phase and are reported as NOT_CONFIGURED / absent on Android — never
+    faked.
 - **Phase 5 (this phase):** Settings / Configuration vertical slice.
   - Android settings domain (`settings/domain/`): typed `AppSettings` snapshot,
     `SettingsSectionId` + `SETTINGS_SECTIONS` (the five sections 个人与隐私 /

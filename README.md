@@ -1,4 +1,4 @@
-# ClawMate Android — Chat (Ph2) + Agent (Ph3) + Task/Workflow (Ph4) + Settings (Ph5)
+# ClawMate Android — Home (Ph6) + Chat (Ph2) + Agent (Ph3) + Task/Workflow (Ph4) + Settings (Ph5)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -24,6 +24,38 @@ safe/default normalization, sensitive-value masking/reveal/edit (masked values
 are never persisted), the `EndpointBridge` seam into the runtime `EndpointConfig`
 the chat/gallery read, and honest NOT_CONFIGURED / DISABLED states for any
 unconfigured endpoint — never claiming connectivity.
+**Phase 6** replaces the Home-tab placeholder and adds a first-launch onboarding
+gate before the 5-tab shell: a real Compose onboarding (three capability
+preview slides + usage guide, 跳过/下一页/进入首页, versioned completion persisted
+to app-private DataStore) and a truthful Home screen (four persona pillars,
+completeness bar, recommendation list with completion toggles + pagination, and
+an honest NOT_CONFIGURED avatar section — avatar generation is DISABLED on
+Android and never fabricated).
+
+## Layout — features added in Phase 6
+
+```
+app/src/main/java/com/clawmate/app/home/
+├── domain/
+│   ├── OnboardingTypes.kt          # Pure onboarding contract (slides, version key, gate fn) [Phase 6]
+│   ├── HomeDomain.kt               # Four persona pillars (吃/穿/住/行) + completeness
+│   ├── HomeRecommendation.kt       # Recommendation view model / persisted state / colors
+│   ├── HomeProfile.kt              # Profile aggregate + loading/ready/error states
+│   ├── RecommendationListLogic.kt  # Pure pagination / filter / completion reductions
+│   └── AvatarStatus.kt             # Avatar statuses + honest notConfigured section
+├── data/
+│   ├── OnboardingRepository.kt     # + DataStoreOnboardingRepository / fake
+│   ├── HomeRecRepository.kt        # + DataStoreHomeRecRepository / fake (completion flags)
+│   └── HomeProfileSource.kt        # Profile source seam (empty profile until data-manager)
+└── ui/
+    ├── HomeScreen.kt               # Real Compose Home (avatar, pillars, rec list, pagination)
+    ├── HomeViewModel.kt            # + factory (completion toggles, filter, pagination)
+    └── onboarding/
+        ├── FirstLaunchOnboardingScreen.kt  # 3 capability slides + usage guide
+        └── OnboardingViewModel.kt          # + factory (next/skip/finish, versioned completion)
+
+ui/ClawMateRoot.kt  (modified: onboarding gate before the 5-tab root; Home tab → home/ui)
+```
 
 ## Layout — features added in Phase 5
 
@@ -147,13 +179,15 @@ generated with `gradle wrapper`).
                                         # ReAct loop guards, disabled adapters, repository tests,
                                         # Phase 4: workflow JSON parse/repair, nested steps,
                                         # repository persistence, unsupported GUI/HDC, runner cancel/bounds
+                                        # Phase 6: onboarding version/section nav, persistence round-trips,
+                                        # recommendation completion + pagination, empty/disabled states
 ./gradlew :app:connectedAndroidTest     # instrumented (device/emulator)
 ```
 
-In this worktree the Phase-2, Phase-3 and Phase-4 builds and unit tests were
-actually executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 —
-commands and results (including the Phase-4 commands and exit codes) are
-recorded in `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`.
+In this worktree the Phase-2, Phase-3, Phase-4, Phase-5 and Phase-6 builds and
+unit tests were actually executed with a local JDK 17 / Android SDK (platform
+34) / Gradle 8.9 — commands and results (including the Phase-6 commands and exit
+codes) are recorded in `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`.
 
 ## No secrets
 
@@ -162,4 +196,7 @@ Endpoints/keys are not in this tree. Copy
 `app/src/main/res/raw/local_config.properties` (git-ignored) and fill in real
 values (`cloudPlannerBaseUrl` / `cloudPlannerApiKey` / `cloudPlannerModel`).
 With no configuration the chat tab shows a "尚未配置云端模型" state instead of
-faking a reply.
+faking a reply. The first-launch onboarding and the Home profile/avatar sections
+read no network and never invent successful data: onboarding works on a fresh,
+configuration-free install, and Home reports the honest empty / NOT_CONFIGURED
+(avatar DISABLED) states until real Android data sources exist.

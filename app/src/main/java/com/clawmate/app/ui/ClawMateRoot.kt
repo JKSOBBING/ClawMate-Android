@@ -15,6 +15,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -25,8 +26,15 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.clawmate.app.chat.ui.ChatScreen
 import com.clawmate.app.gallery.ui.GalleryScreen
+import com.clawmate.app.home.data.DataStoreHomeRecRepository
+import com.clawmate.app.home.data.DataStoreOnboardingRepository
+import com.clawmate.app.home.data.EmptyHomeProfileSource
+import com.clawmate.app.home.data.HomeProfileSource
+import com.clawmate.app.home.data.HomeRecRepository
+import com.clawmate.app.home.data.OnboardingRepository
+import com.clawmate.app.home.ui.HomeScreen
+import com.clawmate.app.home.ui.onboarding.FirstLaunchOnboardingScreen
 import com.clawmate.app.task.ui.TaskScreen as WorkflowTaskScreen
-import com.clawmate.app.ui.home.HomeScreen
 import com.clawmate.app.settings.ui.SettingsScreen
 
 /**
@@ -51,8 +59,42 @@ sealed class Destination(
     }
 }
 
+/**
+ * App shell root. Mirrors the HarmonyOS `Index` build: it first applies the
+ * first-launch onboarding gate and, once the versioned onboarding is completed,
+ * shows the 5-tab root. Onboarding reads no network and works on a
+ * configuration-free fresh install.
+ */
 @Composable
-fun ClawMateRoot() {
+fun ClawMateRoot(
+    onboardingRepository: OnboardingRepository? = null,
+    homeRecRepository: HomeRecRepository? = null,
+    profileSource: HomeProfileSource = EmptyHomeProfileSource,
+) {
+    val context = LocalContext.current
+    // App-private DataStore-backed stores are recreated on configuration change,
+    // but their data survives across the gate → tab transition.
+    val onboarding = onboardingRepository ?: DataStoreOnboardingRepository(context)
+    val homeRecs = homeRecRepository ?: DataStoreHomeRecRepository(context)
+
+    val onboardingVersion by onboarding.onboardingVersion.collectAsState(initial = "")
+    val showOnboarding = com.clawmate.app.home.domain.shouldShowFirstLaunchOnboarding(onboardingVersion)
+
+    if (showOnboarding) {
+        FirstLaunchOnboardingScreen(
+            repository = onboarding,
+            onFinished = { /* version persisted; flow re-resolves and swaps to tabs */ },
+        )
+    } else {
+        MainTabScaffold(homeRecRepository = homeRecs, profileSource = profileSource)
+    }
+}
+
+@Composable
+private fun MainTabScaffold(
+    homeRecRepository: HomeRecRepository,
+    profileSource: HomeProfileSource,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -84,12 +126,12 @@ fun ClawMateRoot() {
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             val context = LocalContext.current
             when (backStackEntry?.destination?.route) {
-                Destination.Home.route -> HomeScreen()
+                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource)
                 Destination.Summary.route -> GalleryScreen()
                 Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> WorkflowTaskScreen(context)
                 Destination.Settings.route -> SettingsScreen(context)
-                else -> HomeScreen()
+                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource)
             }
         }
     }
