@@ -19,10 +19,11 @@
 ## Commit
 
 - Message: `Phase 4 task workflow vertical slice`
-- Hash: `<<FINAL_COMMIT_HASH>>` (on `master`), created in this worktree.
-  (This doc is updated with the final hash after the feature commit and the
-  result-file change is re-committed as the final docs commit; both the feature
-  commit and the result-file update are present in the branch history.)
+- Hash: `04687dc` (`04687dc`, on `master`), created in this worktree.
+  (This feature commit ships the full Task/Workflow slice; the result-file was
+  then updated with the hash and re-committed as the final docs commit — both
+  the feature commit and the result-file update are present in the branch
+  history below.)
 
 ## Scope delivered (Phase 4)
 
