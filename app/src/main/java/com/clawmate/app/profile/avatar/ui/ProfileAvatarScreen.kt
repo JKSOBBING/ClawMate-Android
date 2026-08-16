@@ -1,5 +1,8 @@
 package com.clawmate.app.profile.avatar.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,10 +26,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,26 +40,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.clawmate.app.profile.avatar.data.asset.AvatarImageContentReader
+import com.clawmate.app.profile.avatar.data.asset.AvatarVersionRecord
 import com.clawmate.app.profile.avatar.domain.AvatarGenerationState
 import com.clawmate.app.profile.avatar.domain.LocalAvatarProfile
 
 /**
  * Profile / Avatar screen — the real Android-visible "数字分身" page.
  *
- * Exposes genuine, on-device profile state: the user edits their display name,
- * short summary, gender/age and each persona domain summary/claims, all
- * persisted in app-private DataStore with **no cloud and no secrets**. The
- * avatar *image* generation is surfaced honestly via
+ * Two genuinely on-device surfaces:
+ *  1. **Local profile editor** — display name, short summary, gender/age and
+ *     each persona domain summary/claims, persisted in app-private DataStore.
+ *  2. **Local avatar asset repository** (portable part of migration row A2) —
+ *     the user picks a *real* image from the system photo picker; it is read
+ *     bounded, validated to decode, and persisted as an app-private
+ *     `local-import` version that is displayed (Coil) and kept in an ordered
+ *     version history with delete + clear. This is a genuine avatar asset —
+ *     never a fabricated/generated one.
+ *
+ * The avatar *image generation* stays honestly gated via
  * [com.clawmate.app.profile.avatar.domain.AvatarGenerationGate] and is never
- * faked — no generated avatar appears unless a real provider is wired (not yet
- * on Android).
+ * faked — no cloud output appears unless a real provider is wired (not yet on
+ * Android).
  *
  * HarmonyOS source reference (read-only):
  *   pages/home/HomePage.ets (avatar section)
- *   datamanager/avatar/AvatarTypes.ets
+ *   datamanager/avatar/AvatarTypes.ets / AvatarStorage.ets / AvatarService.ets
  */
 @Composable
 fun ProfileAvatarScreen(
@@ -63,10 +80,33 @@ fun ProfileAvatarScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current.applicationContext
+
+    val pickImage = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            val bytes = AvatarImageContentReader.readBounded(context, uri)
+            if (bytes == null) {
+                viewModel.showAssetMessage("无法读取所选图片或文件过大", isError = true)
+            } else {
+                viewModel.importAvatarImage(
+                    bytes = bytes,
+                    displayLabel = "本机相册照片",
+                    sourceMimeType = context.contentResolver.getType(uri) ?: "",
+                )
+            }
+        }
+    }
+    val launchPicker = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
     LaunchedEffect(state.savedOk) {
-        if (state.savedOk) {
-            snackbar.showSnackbar("本地画像已保存")
+        if (state.savedOk) snackbar.showSnackbar("本地画像已保存")
+    }
+    LaunchedEffect(state.assetMessage) {
+        state.assetMessage?.let { message ->
+            snackbar.showSnackbar(message.text)
+            viewModel.consumeAssetMessage()
         }
     }
 
@@ -98,6 +138,17 @@ fun ProfileAvatarScreen(
                 completeness = state.completeness,
             )
 
+            // Local avatar asset card (display + import + history + clear)
+            LocalAvatarAssetCard(
+                imagePath = state.avatarImagePath,
+                hasAvatar = state.currentAvatar != null,
+                versionHistory = state.versionHistory,
+                isImporting = state.isImporting,
+                onPickImage = launchPicker,
+                onDeleteVersion = viewModel::deleteVersion,
+                onClearAvatar = viewModel::clearAvatar,
+            )
+
             // Local profile editor
             ProfileEditorCard(
                 profile = state.draft,
@@ -112,6 +163,105 @@ fun ProfileAvatarScreen(
         }
 
         SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
+}
+
+@Composable
+private fun LocalAvatarAssetCard(
+    imagePath: String?,
+    hasAvatar: Boolean,
+    versionHistory: List<AvatarVersionRecord>,
+    isImporting: Boolean,
+    onPickImage: () -> Unit,
+    onDeleteVersion: (String) -> Unit,
+    onClearAvatar: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("本机分身照片（设备内保存）", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "从相册选择一张真实照片，仅保存在本机并按\"数字分身\"展示；不会生成、也绝不凭空造出图片。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF6F7684),
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+
+            if (imagePath != null && hasAvatar) {
+                AsyncImage(
+                    model = imagePath,
+                    contentDescription = "当前本机分身照片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .background(Color(0xFFE8F1FF), RoundedCornerShape(16.dp)),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .background(Color(0xFFEDF1F8), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(if (isImporting) "正在导入…" else "尚未选择本机照片", color = Color(0xFF6F7684))
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Button(
+                    onClick = onPickImage,
+                    enabled = !isImporting,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7669FF)),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("选择本机照片", fontWeight = FontWeight.Bold)
+                }
+                if (versionHistory.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = onClearAvatar,
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text("清空")
+                    }
+                }
+            }
+
+            if (versionHistory.isNotEmpty()) {
+                Text(
+                    "分身版本历史（最新在前）",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                )
+                versionHistory.forEach { version ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(version.promptSnapshot.ifBlank { version.versionId }, fontSize = 14.sp)
+                            Text(
+                                "导入于 ${version.createdAt} · ${version.provider}",
+                                fontSize = 12.sp,
+                                color = Color(0xFF6F7684),
+                            )
+                        }
+                        TextButton(onClick = { onDeleteVersion(version.versionId) }) {
+                            Text("删除", color = Color(0xFFC62828))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -241,7 +391,7 @@ private fun ProfileEditorCard(
             }
 
             saveError?.let {
-                Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
             Button(
