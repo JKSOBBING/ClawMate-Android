@@ -181,6 +181,7 @@ class ChatCompletionsClient(
             content = choice.message?.content ?: "",
             finishReason = choice.finishReason ?: "",
             raw = text,
+            toolCalls = choice.message?.toolCalls ?: emptyList(),
         )
     }
 

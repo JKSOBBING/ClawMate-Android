@@ -121,6 +121,11 @@ private fun MessageList(
         items(messages, key = { it.id }) { message ->
             MessageBubble(message)
         }
+        if (state.activeToolTrace != null) {
+            item(key = "__tool__") {
+                ToolStatusPill(state.activeToolTrace.orEmpty())
+            }
+        }
         if (state.isSending) {
             item(key = "__loading__") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -132,12 +137,28 @@ private fun MessageList(
     }
 }
 
+/** A small inline status pill shown while the agent executes a tool. */
+@Composable
+private fun ToolStatusPill(traceLine: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(0.9f),
+    ) {
+        Text(
+            text = traceLine.replace("\n", " · ").take(120) + (if (traceLine.length > 120) "…" else ""),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
 @Composable
 private fun MessageBubble(message: ChatMessage) {
     val isUser = message.role == ChatMessageRole.USER
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
     ) {
         Surface(
             color = if (isUser) MaterialTheme.colorScheme.primaryContainer
@@ -150,6 +171,15 @@ private fun MessageBubble(message: ChatMessage) {
                 else message.content + if (message.isStreaming) " ▌" else "",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(12.dp),
+            )
+        }
+        // Tool execution traces (agent loop) shown under assistant messages.
+        if (message.trace.isNotEmpty()) {
+            Text(
+                text = message.trace.joinToString("\n"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
             )
         }
     }

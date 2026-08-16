@@ -35,6 +35,8 @@ class DefaultChatRepository(
     private val client: ChatClient,
     private val config: ChatServerConfig,
     private val onSessionTitleChanged: (String) -> Unit = {},
+    /** Optional agent loop for [sendAgentMessage]; created lazily when null. */
+    private val agentLoop: com.clawmate.app.chat.agent.AgentLoop? = null,
 ) : ChatRepository {
 
     @Volatile
@@ -113,6 +115,97 @@ class DefaultChatRepository(
         emit(ChatSendEvent.Completed(assistantContent))
     }
 
+    override suspend fun sendAgentMessage(userText: String): Flow<ChatSendEvent> = flow {
+        if (!ChatServerConfig.isConfigured(config.baseUrl)) {
+            throw com.clawmate.app.chat.cloud.ChatException(
+                com.clawmate.app.chat.cloud.ChatErrorKind.CONFIG,
+                "Cloud model not configured",
+            )
+        }
+        val text = userText.trim()
+        if (text.isEmpty()) return@flow
+
+        val sessionId = ensureActiveSession()
+
+        // Build the agent context from the history stored *before* this turn so the
+        // closure includes the whole prior thread exactly once (the loop appends the
+        // new user turn itself).
+        val priorHistory = dao.messagesFor(sessionId).map(ChatMappers::fromEntity)
+        val wireHistory = buildWireHistory(priorHistory)
+        val loop = agentLoop ?: com.clawmate.app.chat.agent.AgentLoop(
+            client = client,
+            registry = com.clawmate.app.chat.agent.createDefaultToolRegistry(),
+        )
+
+        // 1. Persist the user message immediately.
+        val userMessage = ChatMessage(
+            id = "msg-" + UUID.randomUUID(),
+            role = ChatMessageRole.USER,
+            kind = ChatMessageKind.CHAT,
+            content = text,
+            trace = emptyList(),
+            collapsed = false,
+            createdAt = now(),
+        )
+        dao.upsertMessages(listOf(ChatMappers.toEntity(sessionId, userMessage)))
+        updateSessionMeta(sessionId, now())
+        emit(ChatSendEvent.UserMessageAccepted(userMessage))
+
+        // 2. Run the ReAct loop over the stored history.
+        val accumulated = StringBuilder()
+        val toolTraces = mutableListOf<String>()
+
+        try {
+            loop.run(
+                history = wireHistory,
+                userText = text,
+                options = com.clawmate.app.chat.agent.AgentLoop.Options(
+                    model = config.modelName,
+                ),
+            ).collect { event ->
+                when (event) {
+                    is com.clawmate.app.chat.agent.AgentEvent.ContentDelta -> {
+                        accumulated.append(event.delta)
+                        emit(ChatSendEvent.AssistantDelta(event.delta))
+                    }
+                    is com.clawmate.app.chat.agent.AgentEvent.ToolResult -> {
+                        if (event.result.traceLine.isNotEmpty()) {
+                            toolTraces += event.result.traceLine
+                            emit(ChatSendEvent.ToolExecuted(event.result.toolName, event.result.traceLine))
+                        }
+                        if (event.result.kind == com.clawmate.app.chat.agent.ToolResultKind.DISABLED) {
+                            // Append the actionable bridge/permission note to the reply text
+                            // so the user sees why the action was skipped (no fake success).
+                            val note = "\n\n[设备操作被禁用] ${event.result.disabledReason}"
+                            accumulated.append(note)
+                            emit(ChatSendEvent.AssistantDelta(note))
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+        } catch (e: com.clawmate.app.chat.agent.AgentException) {
+            throw e
+        } catch (e: com.clawmate.app.chat.cloud.ChatException) {
+            throw e
+        }
+
+        // 3. Persist the completed assistant message (with tool traces).
+        val assistantContent = accumulated.toString()
+        val assistantMessage = ChatMessage(
+            id = "msg-" + UUID.randomUUID(),
+            role = ChatMessageRole.ASSISTANT,
+            kind = ChatMessageKind.CHAT,
+            content = assistantContent,
+            trace = toolTraces,
+            collapsed = false,
+            createdAt = now(),
+        )
+        dao.upsertMessages(listOf(ChatMappers.toEntity(sessionId, assistantMessage)))
+        updateSessionMeta(sessionId, now())
+        emit(ChatSendEvent.Completed(assistantContent))
+    }
+
     override suspend fun deleteSession(sessionId: String) {
         dao.deleteMessagesFor(sessionId)
         dao.deleteSession(sessionId)
@@ -156,6 +249,17 @@ class DefaultChatRepository(
     }
 
     private fun buildWireMessages(history: List<ChatMessage>, pendingUserText: String): List<ChatMessageWire> {
+        val context = buildWireHistory(history)
+        context += ChatMessageWire(ChatMessageRole.USER.wire, pendingUserText)
+        return context
+    }
+
+    /**
+     * Builds the wire history handed to the agent loop: a system prompt plus the
+     * stored user/assistant messages (task-trace/context notices excluded), so
+     * the ReAct loop sees the full prior context before the new user turn.
+     */
+    private fun buildWireHistory(history: List<ChatMessage>): MutableList<ChatMessageWire> {
         val context = mutableListOf<ChatMessageWire>()
         context += ChatMessageWire(ChatMessageRole.SYSTEM.wire, "You are ClawMate, a helpful assistant.")
         for (message in history) {
@@ -176,7 +280,6 @@ class DefaultChatRepository(
                 else -> Unit
             }
         }
-        context += ChatMessageWire(ChatMessageRole.USER.wire, pendingUserText)
         return context
     }
 }

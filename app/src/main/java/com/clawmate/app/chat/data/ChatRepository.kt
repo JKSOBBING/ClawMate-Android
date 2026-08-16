@@ -11,6 +11,12 @@ sealed interface ChatSendEvent {
     /** A new piece of assistant reply text has streamed in. */
     data class AssistantDelta(val delta: String) : ChatSendEvent
 
+    /**
+     * A tool call was executed during the agent loop; [traceLine] is the
+     * one-line human-readable summary (name/args/result) shown in the chat.
+     */
+    data class ToolExecuted(val toolName: String, val traceLine: String) : ChatSendEvent
+
     /** The assistant reply finished (delta accumulation is complete). */
     data class Completed(val fullContent: String) : ChatSendEvent
 }
@@ -35,6 +41,18 @@ interface ChatRepository {
      * when the streamed request fails.
      */
     suspend fun sendMessage(userText: String): kotlinx.coroutines.flow.Flow<ChatSendEvent>
+
+    /**
+     * Sends a user message through the **agent ReAct loop** (Phase 3): persists
+     * the user message, runs [com.clawmate.app.chat.agent.AgentLoop] over the
+     * stored history, and streams assistant text plus tool traces as the model
+     * progresses. Emits [ChatSendEvent.UserMessageAccepted], a series of
+     * [ChatSendEvent.AssistantDelta] / [ChatSendEvent.ToolExecuted], then
+     * [ChatSendEvent.Completed]. Never fakes model output: when no tools are
+     * registered or the loop is unavailable it surfaces a typed
+     * `com.clawmate.app.chat.agent.AgentException`.
+     */
+    suspend fun sendAgentMessage(userText: String): kotlinx.coroutines.flow.Flow<ChatSendEvent>
 
     /** Deletes a session and all of its messages. */
     suspend fun deleteSession(sessionId: String)

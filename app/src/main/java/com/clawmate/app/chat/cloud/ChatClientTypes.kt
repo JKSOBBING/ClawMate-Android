@@ -14,6 +14,8 @@ data class ChatCompletionResult(
     val content: String,
     val finishReason: String,
     val raw: String?,
+    /** Tool calls the model requested (empty for a plain text reply). */
+    val toolCalls: List<ToolCallWire> = emptyList(),
 )
 
 /** Finished state of a streamed chat completion, including total text. */

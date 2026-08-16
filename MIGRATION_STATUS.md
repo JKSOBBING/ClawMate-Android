@@ -24,6 +24,11 @@ toolchain above: `:app:assembleDebug` and `:app:testDebugUnitTest` both passed
 (see §6 for the exact commands and output). This supersedes the Phase-1 note
 below, which applied when no JDK/SDK/Gradle were installed.
 
+**Phase 3 build verification was actually executed in this worktree** with the
+same toolchain (JDK 17, SDK platform 34, Gradle 8.9, `--max-workers=1`): the
+Agent/ReAct vertical slice compiles and its unit tests pass (see §6). Exact
+commands and exit codes are recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -155,6 +160,31 @@ Unit tests added in Phase 2 (deterministic; no network unless noted):
 **Every phase after this must run**:
 `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:connectedAndroidTest`
 
+**Phase 3 — executed in this worktree** (JDK 17, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`).
+`DSH_PHASE_RESULT.md` records the exact commands and exit codes. In short:
+- `:app:testDebugUnitTest` — **PASS** (all unit tests green).
+- `:app:assembleDebug` — **PASS** (no offline SDK changes; re-run in the same
+  command as the test pass).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available).
+
+Unit tests added in Phase 3 (deterministic; no network unless noted):
+- `chat/agent/ToolCallMappingTest` — tool-call wire serialization/round trip,
+  streaming tool-call delta accumulation (`StreamToolCallAccumulator`), compact
+  of empty calls, and SSE chunk parser `tool_calls` extraction.
+- `chat/agent/AgentActionParserTest` — pure action parsing (action/parameters,
+  unwrap of wrapper payloads, prose tolerance, action lowercasing, terminal
+  detection, missing-action/malformed errors, `coordinates` fallback, nested
+  number arrays).
+- `chat/agent/ToolRegistryTest` — safe adapter execution, invalid-args error,
+  unknown-tool error, adapter-thrown error, **controlled-disabled GUI adapters**
+  (explain the PC bridge / permission), terminal adapters, result truncation.
+- `chat/agent/AgentLoopTest` — normal content streaming regression, tool-call
+  execution then final answer, **max-step guard** (reached-limit, no loop), and
+  **overall timeout → typed `AgentException(TIMEOUT)`**; cancellation test.
+- `chat/data/AgentRepositoryTest` — `sendAgentMessage` persists user + streamed
+  assistant (with tool trace), and persists user only on model-level failure.
+
 ---
 
 ## 7. Open items / risks
@@ -182,6 +212,33 @@ Unit tests added in Phase 2 (deterministic; no network unless noted):
 
 ## 8. Changelog
 
+- **Phase 3 (this phase):** Agent / ReAct vertical slice.
+  - Typed tool-call & tool-result models in the OpenAI layer (`OpenAiModels.kt`,
+    `ChatClientTypes.kt`, `SseParser.kt`): `tools`/`tool_choice` on the request,
+    nullable `content` + `tool_calls`/`tool_call_id`/`name` on messages,
+    `ToolCallWire`, and **streaming tool-call deltas**
+    (`StreamToolCallDelta` + `StreamToolCallAccumulator` port of
+    `CloudModelClient.applyStreamToolCallDeltas`). Ordinary content streaming is
+    preserved (no regression).
+  - Safe Android tool registry (`chat/agent/ToolRegistry.kt`): explicit safe
+    adapters (`get_current_datetime`, `get_device_info`) and
+    **controlled-disabled** adapters for Harmony GUI/HDC/overlay actions
+    (`gui_screen_tap`, `gui_type_text`, `gui_swipe`, `capture_screen`,
+    `open_app`, `float_overlay_status`) that return a typed
+    `ToolResultKind.DISABLED` explaining the required PC bridge / permission —
+    no arbitrary shell commands, no fake automation.
+  - Pure action parser (`chat/agent/AgentActionParser.kt`) port of
+    `AgentActionParser.ets` (JSON extraction/unwrapping, terminal detection).
+  - Cancellable ReAct loop (`chat/agent/AgentLoop.kt`) as a cold Flow state
+    machine over the existing `ChatClient`: max-step guard, overall timeout,
+    typed `AgentException`, no fake model output; terminal tool results stop the
+    loop.
+  - Repository agent path `DefaultChatRepository.sendAgentMessage`
+    (+ `ChatSendEvent.ToolExecuted`) and minimal ViewModel/UI integration to
+    surface tool execution (`activeToolTrace`) and controlled-disabled/error
+    notes; Phase 2 chat screen not rewritten.
+  - Deterministic unit tests for tool-call mapping, action parsing, max-step/
+    cancellation, disabled adapters and normal content regression (see §6).
 - **Phase 2 (this phase):** Chat / cloud-model vertical slice.
   - Kotlin chat message/session models (`ChatModels.kt`) mirroring
     `ChatSessionTypes.ets` / `ChatPageTypes.ets` (roles, kinds, title/preview).

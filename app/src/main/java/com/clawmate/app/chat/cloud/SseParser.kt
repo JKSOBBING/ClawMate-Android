@@ -128,6 +128,7 @@ object ChatStreamChunkParser {
         }
 
         var contentDelta = ""
+        val toolCallDeltas = mutableListOf<StreamToolCallDelta>()
         val finishReason: String =
             choiceObj["finish_reason"]?.jsonPrimitive?.contentOrNull?.ifBlank { "" } ?: ""
 
@@ -137,10 +138,41 @@ object ChatStreamChunkParser {
         val content = deltaObj["content"]?.jsonPrimitive?.contentOrNull
         if (!content.isNullOrEmpty()) contentDelta = content
 
+        deltaObj["tool_calls"]?.jsonArray?.forEach { rawDelta ->
+            toolCallDeltas.add(parseToolCallDelta(rawDelta))
+        }
+
         return CloudStreamChunk(
             contentDelta = contentDelta,
+            toolCallDeltas = toolCallDeltas,
             finishReason = finishReason,
             done = false,
+        )
+    }
+
+    /**
+     * Parses one streaming `tool_calls[]` delta entry into a
+     * [StreamToolCallDelta]. Ported from the HarmonyOS `CloudStreamToolCallDelta`
+     * shape; tolerates missing/null fields from OpenAI-compatible servers.
+     */
+    private fun parseToolCallDelta(rawDelta: kotlinx.serialization.json.JsonElement): StreamToolCallDelta {
+        val obj = try {
+            (rawDelta as? JsonObject) ?: return StreamToolCallDelta()
+        } catch (e: Exception) {
+            return StreamToolCallDelta()
+        }
+        val index = obj["index"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+        val id = obj["id"]?.jsonPrimitive?.contentOrNull?.let { if (it.isBlank()) null else it }
+        val type = obj["type"]?.jsonPrimitive?.contentOrNull?.let { if (it.isBlank()) null else it }
+        val fn = obj["function"] as? JsonObject
+        val name = fn?.get("name")?.jsonPrimitive?.contentOrNull?.let { if (it.isBlank()) null else it }
+        val arguments = fn?.get("arguments")?.jsonPrimitive?.contentOrNull?.let { if (it.isBlank()) null else it }
+        return StreamToolCallDelta(
+            index = index,
+            id = id,
+            type = type,
+            name = name,
+            arguments = arguments,
         )
     }
 }

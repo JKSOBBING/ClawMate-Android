@@ -25,6 +25,10 @@ data class ChatUiState(
     val isSending: Boolean = false,
     val isConfigured: Boolean = true,
     val error: String? = null,          // user-facing error banner text when send fails
+    /** Latest tool-execution trace line shown while the agent reasons. */
+    val activeToolTrace: String? = null,
+    /** True while the agent loop is running (tool executing / reasoning). */
+    val agentRunning: Boolean = false,
 )
 
 /**
@@ -81,10 +85,10 @@ class ChatViewModel(
 
         sendingJob?.cancel()
         sendingJob = viewModelScope.launch {
-            _state.update { it.copy(isSending = true, error = null) }
+            _state.update { it.copy(isSending = true, error = null, agentRunning = true) }
             val sessionId = repository.ensureActiveSession()
             try {
-                repository.sendMessage(text).collect { event ->
+                repository.sendAgentMessage(text).collect { event ->
                     when (event) {
                         is ChatSendEvent.UserMessageAccepted -> {
                             _state.update {
@@ -124,6 +128,22 @@ class ChatViewModel(
                                 current.copy(messages = streaming)
                             }
                         }
+                        is ChatSendEvent.ToolExecuted -> {
+                            _state.update { current ->
+                                val streaming = current.messages
+                                    .toMutableList()
+                                    .also { list ->
+                                        val idx = list.indexOfLast { it.isStreaming || it.role == ChatMessageRole.ASSISTANT }
+                                        if (idx >= 0 && (list[idx].role == ChatMessageRole.ASSISTANT || list[idx].isStreaming)) {
+                                            val base = list[idx]
+                                            val trace = base.trace + event.traceLine
+                                            val isStreamer = list[idx].isStreaming
+                                            list[idx] = base.copy(trace = trace, streamingVersion = if (isStreamer) base.streamingVersion else 0)
+                                        }
+                                    }
+                                current.copy(messages = streaming, activeToolTrace = event.traceLine)
+                            }
+                        }
                         is ChatSendEvent.Completed -> {
                             _state.update { current ->
                                 val finalized = current.messages
@@ -134,7 +154,12 @@ class ChatViewModel(
                                             list[idx] = list[idx].copy(streamingVersion = 0)
                                         }
                                     }
-                                current.copy(messages = finalized, isSending = false)
+                                current.copy(
+                                    messages = finalized,
+                                    isSending = false,
+                                    agentRunning = false,
+                                    activeToolTrace = null,
+                                )
                             }
                         }
                     }
@@ -144,6 +169,8 @@ class ChatViewModel(
                 _state.update { current ->
                     current.copy(
                         isSending = false,
+                        agentRunning = false,
+                        activeToolTrace = null,
                         isConfigured = current.isConfigured && e.kind != ChatErrorKind.CONFIG,
                         error = e.userMessage,
                         messages = current.messages.filterNot {
@@ -151,9 +178,26 @@ class ChatViewModel(
                         },
                     )
                 }
+            } catch (e: com.clawmate.app.chat.agent.AgentException) {
+                _state.update {
+                    it.copy(
+                        isSending = false,
+                        agentRunning = false,
+                        activeToolTrace = null,
+                        error = "智能体执行失败：${e.message}",
+                        messages = it.messages.filterNot { msg ->
+                            msg.isStreaming && msg.role == ChatMessageRole.ASSISTANT
+                        },
+                    )
+                }
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(isSending = false, error = "发送失败：${e.message ?: "未知错误"}")
+                    it.copy(
+                        isSending = false,
+                        agentRunning = false,
+                        activeToolTrace = null,
+                        error = "发送失败：${e.message ?: "未知错误"}",
+                    )
                 }
             }
         }
@@ -162,7 +206,7 @@ class ChatViewModel(
     /** Cancels an in-flight send. */
     fun cancelSend() {
         sendingJob?.cancel()
-        _state.update { it.copy(isSending = false) }
+        _state.update { it.copy(isSending = false, agentRunning = false, activeToolTrace = null) }
     }
 
     fun clearError() {
