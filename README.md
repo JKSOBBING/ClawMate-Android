@@ -1,4 +1,4 @@
-# ClawMate Android — Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Profile→Home Pipeline (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -244,6 +244,43 @@ marked Portable-pending in the Phase 12 inventory D2, based on Harmony
   fallback, the 6-representative cap, the 80-line LLM-input cap + determinism +
   "无" empty block, the ViewModel Loading→Loaded/Empty/Error state machine, and
   repository-item-driven derivation. 490 unit tests, 0 failures, 0 errors.
+
+## Layout — features added in Phase 16
+
+```
+app/src/main/java/com/clawmate/app/home/domain/HomeProfileBuilder.kt           # Pure port of DataManagerFacade.ets
+                                                                            #   homeProfileDomains/homeProfileDomainDescription/
+                                                                            #   homeProfileDomainFullDescription/domainClaimStatements
+app/src/main/java/com/clawmate/app/home/data/ProfileBackedHomeProfileSource.kt # Real HomeProfileSource: persisted local profile → home VM
+(mod) app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt                   # default profile source → ProfileBackedHomeProfileSource(DataStoreProfileAvatarRepository)
+
+app/src/test/java/com/clawmate/app/home/HomeProfileBuilderTest.kt            # pillar/completeness/claims/empty derivation
+app/src/test/java/com/clawmate/app/home/ProfileBackedHomeProfileSourceTest.kt # real source over the fake profile repository
+```
+
+**Phase 16** finishes the **A1 gap** documented at Phase 12 — the persisted
+local profile now **flows into the real Home recommendation pipeline**:
+- A pure, deterministic `HomeProfileBuilder` maps the four locally-curated
+  吃/穿/住/行 `AvatarDomainSnapshot`s onto the Home pillars (`desc` / `fullDesc` /
+  `claims` / `eventCount`) following the HarmonyOS
+  `datamanager/DataManagerFacade.ets` contracts (`homeProfileDomainDescription` /
+  `homeProfileDomainFullDescription` / `domainClaimStatements`), reusing the
+  existing `defaultHomeDomains()` and `homeProfileCompleteness()`. Because the
+  Android profile is **typed on-device** (not index-derived), a pillar is
+  populated by the content it actually contains — never an invented event count.
+- A real `ProfileBackedHomeProfileSource` reads the app-private DataStore profile
+  (the existing `ProfileAvatarRepository`) and returns the derived home VM. The
+  live app now constructs this source as the default in `ClawMateRoot`, so the
+  home pillars / completeness reflect exactly what the user curated in the
+  数字分身 screen — no longer a hard-coded "暂无数据" shell.
+- **Truthful capability boundaries preserved**: the recommendation list stays
+  empty (there is no indexed-todo content source on Android — the Harmony
+  `homeRecommendations()` pipeline is documented as deferred) and the avatar
+  section stays NOT_CONFIGURED (no generated avatar image is ever invented).
+  An entirely empty profile is still the honest `HomeProfileViewModel.empty`
+  (backward compatible with Phases 1–15). Deterministic tests cover pillar
+  derivation, claims/event counts, completeness, empty/incomplete states and
+  source behaviour.
 
 ## Layout — features added in Phase 15
 

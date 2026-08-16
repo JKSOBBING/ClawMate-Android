@@ -28,11 +28,13 @@ import com.clawmate.app.chat.ui.ChatScreen
 import com.clawmate.app.gallery.ui.GalleryScreen
 import com.clawmate.app.home.data.DataStoreHomeRecRepository
 import com.clawmate.app.home.data.DataStoreOnboardingRepository
-import com.clawmate.app.home.data.EmptyHomeProfileSource
 import com.clawmate.app.home.data.HomeProfileSource
 import com.clawmate.app.home.data.HomeRecRepository
 import com.clawmate.app.home.data.OnboardingRepository
+import com.clawmate.app.home.data.ProfileBackedHomeProfileSource
 import com.clawmate.app.home.ui.HomeScreen
+import com.clawmate.app.profile.avatar.data.DataStoreProfileAvatarRepository
+import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
 import com.clawmate.app.home.ui.onboarding.FirstLaunchOnboardingScreen
 import com.clawmate.app.task.ui.TaskScreen as WorkflowTaskScreen
 import com.clawmate.app.settings.ui.SettingsScreen
@@ -69,13 +71,23 @@ sealed class Destination(
 fun ClawMateRoot(
     onboardingRepository: OnboardingRepository? = null,
     homeRecRepository: HomeRecRepository? = null,
-    profileSource: HomeProfileSource = EmptyHomeProfileSource,
+    profileSource: HomeProfileSource? = null,
+    profileRepository: ProfileAvatarRepository? = null,
 ) {
     val context = LocalContext.current
     // App-private DataStore-backed stores are recreated on configuration change,
     // but their data survives across the gate → tab transition.
     val onboarding = onboardingRepository ?: DataStoreOnboardingRepository(context)
     val homeRecs = homeRecRepository ?: DataStoreHomeRecRepository(context)
+
+    // Phase 16 (A1 gap): the persisted local profile now flows into the Home
+    // recommendation pipeline. When no explicit profile source is injected, the
+    // real app-private DataStore profile repository backs a
+    // ProfileBackedHomeProfileSource so the home pillars/completeness reflect
+    // what the user actually curated in the 数字分身 screen. Callers that inject
+    // their own source (e.g. tests) keep full control.
+    val profileRepo = profileRepository ?: DataStoreProfileAvatarRepository(context)
+    val homeProfileSource = profileSource ?: ProfileBackedHomeProfileSource(profileRepo)
 
     val onboardingVersion by onboarding.onboardingVersion.collectAsState(initial = "")
     val showOnboarding = com.clawmate.app.home.domain.shouldShowFirstLaunchOnboarding(onboardingVersion)
@@ -86,7 +98,7 @@ fun ClawMateRoot(
             onFinished = { /* version persisted; flow re-resolves and swaps to tabs */ },
         )
     } else {
-        MainTabScaffold(homeRecRepository = homeRecs, profileSource = profileSource)
+        MainTabScaffold(homeRecRepository = homeRecs, profileSource = homeProfileSource)
     }
 }
 

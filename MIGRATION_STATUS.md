@@ -1052,7 +1052,7 @@ Legend — **Status**:
 
 | # | Focus / feature | Harmony source of truth | Android strategy | Status | What exists on Android (Phase 12) + remaining gap |
 | --- | --- | --- | --- | --- | --- |
-| A1 | **Profile snapshot & local profile** | `datamanager/avatar/AvatarTypes.ets`, `AvatarPromptBuilder.ets`, `pages/home/HomePage.ets` | Direct port + DataStore | **Done** | `profile/avatar/` ports the typed AvatarTypes contracts and provides a locally-editable, device-persisted profile (display name / summary / gender / age / 吃穿住行 domains) with a pure completeness reducer. Gap: profile still does not flow into the Home recommendation pipeline (the data-manager content source remains deferred). |
+| A1 | **Profile snapshot & local profile** | `datamanager/avatar/AvatarTypes.ets`, `AvatarPromptBuilder.ets`, `pages/home/HomePage.ets` | Direct port + DataStore | **Done** | `profile/avatar/` ports the typed AvatarTypes contracts and provides a locally-editable, device-persisted profile (display name / summary / gender / age / 吃穿住行 domains) with a pure completeness reducer. **Phase 16 closes the A1 recommendation gap**: the persisted profile now flows into the Home pipeline via `ProfileBackedHomeProfileSource` + `HomeProfileBuilder` (a faithful `DataManagerFacade.homeProfileDomains/homeProfileDomainDescription/homeProfileDomainFullDescription/domainClaimStatements` port that maps the four curated domain snapshots onto the Home pillars / completeness). The recommendation list stays honestly empty (the Harmony `homeRecommendations` indexed-todo source is deferred) and avatar generation stays a documented boundary — no fabricated recommendations, images, cloud calls or secrets. |
 | A2 | **Avatar generation (image)** | `SeedreamAvatarProvider.ets`, `AvatarService.ets`, `AvatarStorage.ets`, `AvatarForeground*.ets` | Boundary (NOT_CONFIGURED) | **Boundary** | Real generation needs a Seedream base URL + API key + wired provider. `AvatarGenerationGate` reports honest `NOT_CONFIGURED`/`CONFIGURED_BUT_NO_PROVIDER`; it never generates or fakes an image. Gaps: cloud provider adapter, foreground crop/thumbnail processing, avatar version history persistence. |
 | A3 | **Home avatar card** | `pages/home/HomePage.ets` | Real screen entry | **Done** | The Home avatar card now opens the 数字分身 screen (was a dead disabled button). Gap: displaying a real generated avatar image (awaiting A2). |
 | A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (Phase 1)** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. Gap: import/merge pipeline + Android NFC "knock" approximation (documented, deferred). |
@@ -1078,3 +1078,37 @@ Legend — **Status**:
   **Blocked** states (platform/permission/server blockers), never faked.
 - No Harmony-only MNN/HiAI binaries were copied; the Phase-10 native stub is
   unchanged and its dependencies are documented in §5/§7.
+
+---
+
+## 11. Phase 16 — A1 gap: persisted local profile feeds the Home pipeline
+
+Phase 16 closes the last remaining part of row **A1** (profile snapshot & local
+profile): the locally curated profile now **flows into the real Home
+recommendation pipeline** instead of the Home always rendering the hard-coded
+`暂无数据` shell.
+
+Delivered:
+- `home/domain/HomeProfileBuilder.kt` — pure, deterministic port of Harmony
+  `DataManagerFacade.ets` (`homeProfileDomains` / `homeProfileDomainDescription`
+  / `homeProfileDomainFullDescription` / `domainClaimStatements`) that maps the
+  four `AvatarDomainSnapshot`s onto the Home pillars (`desc` / `fullDesc` /
+  `claims` / `eventCount`) and derives completeness / honest empty state via the
+  existing `defaultHomeDomains()` / `homeProfileCompleteness()`.
+- `home/data/ProfileBackedHomeProfileSource.kt` — a real `HomeProfileSource`
+  backed by the existing `ProfileAvatarRepository` (`DataStoreProfileAvatarRepository`
+  in the live app), returning the derived `HomeProfileViewModel`.
+- `ui/ClawMateRoot.kt` — the live default `HomeProfileSource` is now the
+  profile-backed source, so Home shows the actual saved 吃/穿/住/行 profile.
+
+Truthful boundaries kept:
+- The recommendation list stays **empty** — Harmony builds it from indexed todo
+  events (deferred Android) via `homeRecommendations()`, never fabricated.
+- The avatar section stays NOT_CONFIGURED — no generated avatar image is invented.
+- An entirely empty/incomplete profile still yields the honest
+  `HomeProfileViewModel.empty` (backward compatible with Phases 1–15).
+
+Unit tests (new): `HomeProfileBuilderTest` + `ProfileBackedHomeProfileSourceTest`
+cover pillar mapping, short-summary / summary-only / no-data desc resolution,
+claims extraction cap, event-count sums, completeness, the honest empty state
+and source-level behaviour over the fake profile repository.
