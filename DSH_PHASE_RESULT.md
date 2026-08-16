@@ -1,89 +1,87 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 4 (Task / Workflow vertical slice)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 5 (Settings / Configuration vertical slice)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase4-task`
+- Path: `/opt/deepseek-harness/clawmate-phase5-settings`
 - Branch: `master`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
-- This delivery was **built and tested in this worktree** (JDK 17.0.19,
-  OpenJDK, Android SDK platform 34 / build-tools 34.0.0 at
-  `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
-  `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
-- The `/root` home is read-only under the sandbox, so the build ran with
-  `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home` and
-  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (treated as
-  discarded build state; neither is committed).
-- Nothing was written to `/root/ClawMate-Android`; `/root/mobiinfra-oh` was not
-  modified.
+- This delivery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
+  Android SDK platform 34 / build-tools 34.0.0 at `/opt/deepseek-harness/android-sdk`,
+  Gradle 8.9 at `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
+- Build state used: `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
+  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (discarded, never
+  committed). Nothing was written to `/root/ClawMate-Android`; `/root/mobiinfra-oh`
+  was not modified.
 
 ## Commit
 
-- Message: `Phase 4 task workflow vertical slice`
-- Hash: `04687dc` (`04687dc`, on `master`), created in this worktree.
-  (This feature commit ships the full Task/Workflow slice; the result-file was
-  then updated with the hash and re-committed as the final docs commit — both
-  the feature commit and the result-file update are present in the branch
-  history below.)
+First commit (feature slice):
+- Message: `Phase 5 settings configuration vertical slice`
+- Hash: **`4a9b285`** on `master`, created in this worktree. (This ships the full
+  Settings/Configuration slice.)
 
-## Scope delivered (Phase 4)
+The result-file update (this file, with the feature hash filled in) was then
+committed as the final docs commit — both the feature commit and the
+result-file commit are present in the branch history below.
 
-1. **Android workflow domain models** — `task/model/WorkflowModels.kt`
-   (`WorkflowStep`, `WorkflowDefinition`, `WorkflowTask`, plus
-   `WorkflowMetadata` / `WorkflowDefaults` / `WorkflowCondition` contracts) and
-   `task/model/WorkflowSceneConfig.kt` (the 7 collection scenes), mirrored from
-   `utils/WorkflowTypes.ets` / `WorkflowSceneConfig.ets`.
+## Scope delivered (Phase 5)
 
-2. **Tolerant, deterministic JSON parsing** — `task/json/WorkflowJsonParser.kt`
-   + `WorkflowJsonRepair.kt`:
-   - parses `metadata` / `defaults` / `context` / `steps`, including nested
-     `loop` / `if` / `then_steps` / `else_steps`;
-   - **preserves unknown step types and their raw JSON** (never silently drops);
-     they surface as `UNSUPPORTED/BLOCKED` at run time;
-   - repairs common malformed text (fenced blocks, truncation, literal casing,
-     CJK punctuation) and degrades unrecoverable input to a typed `Err` so one
-     corrupt config card never crashes the Task screen.
+1. **Android Settings domain** — `settings/domain/`:
+   - `SettingsSection.kt`: `SettingsSectionId` (5 sections), the ordered section
+     descriptors (`SETTINGS_SECTIONS` 个人与隐私 · 数据采集 · 模型与智能体 ·
+     任务与自动化 · 存储与关于), `normalize`/`isSelected` (mirrors
+     `SettingsCenterTypes.ets`).
+   - `SettingsKeys.kt`: full typed key inventory + `SENSITIVE_KEYS` subset.
+   - `AppSettings.kt`: typed snapshot plus `…Configured` / `hdcBridgeConfigured`
+     connectivity facts that only become true when a real endpoint+secret exist.
+   - `SettingsNormalizers.kt`: deterministic URL / model / bounded int / double /
+     boolean / embedding-mode normalizers (total functions, never throw).
+   - `SensitiveValueUtils.kt`: port of `SensitiveValueUtils.ets` +
+     `maskSensitiveSettingValue` / `restoreMaskedSensitiveSettingDefault`; the
+     mask marker is a display-only transform.
+   - **No real HarmonyOS default values were copied** — every committed default
+     is empty/safe; only the git-ignored `local_config.properties` (runtime)
+     carries real endpoint values.
 
-3. **Bundled configs + repository** — the source's 11
-   `resources/rawfile/workflows/configs/*.json` were copied verbatim into
-   `app/src/main/res/raw/` **after a secrets/personal-data scan**. The two
-   WeChat configs' sample `contact_name: "小赵"` was replaced with a neutral
-   placeholder (`联系人`) so no personal data is bundled. A file-backed
-   repository (`task/data/DefaultWorkflowRepository.kt` +
-   `WorkflowTaskIndexCodec.kt` + `AndroidBundledConfigReader.kt`) installs the
-   configs into app-private `filesDir/workflows/…`, derives default tasks from
-   config metadata (title = description, source = name — identical to the
-   source), and persists **user edits (editable JSON), enabled toggles, and run
-   status** in a versioned, deterministic `task-index.json` (tolerant decode of
-   extra/unknown fields).
+2. **Repository** — `settings/data/`:
+   - `SettingsRepository` interface; `DataStoreSettingsRepository`
+     (DataStore Preferences, all values stored normalized as strings).
+   - `SettingsCodec`: encode/decode round-trips + `sanitizeForWrite` that strips
+     any masked value from the persisted map — **a masked display string is never
+     written back as a literal secret**. Connectivity flags are never persisted.
+   - `FakeSettingsRepository` (deterministic, same codec guarantees) used by
+     tests/previews.
 
-4. **Bounded, honest `WorkflowRunner`** — `task/runner/WorkflowRunner.kt` +
-   `WorkflowVariableResolver.kt`:
-   - only deterministic non-GUI steps run for real: `sleep` (bounded),
-     `loop` (with `loop.index` / `loop.last`), `if` (condition evaluation over
-     `${context.*}` / `${defaults.*}` / `${steps.*.output.*}`), and a test-only
-     `echo` tool;
-   - every `gui_task` / `gui_action` GUI / HDC / open-app / device-control step
-     is returned as `StepOutcome.Unsupported` → overall `RunStatus.BLOCKED`;
-     every VLM/cloud `tool` (`vlm_qa`, etc.) is `NOT_CONFIGURED`;
-   - **a run is never fabricated as successful when blocked**; bounds: max total
-     steps, per-loop capacity, wall-clock timeout; cooperative cancellation →
-     `CANCELLED`. Never calls `Runtime.exec`, shell, adb, hdc, or an
-     `AccessibilityService`.
+3. **Integration with existing components (safe)** — `settings/config/EndpointBridge.kt`
+   + `config/EndpointConfig.applyCloudEndpoint`:
+   - Editing cloud planner/decider base URL, model, API key in Settings updates
+     the runtime `EndpointConfig` that `ChatServerConfig` / the chat cloud client
+     read; a masked value is never pushed into runtime config.
+   - The gallery capability config is treated as user-editable keys (base URL /
+     API key / model / OCR / embedding / map) surfaced in the Data-Collection
+     section; the gallery engines still report `CapabilityState.NotConfigured`
+     until a real endpoint is configured — nothing claims connected.
+   - Workflow/agent toggles and HDC bridge state are editable/displayed; HDC / PC
+     backend are shown NOT_CONFIGURED / DISABLED unless truly configured.
 
-5. **Real Compose Task screen** — `task/ui/TaskScreen.kt` + `TaskViewModel.kt`
-   + `TaskViewModelFactory.kt`, wired into the 任务 tab via `TaskComponent.kt`
-   (manually DI'd repository + runner). Provides: scene/filter chip bar
-   (全部 + 7 scenes), workflow cards (title, source, enabled `Switch`, last
-   status badge, last run), an expandable step-summary / honest run-outcome
-   section, and loading / empty / error / reload states. A run action parses the
-   task's persisted config and executes the bounded runner. The Phase-1
-   placeholder `ui/TaskScreen` is retained only as a reference doc (no longer
-   routed).
+4. **Real Compose Settings UI** — `settings/ui/`:
+   - `SettingsScreen`: section list ↔ detail navigation, loading / error / saved /
+     save-busy states, save/reset bar; app version + storage summary.
+   - `SettingsSections`: the five section composables with grouped cards
+     (`SettingsGroupCard`), text fields, `SettingToggle` switches, sensitive
+     `SensitiveSettingInput` with reveal/hide editing, `SettingsActionRow`
+     buttons and `SettingsOutputPanel`.
+   - `SettingsViewModel`: working draft, section selection, sensitive reveal
+     (only one active), typed field setters, save (normalizes, sanitizes, pushes
+     to runtime) and reset-to-defaults.
+   - Missing / unconfigured endpoints surface as NOT_CONFIGURED or DISABLED; the
+     storage/about section shows app version/code and an app-private storage
+     summary. Destructive cleanup actions are explicit disabled buttons that do
+     **not** delete broad directories or user data.
 
-6. **Deterministic unit tests** — 33 new tests (see §Test count) in
-   `task/json/*Test.kt`, `task/runner/WorkflowRunnerTest.kt`,
-   `task/data/DefaultWorkflowRepositoryTest.kt`, and
-   `task/data/WorkflowTaskIndexCodecTest.kt`.
+5. **Deterministic unit tests** — 34 new tests (see §Test count) covering
+   normalization, masking/restore, persistence round-trips, section selection,
+   and safe disabled/unconfigured states.
 
 ## Commands run & exit codes
 
@@ -95,90 +93,96 @@ Gradle binary: `/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle`.
 
 | # | Command | Result |
 | --- | --- | --- |
-| 1 | `gradle --no-daemon --max-workers=1 :app:compileDebugKotlin` | **SUCCESS** (exit 0) — baseline + during development |
-| 2 | `gradle --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest` | **SUCCESS** (exit code `0`) |
-| 3 | `gradle --no-daemon --max-workers=1 :app:testDebugUnitTest --tests 'com.clawmate.app.task.*'` | **SUCCESS** (exit 0) — 33 Phase-4 task tests green |
-| 4 | `gradle --no-daemon --max-workers=1 :app:connectedAndroidTest` | **not run** — no emulator/device available (same as Phases 1–3) |
+| 1 | `gradle --no-daemon --max-workers=1 :app:compileDebugKotlin` | **SUCCESS** (exit 0) — during development |
+| 2 | `gradle --no-daemon --max-workers=1 :app:testDebugUnitTest --tests 'com.clawmate.app.settings.*'` | **SUCCESS** (exit 0) — 34 Phase-5 settings tests green |
+| 3 | `gradle --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest` | **SUCCESS** (exit code `0`) — full build + all 163 JVM unit tests |
+| 4 | `gradle --no-daemon --max-workers=1 :app:connectedAndroidTest` | **not run** — no emulator/device available (same as Phases 1–4) |
 
 ## Test count
 
-- Total unit tests green: **129** (94 prior Phases 1–3 + **33 new Phase-4
-  Task/Workflow tests**); **0 failures / 0 errors** across
-  `:app:testDebugUnitTest`.
-- New Phase-4 tests by area:
-  - `task/json/WorkflowJsonParserTest` (7) — metadata/defaults/context/steps,
-    nested loop/if, unknown-step preservation, malformed tolerance, repair of
-    casing/braces, `times` as String.
-  - `task/json/WorkflowJsonRepairTest` (6) — object extraction, fence
-    stripping, truncation, CJK punctuation, literal casing.
-  - `task/runner/WorkflowRunnerTest` (11) — GUI/HDC → BLOCKED (never success),
-    VLM tool → NOT_CONFIGURED, deterministic sleep/echo, real `if` branch,
-    cancellation → CANCELLED, loop/time-step bounds, unknown step → BLOCKED,
-    `loop.index/loop.last`.
-  - `task/data/WorkflowTaskIndexCodecTest` (4) — deterministic round-trip,
-    tolerant decode, malformed → null.
-  - `task/data/DefaultWorkflowRepositoryTest` (5) — bundled bootstrap, task
-    derivation, user-edit persistence, enabled toggle, run-status persistence.
+- Total JVM unit tests green: **163** (129 prior Phases 1–4 + **34 new Phase-5
+  Settings tests**); **0 failures / 0 errors** across `:app:testDebugUnitTest`.
+- New Phase-5 tests by area:
+  - `SettingsNormalizersTest` (8) — URL/model trim, compression threshold +
+    recent-rounds bounds, positive concurrency clamp, boolean parse, embedding
+    mode enum, double bounds.
+  - `SensitiveValueUtilsTest` (6) — blank never masked, mask-marker detection,
+    deterministic length-preserving mask, restore-exact-default, unknown-masked →
+    empty, non-masked passthrough.
+  - `SettingsCodecTest` (4) — encode/decode round-trip, empty map → safe defaults,
+    corrupt-value degradation (total), `sanitizeForWrite` drops masked secrets.
+  - `SettingsRepositoryTest` (5) — save/snapshot round-trip + normalization,
+    flow emission, masked-secret never persisted, safe unconfigured defaults,
+    connectivity flags never persisted.
+  - `SettingsSectionTest` (5) — five sections order/content, normalize/isSelected,
+    titles/subtitles, section badges.
+  - `SafeDisabledStateTest` (6) — configured flags require URL+secret, HDC URL
+    rule, EndpointBridge never pushes a masked key into runtime config, plain
+    typed secret applied, `EndpointConfig.applyCloudEndpoint` mask guard.
 
 ## Changed files (this phase)
 
 ```
-app/src/main/java/com/clawmate/app/task/TaskComponent.kt                     (new)
-app/src/main/java/com/clawmate/app/task/model/WorkflowModels.kt              (new)
-app/src/main/java/com/clawmate/app/task/model/WorkflowSceneConfig.kt         (new)
-app/src/main/java/com/clawmate/app/task/json/WorkflowJsonParser.kt           (new)
-app/src/main/java/com/clawmate/app/task/json/WorkflowJsonRepair.kt           (new)
-app/src/main/java/com/clawmate/app/task/data/WorkflowRepository.kt           (new)
-app/src/main/java/com/clawmate/app/task/data/DefaultWorkflowRepository.kt    (new)
-app/src/main/java/com/clawmate/app/task/data/WorkflowTaskIndexCodec.kt       (new)
-app/src/main/java/com/clawmate/app/task/data/AndroidBundledConfigReader.kt   (new)
-app/src/main/java/com/clawmate/app/task/runner/WorkflowVariableResolver.kt    (new)
-app/src/main/java/com/clawmate/app/task/runner/WorkflowRunner.kt              (new)
-app/src/main/java/com/clawmate/app/task/ui/TaskScreen.kt                      (new)
-app/src/main/java/com/clawmate/app/task/ui/TaskViewModel.kt                   (new)
-app/src/main/java/com/clawmate/app/task/ui/TaskViewModelFactory.kt            (new)
-app/src/main/res/raw/default_alipay_bill.json … default_xiaohongshu_history.json  (new, secrets-free)
-app/src/test/java/com/clawmate/app/task/json/WorkflowJsonParserTest.kt        (new)
-app/src/test/java/com/clawmate/app/task/json/WorkflowJsonRepairTest.kt        (new)
-app/src/test/java/com/clawmate/app/task/runner/WorkflowRunnerTest.kt          (new)
-app/src/test/java/com/clawmate/app/task/data/DefaultWorkflowRepositoryTest.kt (new)
-app/src/test/java/com/clawmate/app/task/data/WorkflowTaskIndexCodecTest.kt    (new)
-app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt                        (modified — route 任务 tab to TaskScreen)
-app/src/main/java/com/clawmate/app/ui/FeatureScreens.kt                      (modified — note placeholder no longer routed)
-README.md                                                                    (modified)
-MIGRATION_STATUS.md                                                          (modified)
-DSH_PHASE_RESULT.md                                                          (rewritten — this file)
+app/src/main/java/com/clawmate/app/config/EndpointConfig.kt                 (modified — applyCloudEndpoint, mask guard)
+app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt                       (modified — route 设置 tab to settings.ui.SettingsScreen)
+app/src/main/java/com/clawmate/app/ui/settings/SettingsScreen.kt            (modified — Phase-1 placeholder marked non-routed reference)
+app/src/main/java/com/clawmate/app/settings/SettingsComponent.kt            (new)
+app/src/main/java/com/clawmate/app/settings/config/EndpointBridge.kt        (new)
+app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt       (new)
+app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt          (new)
+app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt           (new)
+app/src/main/java/com/clawmate/app/settings/domain/SettingsNormalizers.kt   (new)
+app/src/main/java/com/clawmate/app/settings/domain/SensitiveValueUtils.kt   (new)
+app/src/main/java/com/clawmate/app/settings/data/SettingsRepository.kt      (new)
+app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt           (new)
+app/src/main/java/com/clawmate/app/settings/data/DataStoreSettingsRepository.kt (new)
+app/src/main/java/com/clawmate/app/settings/data/FakeSettingsRepository.kt  (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt            (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt          (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsControls.kt          (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsTheme.kt             (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt         (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModelFactory.kt  (new)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsUiState.kt           (new)
+app/src/test/java/com/clawmate/app/settings/*Test.kt                         (6 new test classes, 34 tests)
+README.md                                                                   (modified)
+MIGRATION_STATUS.md                                                         (modified)
+DSH_PHASE_RESULT.md                                                         (rewritten — this file)
 ```
 
 ## Limitations & platform blockers
 
-- **GUI / HDC / accessibility automation is not implemented and not faked.**
-  `gui_task` / `gui_action` steps (open-app, screenshot, tap, swipe, coordinates,
-  deep links) are reported as `UNSUPPORTED` with a clear reason and the run is
-  `BLOCKED`. A VLM/cloud `tool` is `NOT_CONFIGURED` (no endpoint on this
-  device). There is no `Runtime.exec`/shell/adb/hdc/`AccessibilityService`, so a
-  workflow is only ever `SUCCESS` when its steps are deterministic, non-GUI, and
-  fully executed.
-- **Cloud VLM execution boundary** — `tool: vlm_qa` and similar require a cloud
-  model + screenshot pipeline; out of scope for this slice, reported
-  `NOT_CONFIGURED`.
-- **Daily-log / run-dir artifact generation** from the HarmonyOS runner is not
-  ported (no real runs produce artifacts because runs with GUI steps are
-  blocked).
+- **Connectivity is never fabricated.** Cloud Planner/Decider, gallery vision,
+  Embedding, HDC bridge and the PC backend are reported NOT_CONFIGURED / DISABLED
+  until a real URL + secret + live check proves otherwise. There is no fake
+  "connected" status, no gratuitous `Runtime.exec`, no shell/adb/hdc invocation
+  and no silent directory deletion.
+- **Sensitive masking is display-only.** A masked value (bullet marker) is
+  recognized, never persisted verbatim (codec `sanitizeForWrite`) and never
+  pushed into runtime config (EndpointBridge guard). Only a user-typed plaintext
+  secret is stored, and only while the user is actively editing the revealed
+  field.
+- **Destructive cleanups are gated.** The 清理操作 card renders explicit disabled
+  buttons with an explanatory note; no cleanup deletes broad directories or user
+  data. The Phase 5 slice intentionally does not wire file deletion.
+- **HDC / GUI automation and model download remain out of scope** — HDC bridge
+  state is editable/config-visible but the actual bridge/auto-pairing is not
+  implemented (surfaced as DISABLED), consistent with the Phase-4 blocker.
 - **connectedAndroidTest** not run (no device/emulator); `assembleDebug` and all
-  129 JVM unit tests pass.
-- **Some benign Kotlin warnings** remain (unused params/safe calls) — non-fatal,
-  no compilation errors.
+  163 JVM unit tests pass.
+- **Some benign Kotlin warnings remain** (a few unused params in new composable
+  scaffolding) — non-fatal, no compilation errors.
 
 ## Next phase
 
-1. A **cloud/PC bridge adapter for GUI automation**: the source drives real
-   devices over HDC via a PC-side Python service (`hdc_server.py` :9124,
-   `harmony_agent.py`). The Android equivalent would be an HTTP bridge to a
-   PC/adb service (or UIAutomator/Shizuku) — wire that adapter behind the
-   `WorkflowRunner` so `gui_task`/`gui_action` can become executable, with the
-   currently `UNSUPPORTED`/`NOT_CONFIGURED` states as the honest fallback.
-2. **Settings tab** (the 5th major phase): port the 7 settings sections from
-   `pages/Index.ets` key inventory + `SettingsCenter*` to DataStore/Compose.
-3. Optionally: daily-log normalization (`WorkflowDateContext`) and run-result
-   artifact persistence once GUI/HDC steps can actually run.
+1. **Cloud/PC bridge adapter for GUI automation** — the source drives real
+   devices over HDC via a PC-side Python service. The Android equivalent is an
+   HTTP/adb/UIAutomator/Shizuku adapter wired behind the `WorkflowRunner` and the
+   HDC settings card, so `gui_task`/`gui_action`/HDC steps could become
+   executable and the HDC "已连接" state could become truthful — with the current
+   NOT_CONFIGURED/DISABLED states as the honest fallback.
+2. **Voice / digital avatar** and **local MNN model** vertical slices (rows 8–9
+   in MIGRATION_STATUS) — the settings fields for avatar/TTS already exist; wire
+   the real clients and per-section enable/disable.
+3. Optionally: on-device OCR/cloud-vision analytics once an endpoint + engine
+   are configured, gated by the gallery settings this phase introduced.
