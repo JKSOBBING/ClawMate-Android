@@ -1,35 +1,38 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 11 (Real on-device OCR)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 12 (Coverage audit + Profile/Avatar local UI & state)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase11-ocr`
-- Branch: `master`
+- Path: `/opt/deepseek-harness/clawmate-phase12-coverage`
+- Branch: `phase12-coverage-audit`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
 - This delivery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
   Android SDK platform 34 / build-tools 34.0.0 at
-  `/opt/deepseek-harness/android-sdk`, Android NDK 25.2.9519653 + Google CMake
-  3.22.1 installed there via the SDK's `sdkmanager`, Gradle 8.9 at
+  `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
   `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
 - Build state used: `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
   `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (both discarded,
-  never committed). Nothing was written to `/root/ClawMate-Android`;
-  `/root/mobiinfra-oh` was not modified. All Phase 1–10 code is preserved.
+  never committed), and the exact same Gradle 8.9 release binary used in Phases
+  2–11 (the wrapper distribution URL is unreachable here). Nothing was written
+  to `/root/ClawMate-Android`; `/root/mobiinfra-oh` was not modified. All Phase
+  1–11 code is preserved.
 - Working policy: serial only, single worker, no parallel Gradle processes, no
   servers/emulators, one Gradle build at a time.
-- Note: the Gradle wrapper distribution URL (`services.gradle.org`) is **not
-  reachable from this worktree** (download times out). The build therefore ran
-  the same **Gradle 8.9** release binary directly from
-  `/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle` (the same binary the
-  Phase 10 build used), with the same environment variables. This is recorded
-  exactly under "Command executed".
 
 ## Commit
 
-The Phase-11 feature changes plus this documentation are committed together as a
-single feature commit:
-- Message: `Phase 11 local OCR`
-- Hash: recorded at the bottom of this file after the commit (this file is part
-  of that same commit, so the hash is the commit that contains it).
+The Phase-12 feature changes plus this documentation are prepared as a single
+feature commit (message `Phase 12 coverage audit`) **but the commit could not be
+created in this worktree** because of a sandbox restriction: the worktree's git
+metadata lives under `/root/ClawMate-Android/.git/`, which this environment
+denies **all writes** to (verified for `git add` → `index.lock Permission
+denied`, `git hash-object -w` → object database permission error, and direct
+file creation under `.git/`). Requesting a wider sandbox mode requires approval
+that has no available channel, so the request fails closed. This is an
+environmental blocker, not a code issue — **no commit hash is claimed.** All
+Phase-12 changes remain in the working tree, staged conceptually but not
+committable here. If a later environment (or an approval channel) permits writes
+to `/root/ClawMate-Android/.git/`, run `git add -A && git commit -m "Phase 12
+coverage audit"` in `clawmate-phase12-coverage` and record the returned hash.
 
 ## Command executed (actual, in this worktree)
 
@@ -42,110 +45,93 @@ ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
     --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Result: **BUILD SUCCESSFUL — exit code 0**.
+Result: **BUILD SUCCESSFUL** (exit code `0`).
 - `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk`
-  (~52.5 MB, regenerated fresh in this worktree). The APK packages the **bundled
-  ML Kit Chinese text-recognition** (`com.google.mlkit:text-recognition-chinese:
-  16.0.1`, resolved on Google Maven): `libmlkit_google_ocr_pipeline.so` for
-  arm64-v8a / armeabi-v7a / x86_64 plus the bundled Chinese (`Hani_ctc`) and
-  Latin (`Latn_ctc`) OCR model assets and the truthful local-model JNI stub
-  (`libclawmate_local_model.so`, three ABIs).
-- `:app:testDebugUnitTest` was re-run to completion in this worktree: **407
-  tests, 0 failures, 0 errors** (380 prior Phases 1–10 + **27 new Phase-11 OCR
-  tests**), across 61 test class result files.
+  (regenerated fresh in this worktree) including the new `profile/avatar/`
+  slice and the existing ML Kit bundled OCR + local-model native stub.
+- `:app:testDebugUnitTest` ran to completion: **425 tests, 0 failures,
+  0 errors** (407 prior Phases 1–11 + **18 new Phase-12 Profile/Avatar tests**).
 - `:app:connectedAndroidTest` was **not run** — no device/emulator is available
-  in this worktree; ML Kit's runtime and any on-device model handling require a
-  real device.
+  in this worktree.
 
-## ML Kit dependency resolution (verified)
+## Scope delivered (Phase 12)
 
-`com.google.mlkit:text-recognition-chinese:16.0.1` (and its
-`com.google.mlkit:text-recognition` and `com.google.mlkit:vision-common`
-dependencies and the bundled `com.google.android.gms:play-services-*` base)
-resolved on Google Maven. The resolved AAR/artifacts were confirmed present in
-`GRADLE_USER_HOME/caches/modules-2`, and the final APK was inspected to contain
-the bundled OCR native pipeline + Chinese/Latin model assets described above.
+1. **Coverage audit / feature matrix** (`MIGRATION_STATUS.md` §10): a full
+   source-to-target comparison of the HarmonyOS `ets` inventory against Phases
+   1–11 Android, focused on Profile/Avatar, AutoAgent, float/edge/log, gallery
+   embedding & monthly insights, and WeChat auto-summary. Each row documents the
+   source of truth, strategy, and honest status (Done / Boundary /
+   Portable-pending / Blocked) with the exact remaining gap.
+2. **Typed avatar domain** (`profile/avatar/domain/AvatarDomain.kt`): port of
+   the pure `datamanager/avatar/AvatarTypes.ets` contracts (`AvatarProfileSnapshot`,
+   `AvatarDomainSnapshot`, `AvatarConsentSnapshot`, `AvatarGenerationMode`,
+   `AvatarState`/`AvatarStatusToken`, `AvatarVersionViewModel`, four persona
+   domains, `localProfileCompleteness`, `avatarErrorMessage`).
+3. **Locally editable, device-persisted profile**
+   (`data/DataStoreProfileAvatarRepository.kt` + `domain/LocalAvatarProfile`):
+   display name / short summary / gender / age / per-domain (吃/穿/住/行)
+   summaries & claims; stored app-private in a DataStore Preferences JSON payload
+   with tolerant decode → honest empty fallback. No cloud, no secrets, no
+   generated image.
+4. **Truthful avatar-generation boundary**
+   (`domain/AvatarGenerationGate.kt`): derives `NOT_CONFIGURED` vs
+   `CONFIGURED_BUT_NO_PROVIDER` from the configured avatar service and explains
+   it; it never calls Seedream and **never fabricates a generated avatar**. The
+   real image generation (Harmony `SeedreamAvatarProvider`) stays a documented
+   remaining gap.
+5. **Real Compose Profile/Avatar screen** (`ui/ProfileAvatarScreen.kt` +
+   `ProfileAvatarHost.kt` + `ProfileAvatarViewModel.kt`): editable local profile
+   form, honest generation-status card with completeness bar, save validation +
+   snackbar. Wired so the Home avatar card (`ui/HomeScreen.kt`) opens the
+   数字分身 screen instead of a dead disabled button.
+6. **No Harmony-only binaries**: no MNN/HiAI `.so` copied; the Phase-10
+   `libclawmate_local_model.so` stub is unchanged. Dependencies are documented
+   (MNN-for-Android prebuilt per ABI + an `Llm`-equivalent loader).
 
-## Scope delivered (Phase 11)
-
-1. **Real on-device Chinese OCR adapter** (`gallery/ocr/AndroidOcrEngine.kt`),
-   replacing the Phase-9 `NOT_CONFIGURED` OCR boundary: opens the picked
-   `content://` photo URI through `ContentResolver` (picker URI grant — no broad
-   storage permission), decodes a bounded-size `Bitmap` (64 MB pixel budget),
-   runs ML Kit `task-recognition-chinese` on a background dispatcher, maps every
-   outcome to typed `OcrResult` states, and closes the recognizer/bitmap/stream.
-
-2. **Typed result taxonomy** (`CapabilityEngines.kt`): `OcrResult` is now
-   `Text / Empty / Cancelled / ModelDownload / Failed(kind) / Unavailable` with a
-   stable `OcrErrorKind` enum (UNKNOWN, URI_ACCESS, DECODE, MLKIT_ENGINE,
-   UNAVAILABLE, CANCELLED). Only `Text` carries real recognized text; every
-   other state is an honest non-text result. `OcrEngine.recognize` is now a
-   suspend function.
-
-3. **Device-free pure mapping** (`gallery/ocr/OcrMapping.kt`): concentrated
-   decision logic (real-text vs honest-empty, failure classification,
-   model-download state, no-fake-output guarantee) that is deterministic and
-   unit-tested without a device.
-
-4. **Bounded-bitmap decode planning** (`gallery/ocr/OcrBitmapDecode.kt`):
-   deterministic power-of-two `inSampleSize` downscale to ≤2048 px side and an
-   honest memory-budget refusal (no blind OOM).
-
-5. **User-triggered Analyze OCR** in the gallery detail panel
-   (`GalleryDetailScreen` + `GalleryViewModel.analyzeOcr`): explicit action with
-   typed loading/success/empty/error/model-download/unavailable states. Only real
-   recognized text (or a genuine empty) + the `analyzed` status is persisted via
-   Room (`GalleryDao.updateOcr` / `GalleryRepository.updateOcr`). Failures,
-   model-download, and unavailable persist nothing and never fabricate text.
-
-6. **Wiring**: `GalleryComponent.ocr(context)` now returns the real adapter
-   (`androidOcrEngine`); cloud vision stays NOT_CONFIGURED and reverse geocoding
-   is unchanged.
-
-## Files changed (Phase 11)
+## Files changed (Phase 12)
 
 New:
-- `app/src/main/java/com/clawmate/app/gallery/ocr/AndroidOcrEngine.kt`
-- `app/src/main/java/com/clawmate/app/gallery/ocr/OcrBitmapDecode.kt`
-- `app/src/main/java/com/clawmate/app/gallery/ocr/OcrMapping.kt`
-- `app/src/test/java/com/clawmate/app/gallery/ocr/OcrBitmapDecodeTest.kt`
-- `app/src/test/java/com/clawmate/app/gallery/ocr/OcrMappingTest.kt`
-- `app/src/test/java/com/clawmate/app/gallery/ui/OcrAnalysisViewModelTest.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/domain/AvatarDomain.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/domain/AvatarGenerationGate.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/data/ProfileAvatarRepository.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/data/DataStoreProfileAvatarRepository.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/data/FakeProfileAvatarRepository.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/ui/ProfileAvatarViewModel.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/ui/ProfileAvatarScreen.kt`
+- `app/src/main/java/com/clawmate/app/profile/avatar/ui/ProfileAvatarHost.kt`
+- `app/src/test/java/com/clawmate/app/profile/avatar/AvatarDomainTest.kt`
+- `app/src/test/java/com/clawmate/app/profile/avatar/ProfileAvatarViewModelTest.kt`
 
 Modified:
-- `app/build.gradle.kts` (added `libs.mlkit.text.recognition.chinese`)
-- `gradle/libs.versions.toml` (ML Kit version + dependency coordinates)
-- `GalleryComponent.kt`, `CapabilityEngines.kt` (typed `OcrResult`/`OcrErrorKind`,
-  suspend `recognize`, real adapter wiring)
-- `GalleryDAO.kt`, `GalleryRepository.kt`, `DefaultGalleryRepository.kt`
-  (`updateOcr`)
-- `GalleryModels.kt` (`ANALYSIS_STATE_ANALYZED = "analyzed"`)
-- `GalleryViewModel.kt` (`analyzeOcr` + `OcrViewState` + detail OCR state)
-- `GalleryDetailScreen.kt` (Analyze OCR section), `GalleryScreen.kt` (wiring),
-  `GalleryDetailLabels.kt` (honest "已分析（本地 OCR）" label)
-- `README.md`, `MIGRATION_STATUS.md` (this phase's docs)
+- `app/src/main/java/com/clawmate/app/home/ui/HomeScreen.kt` (avatar card opens
+  the Profile/Avatar screen via `onOpenAvatar`)
+- `README.md`, `MIGRATION_STATUS.md`, this `DSH_PHASE_RESULT.md`
 
 ## Verification summary
 
-- ML Kit `com.google.mlkit:text-recognition-chinese:16.0.1` resolves on Google
-  Maven (verified in the module cache; bundled model/native libs confirmed in the
-  final APK).
-- `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL exit 0**.
-- Fresh test execution in this worktree → **407 tests, 0 failures, 0 errors**
-  (incl. the 27 new Phase-11 OCR tests).
+- `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**, exit `0`.
+- Fresh test execution in this worktree → **425 tests, 0 failures, 0 errors**.
 - `:app:connectedAndroidTest` not run (no device/emulator).
 
-## Known gaps / notes
+## Known gaps / notes (recorded honestly)
 
-- **Live OCR output requires a real device**: ML Kit Chinese text recognition is
-  wired, bundled, and unit-tested (deterministic mapping), but real recognized
-  text from an actual photo and any on-device model handling can only be
-  exercised on a device/emulator, which this worktree lacks — documented, not
-  claimed as verified on-device.
-- Cloud vision (MiniCPM-V) remains NOT_CONFIGURED (no endpoint/key configured).
-- No broad storage permission, no network endpoint/API key, no background scan of
-  all media — only explicit user-triggered analysis of a selected photo.
+- **Avatar image generation is not implemented** — it requires a configured
+  Seedream (or similar) cloud provider with a base URL + API key and a consent
+  flow; `AvatarGenerationGate` keeps this an honest NOT_CONFIGURED /
+  CONFIGURED_BUT_NO_PROVIDER state. No fake avatar is produced.
+- **Gallery monthly insights & WeChat auto-summary validation** are pure,
+  portable logic but not ported in this phase — documented as Portable-pending
+  in `MIGRATION_STATUS.md` §10 and §7.
+- **AutoAgent / float-edge overlay / WeChat collection** remain honest Blocked /
+  controlled states (Android AccessibilityService opt-in, `SYSTEM_ALERT_WINDOW`
+  permission, or a configured PC HDC bridge respectively) — never faked.
+- **Log view** (Harmony `pages/LogView.ets`) is documented but not ported.
+- **Profile/data-manager pipeline**: the locally edited profile does not yet feed
+  the Home recommendation content pipeline (that data source remains deferred).
 
 ## Commit hash
 
-- `Phase 11 local OCR` → **`635f5a86eba4f01ad60e2fe3b1b4bc267fa64a91`**
+- `Phase 12 coverage audit` → **NOT COMMITTED** — see "Commit" above (sandbox
+  blocks writes to the external `/root/ClawMate-Android/.git/` repo metadata;
+  no approval channel is available). Record the hash here once committed by a
+  writable environment.

@@ -1,4 +1,4 @@
-# ClawMate Android — OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -140,6 +140,33 @@ bundled Chinese + Latin model):
   (documented — not claimed as on-device-verified). 27 new deterministic unit
   tests (407 total green in this worktree).
 
+**Phase 12** is a **coverage audit** plus the highest-value real gap from it: a
+truthful **Profile / Avatar local UI & state** slice (`profile/avatar/`),
+reached from the Home avatar card:
+- A full source-to-target feature matrix comparing the HarmonyOS `ets`
+  inventory against Phases 1–11 (see `MIGRATION_STATUS.md` §10), focusing on
+  Profile/Avatar, AutoAgent, float/edge/log, gallery embedding & monthly
+  insights, and WeChat auto-summary. Every gap is marked Done / Boundary /
+  Portable-pending / Blocked with its exact remaining work.
+- **Local profile UI & state** — typed avatar domain (`profile/avatar/domain/
+  AvatarDomain.kt`) porting the pure `datamanager/avatar/AvatarTypes.ets`
+  contracts, plus a locally edited, device-persisted profile (display name /
+  short summary / gender / age / 吃穿住行 domain summaries & claims) stored in
+  app-private DataStore. This is genuinely on-device, with **no cloud and no
+  secrets**, and exposes a deterministic completeness reducer.
+- **Honest avatar-generation boundary** (`domain/AvatarGenerationGate.kt`): the
+  Home avatar card now opens a real 数字分身 screen that reports
+  `NOT_CONFIGURED` / `CONFIGURED_BUT_NO_PROVIDER` for the cloud image generator
+  (Seedream base URL + API key + wired provider would be needed). It **never
+  fabricates a generated avatar**; the seedream generation and
+  foreground-crop/thumbnail processing remain documented remaining gaps.
+- The Home avatar section changes from a dead disabled button to a working
+  entry point into this page. Profile persistence and the honest boundary are
+  covered by deterministic unit tests. AutoAgent, float/edge overlay, WeChat
+  collection, and (partially) embedding remain honest controlled/blocked states,
+  and gallery monthly insights + WeChat settings normalization are documented
+  as portable-pending for a later phase.
+
 ## Layout — features added in Phase 11
 
 ```
@@ -162,6 +189,28 @@ app/src/main/java/com/clawmate/app/gallery/
 app/src/test/java/com/clawmate/app/gallery/ocr/            # OcrMappingTest (12) + OcrBitmapDecodeTest (8)
 app/src/test/java/com/clawmate/app/gallery/ui/OcrAnalysisViewModelTest.kt  # 6 tests
 app/src/test/java/com/clawmate/app/gallery/data/GalleryRepositoryEditDeleteTest.kt  # +updateOcr test
+```
+
+## Layout — features added in Phase 12
+
+```
+app/src/main/java/com/clawmate/app/profile/avatar/
+├── domain/
+│   ├── AvatarDomain.kt            # Typed port of datamanager/avatar/AvatarTypes.ets
+│   │                              #   (profile snapshot, domain snapshot, consent, state,
+│   │                              #    version VM, 4 persona domains, completeness, error text)
+│   └── AvatarGenerationGate.kt    # Honest NOT_CONFIGURED / CONFIGURED_BUT_NO_PROVIDER boundary
+├── data/
+│   ├── ProfileAvatarRepository.kt          # persistence boundary
+│   ├── DataStoreProfileAvatarRepository.kt # app-private DataStore (JSON, tolerant decode)
+│   └── FakeProfileAvatarRepository.kt      # deterministic in-memory fake (tests)
+└── ui/
+    ├── ProfileAvatarViewModel.kt  # draft editing + save validation + honest gate wiring
+    ├── ProfileAvatarScreen.kt     # editable local profile + generation status card + snackbar
+    └── ProfileAvatarHost.kt       # self-contained entry (DataStore repo + settings repo)
+
+(mod) app/src/main/java/com/clawmate/app/home/ui/HomeScreen.kt  # avatar card → ProfileAvatarHost
+app/src/test/java/com/clawmate/app/profile/avatar/              # AvatarDomainTest + ProfileAvatarViewModelTest
 ```
 
 ## Layout — features added in Phase 10

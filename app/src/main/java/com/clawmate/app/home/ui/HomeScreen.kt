@@ -30,6 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,6 +52,7 @@ import com.clawmate.app.home.domain.HomeProfileViewModel
 import com.clawmate.app.home.domain.HomeRecommendationViewModel
 import com.clawmate.app.home.domain.HomeUiState
 import com.clawmate.app.home.domain.recommendationColor
+import com.clawmate.app.profile.avatar.ui.ProfileAvatarHost
 
 /**
  * Home tab — real Compose port of `pages/home/HomePage.ets`.
@@ -68,6 +72,15 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val list by viewModel.list.collectAsState()
 
+    // Phase 12: the avatar section opens the real Profile / Avatar screen
+    // (local profile editing + honest generation boundary) instead of staying a
+    // dead disabled button.
+    var showAvatar by remember { mutableStateOf(false) }
+    if (showAvatar) {
+        ProfileAvatarHost(onClose = { showAvatar = false })
+        return
+    }
+
     when (val s = state) {
         is HomeUiState.Loading -> LoadingBox()
         is HomeUiState.Error -> ErrorBox(message = s.message)
@@ -78,6 +91,7 @@ fun HomeScreen(
             onPrevious = viewModel::previousPage,
             onNext = viewModel::nextPage,
             onSetCompleted = viewModel::setRecommendationCompleted,
+            onOpenAvatar = { showAvatar = true },
         )
     }
 }
@@ -123,6 +137,7 @@ private fun HomeContent(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onSetCompleted: (String, Boolean) -> Unit,
+    onOpenAvatar: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -140,7 +155,7 @@ private fun HomeContent(
         )
 
         // --------------------------------------------------- avatar section
-        AvatarSectionCard(profile)
+        AvatarSectionCard(profile, onOpenAvatar)
 
         // ------------------------------------------- completeness + pillars
         CompletenessCard(completeness = profile.completeness)
@@ -158,9 +173,8 @@ private fun HomeContent(
 }
 
 @Composable
-private fun AvatarSectionCard(profile: HomeProfileViewModel) {
+private fun AvatarSectionCard(profile: HomeProfileViewModel, onOpenAvatar: () -> Unit) {
     val avatar = profile.avatar
-    val primary = Color(0xFF8066FF).copy(alpha = 0.12f)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -234,13 +248,12 @@ private fun AvatarSectionCard(profile: HomeProfileViewModel) {
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Button(
-                    onClick = {},
-                    enabled = false,
+                    onClick = onOpenAvatar,
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(disabledContainerColor = primary, disabledContentColor = Color(0xFF7B8190)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7669FF)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(avatar.actionLabel + "（未配置）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("数字分身 · 管理本地画像", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

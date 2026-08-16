@@ -90,6 +90,15 @@ ML Kit runtime / any on-device model download still require a real device
 (documented; the typed mapping is covered by device-free tests). Exact commands
 and exit codes are recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 12 (coverage audit + Profile/Avatar local UI & state) build
+verification was actually executed in this worktree** with the same toolchain
+(JDK 17.0.19, Android SDK platform 34 / build-tools 34.0.0, Gradle 8.9,
+`--no-daemon --max-workers=1`): `:app:assembleDebug` and `:app:testDebugUnitTest` both pass — **425 unit tests
+/ 0 failures** (407 prior Phases 1–11 + **18 new Phase-12 avatar/profile tests**,
+exact count recorded in `DSH_PHASE_RESULT.md`). The new `profile/avatar/`
+slice is wired into the Home avatar card. Exact commands and exit codes are
+recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -501,10 +510,65 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 - The cloud endpoint is only exercised against the OpenAI-compatible protocol;
   no live endpoint is bundled. Runtime verification against a real model server
   is left as a manual integration step for a configured build.
+- **Avatar image generation (Phase 12) is deliberately not wired:** the local
+  profile/state is real, but the actual "数字分身" image requires a Seedream
+  cloud provider (base URL + API key) or an alternative generator and a consent
+  flow. `AvatarGenerationGate` keeps this an honest NOT_CONFIGURED /
+  CONFIGURED_BUT_NO_PROVIDER state — no fake avatar is ever produced.
+- **Git commit is blocked by the sandbox (Phase 12):** this worktree's git
+  metadata lives under `/root/ClawMate-Android/.git/`, which this environment
+  denies all writes to (`git add`/`git commit`/`git hash-object -w` fail with
+  Permission denied), and a wider sandbox mode requires an approval channel that
+  is unavailable (fails closed). All Phase-12 changes are present in the working
+  tree and verified by the build, but **no commit hash is claimed**. To commit,
+  run `git add -A && git commit -m "Phase 12 coverage audit"` in
+  `clawmate-phase12-coverage` from an environment that may write to that `.git`.
+- **Gallery monthly insights & WeChat summary validation are portable but not
+  ported yet:** both are documented as Portable-pending in §10 and are good
+  candidates for a later phase (they are pure logic safe to port and just need
+  a settings UI + data wiring).
 
 ---
 
 ## 8. Changelog
+
+- **Phase 12 (this phase):** Coverage audit + Profile / Avatar local UI & state.
+  - **Coverage audit** compared the complete HarmonyOS `ets` feature inventory under
+    `/root/mobiinfra-oh/entry/src/main/ets` against the current Android target
+    (Phases 1–11) and produced the concrete Phase-12 coverage matrix in §10.
+    Focus areas beyond Phases 1–11: Profile / Avatar, AutoAgent, float/edge/log,
+    gallery embedding & monthly insights, and WeChat auto-summary. Every gap is
+    marked **Done** (ported), **Boundary** (honest typed disabled/configured
+    state), **Portable-pending** (pure logic that could be ported later), or
+    **Blocked** (Harmony-only or platform blocker) — see §10.
+  - **Implemented: Profile / Avatar local UI & state** (`profile/avatar/`) —
+    the task's preferred highest-value real gap:
+    - Typed avatar domain (`domain/AvatarDomain.kt`) ported from
+      `datamanager/avatar/AvatarTypes.ets`: `AvatarProfileSnapshot`,
+      `AvatarDomainSnapshot`, `AvatarConsentSnapshot`, `AvatarGenerationMode`,
+      `AvatarState`/`AvatarStatusToken`, `AvatarVersionViewModel`, the four
+      persona-domain defaults, `localProfileCompleteness` (0..100) and
+      `avatarErrorMessage` normalisation. Pure and deterministic.
+    - Locally editable, device-persisted profile (`data/DataStoreProfileAvatarRepository`
+      + `domain/LocalAvatarProfile`): display name / short summary / gender / age /
+      per-domain (吃/穿/住/行) summaries & claims, stored in app-private DataStore
+      via kotlinx-serialization with tolerant decode → honest empty fallback. No
+      cloud, no secrets, no generated image.
+    - Truthful avatar-generation boundary (`domain/AvatarGenerationGate`): derives
+      `NOT_CONFIGURED` vs `CONFIGURED_BUT_NO_PROVIDER` from the configured avatar
+      service (base URL + API key) and explains it; it never invokes Seedream and
+      **never fabricates a generated avatar**. The real image generation
+      (Harmony `SeedreamAvatarProvider`) remains the documented remaining gap.
+    - Composable `ProfileAvatarScreen` + `ProfileAvatarHost` + `ProfileAvatarViewModel`
+      (read profile + draft editing + honest save validation + snackbar), wired so
+      the Home avatar card now opens the 数字分身 screen instead of being a dead
+      disabled button (HomeScreen `onOpenAvatar`).
+  - **Secret / binary scan** found no secrets committed and no new large
+    Harmony-only binaries (no MNN/HiAI `.so` copied; the local-model stub from
+    Phase 10 is unchanged).
+  - Deterministic unit tests (see §6): avatar domain normalisation/state gate/
+    completeness (no fake avatar), repository save round-trips, and avatar
+    provider-gate + settings wiring. Device-free.
 
 - **Phase 11 (this phase):** Real on-device Chinese OCR adapter.
   - Added `com.google.mlkit:text-recognition-chinese:16.0.1` (bundled ML Kit
@@ -878,3 +942,51 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
   sandbox could not write into `/root/ClawMate-Android`. All phase-1 artifacts
   were authored as a copy-ready tree. Install them and commit with a short note.
   Verify build per section 6 before starting phase 2.
+
+---
+
+## 10. Phase 12 coverage audit (features beyond Phases 1–11)
+
+This phase ran a full source-to-target comparison of the HarmonyOS `ets`
+inventory (under `/root/mobiinfra-oh/entry/src/main/ets`) against the current
+Android target, calling out user-facing gaps in the named focus areas. Each row
+gives the source of truth, the Android strategy, its status, and the exact
+remaining gap.
+
+Legend — **Status**:
+- **Done** — a real Android implementation is ported/wired.
+- **Boundary** — honest typed disabled/configured state exposed; underlying real
+  capability kept deliberately unimplemented (no fake capability).
+- **Portable-pending** — pure logic that maps directly onto existing Android data
+  and could be ported in a later phase.
+- **Blocked** — Harmony-only platform dependency or Android platform blocker with
+  no safe equivalent; must stay an honest controlled state.
+
+| # | Focus / feature | Harmony source of truth | Android strategy | Status | What exists on Android (Phase 12) + remaining gap |
+| --- | --- | --- | --- | --- | --- |
+| A1 | **Profile snapshot & local profile** | `datamanager/avatar/AvatarTypes.ets`, `AvatarPromptBuilder.ets`, `pages/home/HomePage.ets` | Direct port + DataStore | **Done** | `profile/avatar/` ports the typed AvatarTypes contracts and provides a locally-editable, device-persisted profile (display name / summary / gender / age / 吃穿住行 domains) with a pure completeness reducer. Gap: profile still does not flow into the Home recommendation pipeline (the data-manager content source remains deferred). |
+| A2 | **Avatar generation (image)** | `SeedreamAvatarProvider.ets`, `AvatarService.ets`, `AvatarStorage.ets`, `AvatarForeground*.ets` | Boundary (NOT_CONFIGURED) | **Boundary** | Real generation needs a Seedream base URL + API key + wired provider. `AvatarGenerationGate` reports honest `NOT_CONFIGURED`/`CONFIGURED_BUT_NO_PROVIDER`; it never generates or fakes an image. Gaps: cloud provider adapter, foreground crop/thumbnail processing, avatar version history persistence. |
+| A3 | **Home avatar card** | `pages/home/HomePage.ets` | Real screen entry | **Done** | The Home avatar card now opens the 数字分身 screen (was a dead disabled button). Gap: displaying a real generated avatar image (awaiting A2). |
+| A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (Phase 1)** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. Gap: import/merge pipeline + Android NFC "knock" approximation (documented, deferred). |
+| B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Blocked** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). AutoAgentAbility itself is not portable; kept as a doc'd platform blocker. |
+| C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Blocked → controlled state | **Blocked** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay needs Android `SYSTEM_ALERT_WINDOW` runtime permission. Not wired; documented controlled disabled state (§5 #2) — no fake overlay. |
+| C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Portable-pending | **Portable-pending** | `AppLogger` ports to kotlin `Log` (§4); an in-app log ring-buffer UI (native/cloud/gallery tabs) is straightforward but not yet built. Gap: in-app log viewer. |
+| D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Boundary (NOT_CONFIGURED) | **Boundary** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent; remote embedding needs a base URL + API key. `galleryEmbeddingMode` key exists in settings; the service stays NOT_CONFIGURED. Gap: an optional remote-embedding client behind config. |
+| D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Portable-pending | **Portable-pending** | `GalleryMonthlyInsights.build` is pure logic over `GalleryAnalysisResult`; Android already stores the equivalent `GalleryPhotoItem` in Room (Phases 3/9/11). Gap: port the bucketing/tag-counts/LLM-input builder plus a visible insights panel. |
+| D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Defer / boundary | **Defer** | Background scan + cloud memory sync need storage permission + configured vision key; both deliberately not backgrounded on Android. No silent scanning. |
+| E1 | **WeChat auto-summary settings + validation** | `utils/wechat/WechatAutoSummaryTypes.ets` (pure normalizers + validation) | Portable-pending | **Portable-pending** | The pure clamp/validate/normalise logic and the settings keys are fully portable and device-free, but the settings section is not yet exposed on Android. Gap: settings UI + validation + a truthful PC-bridge collection boundary. |
+| E2 | **WeChat auto-summary collection** | `utils/wechat/WechatAutoSummaryClient.ets`, `WechatAutoSummaryStorage.ets`, `entry/src/main/python/wechat_collect/*` | Blocked | **Blocked** | Collection is PC-side Python/HDC GUI automation (not on-device); Android must talk to a verified PC bridge (Phase 8). Until a configured bridge, collection stays BLOCKED and is never faked. The bundled WeChat workflow configs (Phase 4) mirror this. |
+
+### Why Phase 12 chose Profile / Avatar as the implemented gap
+
+- It is the task's preferred "highest-value real gap" and is genuinely
+  implementable on Android with **no secrets and no fake capability**: the local
+  profile state, typed avatar domain, honest generation boundary and a real
+  Composable page are all device-safe and device-free-testable.
+- Monthly insights (D2) and WeChat settings/validation (E1) are also portable
+  pure logic and are documented as **Portable-pending** for a later phase — not
+  left silent.
+- AutoAgent (B1), float/edge (C1) and WeChat *collection* (E2) remain honest
+  **Blocked** states (platform/permission/server blockers), never faked.
+- No Harmony-only MNN/HiAI binaries were copied; the Phase-10 native stub is
+  unchanged and its dependencies are documented in §5/§7.
