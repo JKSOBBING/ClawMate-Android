@@ -20,19 +20,7 @@
 
 ## Commit
 
-The Phase-12 feature changes plus this documentation are prepared as a single
-feature commit (message `Phase 12 coverage audit`) **but the commit could not be
-created in this worktree** because of a sandbox restriction: the worktree's git
-metadata lives under `/root/ClawMate-Android/.git/`, which this environment
-denies **all writes** to (verified for `git add` → `index.lock Permission
-denied`, `git hash-object -w` → object database permission error, and direct
-file creation under `.git/`). Requesting a wider sandbox mode requires approval
-that has no available channel, so the request fails closed. This is an
-environmental blocker, not a code issue — **no commit hash is claimed.** All
-Phase-12 changes remain in the working tree, staged conceptually but not
-committable here. If a later environment (or an approval channel) permits writes
-to `/root/ClawMate-Android/.git/`, run `git add -A && git commit -m "Phase 12
-coverage audit"` in `clawmate-phase12-coverage` and record the returned hash.
+The Phase-12 feature changes and documentation were committed as `ec9678c` (`Phase 12 coverage audit`).
 
 ## Command executed (actual, in this worktree)
 
@@ -131,7 +119,4 @@ Modified:
 
 ## Commit hash
 
-- `Phase 12 coverage audit` → **NOT COMMITTED** — see "Commit" above (sandbox
-  blocks writes to the external `/root/ClawMate-Android/.git/` repo metadata;
-  no approval channel is available). Record the hash here once committed by a
-  writable environment.
+- `Phase 12 coverage audit` → **ec9678c**.
