@@ -11,7 +11,7 @@ import org.junit.Test
 class SettingsSectionTest {
 
     @Test
-    fun `five sections in the correct order`() {
+    fun `six sections in the correct order`() {
         val ids = SETTINGS_SECTIONS.map { it.id }
         assertEquals(
             listOf(
@@ -20,6 +20,7 @@ class SettingsSectionTest {
                 SettingsSectionId.ModelAgents,
                 SettingsSectionId.TaskAutomation,
                 SettingsSectionId.StorageAbout,
+                SettingsSectionId.WechatAutoSummary,
             ),
             ids,
         )
@@ -29,6 +30,7 @@ class SettingsSectionTest {
     fun `normalize only accepts real section ids`() {
         assertEquals(0, SettingsSectionId.normalize(SettingsSectionId.PersonalPrivacy.ordinalIndex))
         assertEquals(4, SettingsSectionId.normalize(SettingsSectionId.StorageAbout.ordinalIndex))
+        assertEquals(5, SettingsSectionId.normalize(SettingsSectionId.WechatAutoSummary.ordinalIndex))
         assertEquals(SettingsSectionId.NONE, SettingsSectionId.normalize(999))
         assertEquals(SettingsSectionId.NONE, SettingsSectionId.normalize(-1))
     }
@@ -36,6 +38,7 @@ class SettingsSectionTest {
     @Test
     fun `isSelected reflects real sections only`() {
         assertTrue(SettingsSectionId.isSelected(2))
+        assertTrue(SettingsSectionId.isSelected(5))
         assertFalse(SettingsSectionId.isSelected(-1))
         assertFalse(SettingsSectionId.isSelected(7))
     }
@@ -54,6 +57,8 @@ class SettingsSectionTest {
             com.clawmate.app.settings.domain.settingsSectionTitle(SettingsSectionId.ModelAgents),
         )
         assertTrue(com.clawmate.app.settings.domain.settingsSectionSubtitle(SettingsSectionId.StorageAbout).isNotEmpty())
+        assertEquals("微信自动汇总", com.clawmate.app.settings.domain.settingsSectionTitle(SettingsSectionId.WechatAutoSummary))
+        assertTrue(com.clawmate.app.settings.domain.settingsSectionSubtitle(SettingsSectionId.WechatAutoSummary).isNotEmpty())
     }
 
     @Test
@@ -63,6 +68,7 @@ class SettingsSectionTest {
         assertEquals("M", badge(SettingsSectionId.ModelAgents))
         assertEquals("T", badge(SettingsSectionId.TaskAutomation))
         assertEquals("S", badge(SettingsSectionId.StorageAbout))
+        assertEquals("W", badge(SettingsSectionId.WechatAutoSummary))
     }
 
     private fun badge(id: SettingsSectionId): String =

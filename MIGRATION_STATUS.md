@@ -99,6 +99,16 @@ exact count recorded in `DSH_PHASE_RESULT.md`). The new `profile/avatar/`
 slice is wired into the Home avatar card. Exact commands and exit codes are
 recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 13 (portable WeChat auto-summary settings + typed collection boundary)
+build verification was actually executed in this worktree** with the same
+toolchain (JDK 17.0.19, Android SDK platform 34 / build-tools 34.0.0, Gradle
+8.9, `--no-daemon --max-workers=1`): `:app:assembleDebug` and
+`:app:testDebugUnitTest` both pass at the end of this phase (new Phase-13
+WeChat tests; the exact total is recorded in `DSH_PHASE_RESULT.md`). The new
+`wechat/` slice and the WeChat Settings section are wired into the Settings
+center, and the PC/HDC collection boundary is typed and stays BLOCKED /
+NOT_CONFIGURED absent a verified bridge.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -974,8 +984,8 @@ Legend — **Status**:
 | D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Boundary (NOT_CONFIGURED) | **Boundary** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent; remote embedding needs a base URL + API key. `galleryEmbeddingMode` key exists in settings; the service stays NOT_CONFIGURED. Gap: an optional remote-embedding client behind config. |
 | D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Portable-pending | **Portable-pending** | `GalleryMonthlyInsights.build` is pure logic over `GalleryAnalysisResult`; Android already stores the equivalent `GalleryPhotoItem` in Room (Phases 3/9/11). Gap: port the bucketing/tag-counts/LLM-input builder plus a visible insights panel. |
 | D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Defer / boundary | **Defer** | Background scan + cloud memory sync need storage permission + configured vision key; both deliberately not backgrounded on Android. No silent scanning. |
-| E1 | **WeChat auto-summary settings + validation** | `utils/wechat/WechatAutoSummaryTypes.ets` (pure normalizers + validation) | Portable-pending | **Portable-pending** | The pure clamp/validate/normalise logic and the settings keys are fully portable and device-free, but the settings section is not yet exposed on Android. Gap: settings UI + validation + a truthful PC-bridge collection boundary. |
-| E2 | **WeChat auto-summary collection** | `utils/wechat/WechatAutoSummaryClient.ets`, `WechatAutoSummaryStorage.ets`, `entry/src/main/python/wechat_collect/*` | Blocked | **Blocked** | Collection is PC-side Python/HDC GUI automation (not on-device); Android must talk to a verified PC bridge (Phase 8). Until a configured bridge, collection stays BLOCKED and is never faked. The bundled WeChat workflow configs (Phase 4) mirror this. |
+| E1 | **WeChat auto-summary settings + validation** | `utils/wechat/WechatAutoSummaryTypes.ets` (pure normalizers + validation) | Done (Phase 13) | **Done** | `wechat/domain/WechatAutoSummaryTypes.kt` ports the constants, bounded normalizers (`days` 1..90, `max_contacts` 1..50, `swipe_speed` 0..20000, ratio 0.1..0.95, `stable_swipes` 1..10, `max_history_swipes` 1..300, `wait` 0..10, mode) and the `validateWechatAutoSummaryRequest` validator. A real Settings center section (微信自动汇总) exposes the fields via DataStore (`SettingsKeys.WECHAT_*`, `SettingsCodec`) with normalization, masking affinity for any sensitive keys, and honest saved/error states. Gap: no actual collection (see E2). |
+| E2 | **WeChat auto-summary collection** | `utils/wechat/WechatAutoSummaryClient.ets`, `WechatAutoSummaryStorage.ets`, `entry/src/main/python/wechat_collect/*` | Boundary (BLOCKED) | **Boundary (BLOCKED)** | A typed `wechat/domain/WechatCollectionGate.kt` derives a truthful BLOCKED / NOT_CONFIGURED state from the Phase-8 verified bridge. It never drives WeChat, never sends arbitrary commands, and `collect()` never fabricates a summary: the Android `WorkflowDeviceAdapter` exposes no safe `wechat_collect` action, so a verified bridge still reports BLOCKED. The Settings section renders this status live. Real collection remains a PC-side Python/HDC service gap. |
 
 ### Why Phase 12 chose Profile / Avatar as the implemented gap
 

@@ -226,6 +226,7 @@ private fun SectionDetail(
             SettingsSectionId.ModelAgents -> ModelAgentsSection(state, vm, context)
             SettingsSectionId.TaskAutomation -> TaskAutomationSection(state, vm, context)
             SettingsSectionId.StorageAbout -> StorageAboutSection(state, vm, context)
+            SettingsSectionId.WechatAutoSummary -> WechatSettingsSection(state, vm)
         }
 
         // Save / reset actions

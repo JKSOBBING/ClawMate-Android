@@ -51,6 +51,17 @@ data class AppSettings(
     val workflowHardwareStepsEnabled: Boolean = false,
     val pcServerUrl: String = "",
     val pcConnected: Boolean = false,
+    // WeChat auto-summary — 微信自动汇总 (Phase 13; settings/normalization only)
+    val wechatAutoSummaryEnabled: Boolean = false,
+    val wechatAutoSummaryDays: Int = 7,
+    val wechatAutoSummaryMaxContacts: Int = 10,
+    val wechatAutoSummarySwipeSpeed: Int = 2000,
+    val wechatAutoSummaryHistorySwipeRatio: Double = 0.4,
+    val wechatAutoSummaryStableSwipes: Int = 3,
+    val wechatAutoSummaryMaxHistorySwipes: Int = 80,
+    val wechatAutoSummaryWait: Double = 1.0,
+    val wechatCollectionMode: String = "recent_contacts",
+    val wechatCollectionTargetContact: String = "",
     // Storage / about — 存储与关于
     val cleanupAckSafe: Boolean = false,
 ) {

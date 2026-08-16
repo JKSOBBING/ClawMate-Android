@@ -123,6 +123,37 @@ object SettingsKeys {
     /** PC backend connection state (display only; never assumed true). */
     const val PC_CONNECTED = "pc_connected"
 
+    // ------------------------------------------------------- wechat summary
+    /** Whether WeChat auto-summary is enabled (Harmony: `wechatAutoSummaryEnabled`). */
+    const val WECHAT_AUTO_SUMMARY_ENABLED = "wechat_auto_summary_enabled"
+
+    /** Summary days window 1..90 (Harmony: `wechatAutoSummaryDefaultDays`). */
+    const val WECHAT_AUTO_SUMMARY_DAYS = "wechat_auto_summary_days"
+
+    /** Max contacts per summary run 1..50 (Harmony: `wechatAutoSummaryDefaultMaxContacts`). */
+    const val WECHAT_AUTO_SUMMARY_MAX_CONTACTS = "wechat_auto_summary_max_contacts"
+
+    /** Swipe speed 0..20000 (Harmony: `wechatAutoSummarySwipeSpeed`). */
+    const val WECHAT_AUTO_SUMMARY_SWIPE_SPEED = "wechat_auto_summary_swipe_speed"
+
+    /** History swipe ratio 0.1..0.95 (Harmony: `wechatAutoSummaryHistorySwipeRatio`). */
+    const val WECHAT_AUTO_SUMMARY_HISTORY_SWIPE_RATIO = "wechat_auto_summary_history_swipe_ratio"
+
+    /** Stable swipes 1..10 (Harmony: `wechatAutoSummaryStableSwipes`). */
+    const val WECHAT_AUTO_SUMMARY_STABLE_SWIPES = "wechat_auto_summary_stable_swipes"
+
+    /** Max history swipes 1..300 (Harmony: `wechatAutoSummaryMaxHistorySwipes`). */
+    const val WECHAT_AUTO_SUMMARY_MAX_HISTORY_SWIPES = "wechat_auto_summary_max_history_swipes"
+
+    /** Wait seconds 0..10 (Harmony: `wechatAutoSummaryWait`). */
+    const val WECHAT_AUTO_SUMMARY_WAIT = "wechat_auto_summary_wait"
+
+    /** Collection mode: `recent_contacts` | `target_contact`. */
+    const val WECHAT_COLLECTION_MODE = "wechat_collection_mode"
+
+    /** Target-contact name for target mode (Harmony: `..._TargetContactInput`). */
+    const val WECHAT_COLLECTION_TARGET_CONTACT = "wechat_collection_target_contact"
+
     // ------------------------------------------------------------- storage
     /** Whether "destructive debug cleanup" has ever been acknowledged. */
     const val CLEANUP_ACK_SAFE = "cleanup_ack_safe"
@@ -146,6 +177,10 @@ object SettingsKeys {
         CHAT_COMPRESSION_THRESHOLD_PERCENT, CHAT_RECENT_ROUNDS,
         WORKFLOW_AUTOMATION_ENABLED, WORKFLOW_HARDWARE_STEPS_ENABLED,
         PC_SERVER_URL, PC_CONNECTED,
+        WECHAT_AUTO_SUMMARY_ENABLED, WECHAT_AUTO_SUMMARY_DAYS, WECHAT_AUTO_SUMMARY_MAX_CONTACTS,
+        WECHAT_AUTO_SUMMARY_SWIPE_SPEED, WECHAT_AUTO_SUMMARY_HISTORY_SWIPE_RATIO,
+        WECHAT_AUTO_SUMMARY_STABLE_SWIPES, WECHAT_AUTO_SUMMARY_MAX_HISTORY_SWIPES, WECHAT_AUTO_SUMMARY_WAIT,
+        WECHAT_COLLECTION_MODE, WECHAT_COLLECTION_TARGET_CONTACT,
         CLEANUP_ACK_SAFE, DEFAULTS_SCHEMA_VERSION,
     )
 

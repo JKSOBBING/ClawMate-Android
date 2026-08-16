@@ -6,6 +6,14 @@ import com.clawmate.app.settings.domain.EmbeddingMode
 import com.clawmate.app.settings.domain.SensitiveValueUtils
 import com.clawmate.app.settings.domain.SettingsKeys
 import com.clawmate.app.settings.domain.SettingsNormalizers
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryHistorySwipeRatio
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryMaxContacts
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryMaxHistorySwipes
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryStableSwipes
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummarySwipeSpeed
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryWait
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryDays
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryMode
 
 /**
  * Translates a typed [AppSettings] snapshot to/from a flat `Map<String,String>`
@@ -67,6 +75,18 @@ object SettingsCodec {
         out[SettingsKeys.WORKFLOW_AUTOMATION_ENABLED] = s.workflowAutomationEnabled.toString()
         out[SettingsKeys.WORKFLOW_HARDWARE_STEPS_ENABLED] = s.workflowHardwareStepsEnabled.toString()
         out[SettingsKeys.PC_SERVER_URL] = SettingsNormalizers.normalizeUrl(s.pcServerUrl)
+
+        // WeChat auto-summary (Phase 13) — normalized before persistence.
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_ENABLED] = s.wechatAutoSummaryEnabled.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_DAYS] = s.wechatAutoSummaryDays.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_MAX_CONTACTS] = s.wechatAutoSummaryMaxContacts.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_SWIPE_SPEED] = s.wechatAutoSummarySwipeSpeed.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_HISTORY_SWIPE_RATIO] = s.wechatAutoSummaryHistorySwipeRatio.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_STABLE_SWIPES] = s.wechatAutoSummaryStableSwipes.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_MAX_HISTORY_SWIPES] = s.wechatAutoSummaryMaxHistorySwipes.toString()
+        out[SettingsKeys.WECHAT_AUTO_SUMMARY_WAIT] = s.wechatAutoSummaryWait.toString()
+        out[SettingsKeys.WECHAT_COLLECTION_MODE] = normalizeWechatAutoSummaryMode(s.wechatCollectionMode)
+        out[SettingsKeys.WECHAT_COLLECTION_TARGET_CONTACT] = s.wechatCollectionTargetContact.trim()
         return out
     }
 
@@ -131,6 +151,23 @@ object SettingsCodec {
             workflowHardwareStepsEnabled =
                 SettingsNormalizers.boolean(s(SettingsKeys.WORKFLOW_HARDWARE_STEPS_ENABLED), false),
             pcServerUrl = SettingsNormalizers.normalizeUrl(s(SettingsKeys.PC_SERVER_URL)),
+            wechatAutoSummaryEnabled =
+                SettingsNormalizers.boolean(s(SettingsKeys.WECHAT_AUTO_SUMMARY_ENABLED), false),
+            wechatAutoSummaryDays = normalizeWechatAutoSummaryDays(s(SettingsKeys.WECHAT_AUTO_SUMMARY_DAYS)),
+            wechatAutoSummaryMaxContacts =
+                normalizeWechatAutoSummaryMaxContacts(s(SettingsKeys.WECHAT_AUTO_SUMMARY_MAX_CONTACTS)),
+            wechatAutoSummarySwipeSpeed =
+                normalizeWechatAutoSummarySwipeSpeed(s(SettingsKeys.WECHAT_AUTO_SUMMARY_SWIPE_SPEED)),
+            wechatAutoSummaryHistorySwipeRatio =
+                normalizeWechatAutoSummaryHistorySwipeRatio(s(SettingsKeys.WECHAT_AUTO_SUMMARY_HISTORY_SWIPE_RATIO)),
+            wechatAutoSummaryStableSwipes =
+                normalizeWechatAutoSummaryStableSwipes(s(SettingsKeys.WECHAT_AUTO_SUMMARY_STABLE_SWIPES)),
+            wechatAutoSummaryMaxHistorySwipes =
+                normalizeWechatAutoSummaryMaxHistorySwipes(s(SettingsKeys.WECHAT_AUTO_SUMMARY_MAX_HISTORY_SWIPES)),
+            wechatAutoSummaryWait = normalizeWechatAutoSummaryWait(s(SettingsKeys.WECHAT_AUTO_SUMMARY_WAIT)),
+            wechatCollectionMode = normalizeWechatAutoSummaryMode(s(SettingsKeys.WECHAT_COLLECTION_MODE)),
+            wechatCollectionTargetContact =
+                SettingsNormalizers.normalizeText(s(SettingsKeys.WECHAT_COLLECTION_TARGET_CONTACT)),
         )
     }
 

@@ -11,6 +11,15 @@ import com.clawmate.app.settings.domain.EmbeddingMode
 import com.clawmate.app.settings.domain.SensitiveValueUtils
 import com.clawmate.app.settings.domain.SettingsSectionId
 import com.clawmate.app.settings.domain.SettingsNormalizers
+import com.clawmate.app.wechat.domain.WechatAutoSummaryModes
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryDays
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryHistorySwipeRatio
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryMaxContacts
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryMaxHistorySwipes
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryMode
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryStableSwipes
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummarySwipeSpeed
+import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryWait
 import com.clawmate.app.task.TaskComponent
 import com.clawmate.app.task.hdc.BridgeBackedWorkflowDeviceAdapter
 import com.clawmate.app.task.hdc.HdcBridgeClient
@@ -175,6 +184,42 @@ class SettingsViewModel(
     fun setWorkflowHardwareSteps(value: Boolean) = updateDraft { it.copy(workflowHardwareStepsEnabled = value) }
     fun setPcServerUrl(value: String) = updateDraft { it.copy(pcServerUrl = value) }
 
+    // ----- WeChat auto-summary (Phase 13) — fields are normalized on change.
+    fun setWechatAutoSummaryEnabled(value: Boolean) = updateDraft { it.copy(wechatAutoSummaryEnabled = value) }
+    fun setWechatAutoSummaryDays(value: String) {
+        val n = normalizeWechatAutoSummaryDays(value)
+        updateDraft { it.copy(wechatAutoSummaryDays = n) }
+    }
+    fun setWechatAutoSummaryMaxContacts(value: String) {
+        val n = normalizeWechatAutoSummaryMaxContacts(value)
+        updateDraft { it.copy(wechatAutoSummaryMaxContacts = n) }
+    }
+    fun setWechatAutoSummarySwipeSpeed(value: String) {
+        val n = normalizeWechatAutoSummarySwipeSpeed(value)
+        updateDraft { it.copy(wechatAutoSummarySwipeSpeed = n) }
+    }
+    fun setWechatAutoSummaryHistorySwipeRatio(value: String) {
+        val n = normalizeWechatAutoSummaryHistorySwipeRatio(value)
+        updateDraft { it.copy(wechatAutoSummaryHistorySwipeRatio = n) }
+    }
+    fun setWechatAutoSummaryStableSwipes(value: String) {
+        val n = normalizeWechatAutoSummaryStableSwipes(value)
+        updateDraft { it.copy(wechatAutoSummaryStableSwipes = n) }
+    }
+    fun setWechatAutoSummaryMaxHistorySwipes(value: String) {
+        val n = normalizeWechatAutoSummaryMaxHistorySwipes(value)
+        updateDraft { it.copy(wechatAutoSummaryMaxHistorySwipes = n) }
+    }
+    fun setWechatAutoSummaryWait(value: String) {
+        val n = normalizeWechatAutoSummaryWait(value)
+        updateDraft { it.copy(wechatAutoSummaryWait = n) }
+    }
+    fun setWechatCollectionMode(value: String) {
+        val normalized = if (value == WechatAutoSummaryModes.TARGET) WechatAutoSummaryModes.TARGET else WechatAutoSummaryModes.RECENT
+        updateDraft { it.copy(wechatCollectionMode = normalized) }
+    }
+    fun setWechatCollectionTargetContact(value: String) = updateDraft { it.copy(wechatCollectionTargetContact = value) }
+
     // ------------------------------------------------------------------ actions
 
     fun save() {
@@ -291,4 +336,35 @@ class SettingsViewModel(
     /** Restore a masked value to its known default (only when mask == default mask). */
     fun normalizeMaskedSecretIfDefault(persistedKey: String, defaultValue: String): String =
         SensitiveValueUtils.restoreMaskedSensitiveSettingDefault(persistedKey, defaultValue)
+
+    /**
+     * Build the Phase-13 WeChat collection boundary from live state: a bridge is
+     * "verified" only when a health-verified adapter is registered via
+     * [TaskComponent]. Collection never dispatches; the gate reports a truthful
+     * BLOCKED/NOT_CONFIGURED state.
+     */
+    fun wechatCollectionGate(): com.clawmate.app.wechat.domain.WechatCollectionGate {
+        val verified = runCatching { TaskComponent.currentAdapter().isConfigured }.getOrDefault(false)
+        return com.clawmate.app.wechat.domain.WechatCollectionGate(
+            verifiedBridgeConfigured = verified,
+            summaryEnabled = _state.value.draft.wechatAutoSummaryEnabled,
+        )
+    }
+
+    /** Validate the current WeChat summary draft into a buildable request (null when invalid). */
+    fun wechatSummaryRequestOrNull(): com.clawmate.app.wechat.domain.WechatAutoSummaryRequest? {
+        val d = _state.value.draft
+        val request = com.clawmate.app.wechat.domain.WechatAutoSummaryRequest(
+            mode = normalizeWechatAutoSummaryMode(d.wechatCollectionMode),
+            days = d.wechatAutoSummaryDays,
+            maxContacts = d.wechatAutoSummaryMaxContacts,
+            targetContact = d.wechatCollectionTargetContact,
+            maxHistorySwipes = d.wechatAutoSummaryMaxHistorySwipes,
+            swipeSpeed = d.wechatAutoSummarySwipeSpeed,
+            historySwipeRatio = d.wechatAutoSummaryHistorySwipeRatio,
+            stableSwipes = d.wechatAutoSummaryStableSwipes,
+            wait = d.wechatAutoSummaryWait,
+        )
+        return if (com.clawmate.app.wechat.domain.validateWechatAutoSummaryRequest(request).isEmpty()) request else null
+    }
 }

@@ -167,6 +167,27 @@ reached from the Home avatar card:
   and gallery monthly insights + WeChat settings normalization are documented
   as portable-pending for a later phase.
 
+**Phase 13** delivers the portable WeChat auto-summary **settings +
+normalization + validation** slice (previously marked Portable-pending in the
+Phase 12 inventory E1), plus a **typed PC/HDC collection boundary** (E2):
+- A pure port of `utils/wechat/WechatAutoSummaryTypes.ets` into
+  `wechat/domain/WechatAutoSummaryTypes.kt`: the settings keys/defaults, the
+  bounded normalizers (`days` 1..90, `max_contacts` 1..50, `swipe_speed`
+  0..20000, ratio 0.1..0.95, `stable_swipes` 1..10, `max_history_swipes`
+  1..300, `wait` 0..10, `recent_contacts`/`target_contact` mode) and the
+  `validateWechatAutoSummaryRequest` validator returning a user-presentable
+  Chinese error (empty when valid).
+- A **real Settings center section** (微信自动汇总, a sixth section) exposing the
+  fields through the existing DataStore-backed `SettingsRepository` /
+  `SettingsCodec` (`SettingsKeys.WECHAT_*`), with values normalized on change,
+  honest saved/error states, and no fabricated capability.
+- A **typed PC/HDC collection boundary** (`wechat/domain/WechatCollectionGate.kt`)
+  that derives a truthful `BLOCKED` / `NOT_CONFIGURED` state from the Phase-8
+  verified bridge. It **never drives WeChat, never sends arbitrary commands,
+  and `collect()` never fakes a summary** — the Android `WorkflowDeviceAdapter`
+  exposes no safe `wechat_collect` action, so even a verified generic bridge
+  stays BLOCKED. Real collection remains the PC-side Python/HDC service gap.
+
 ## Layout — features added in Phase 11
 
 ```
@@ -211,6 +232,29 @@ app/src/main/java/com/clawmate/app/profile/avatar/
 
 (mod) app/src/main/java/com/clawmate/app/home/ui/HomeScreen.kt  # avatar card → ProfileAvatarHost
 app/src/test/java/com/clawmate/app/profile/avatar/              # AvatarDomainTest + ProfileAvatarViewModelTest
+```
+
+## Layout — features added in Phase 13
+
+```
+app/src/main/java/com/clawmate/app/wechat/
+└── domain/
+    ├── WechatAutoSummaryTypes.kt    # Pure port of WechatAutoSummaryTypes.ets (keys/defaults/modes,
+    │                                #   request/response/message/conversation types, bounded normalizers,
+    │                                #   validateWechatAutoSummaryRequest)
+    └── WechatCollectionGate.kt      # Typed PC/HDC collection boundary: BLOCKED / NOT_CONFIGURED from the
+                                     #   Phase-8 verified bridge; collect() never dispatches or fakes a summary
+
+(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt    # WECHAT_* keys (+ ALL_KEYS)
+(mod) app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt     # wechatAutoSummary* / wechatCollection* fields
+(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt # sixth WechatAutoSummary section
+(mod) app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt     # encode/decode the WeChat fields
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt   # setters + wechatCollectionGate()/summary request
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt      # section dispatch
+(new) app/src/main/java/com/clawmate/app/settings/ui/WechatSettingsSection.kt # real section UI + live boundary card
+
+app/src/test/java/com/clawmate/app/wechat/  # WechatAutoSummaryTypesTest (15) + WechatSettingsCodecTest (4) + WechatCollectionGateTest (4)
+(mod) app/src/test/java/com/clawmate/app/settings/SettingsSectionTest.kt    # six sections + badge "W"
 ```
 
 ## Layout — features added in Phase 10
