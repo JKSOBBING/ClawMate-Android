@@ -17,7 +17,7 @@
 
 First commit (feature slice):
 - Message: `Phase 6 home onboarding vertical slice`
-- Hash: **FILL_AFTER_COMMIT** on `master`, created in this worktree. (Ships the
+- Hash: **`f51f27c`** on `master`, created in this worktree. (Ships the
   full Home + Onboarding slice.)
 
 The result-file update (this file, with the feature hash filled in) is then
