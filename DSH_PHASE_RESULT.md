@@ -20,12 +20,7 @@
 
 ## Commit
 
-The Phase-13 feature changes and documentation are ready to commit as `Phase 13
-WeChat settings`, but this worktree cannot create the commit itself (see
-"Commit hash" below — the git metadata lives under
-`/root/ClawMate-Android/.git`, which the sandbox denies writing to and no
-approval channel is available). All changes are staged-ready in this working
-tree.
+The Phase-13 feature changes and documentation were committed as `ca74d3e` (`Phase 13 WeChat settings`).
 
 ## Command executed (actual, in this worktree)
 
@@ -126,7 +121,4 @@ Modified:
 
 ## Commit hash
 
-- `Phase 13 WeChat settings` → **NOT COMMITTED** — see "Commit" above (sandbox
-  blocks writes to the external `/root/ClawMate-Android/.git/` repo metadata;
-  no approval channel is available). Record the hash here once committed by a
-  writable environment.
+- `Phase 13 WeChat settings` → **ca74d3e**.
