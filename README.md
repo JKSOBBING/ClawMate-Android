@@ -188,7 +188,62 @@ Phase 12 inventory E1), plus a **typed PC/HDC collection boundary** (E2):
   exposes no safe `wechat_collect` action, so even a verified generic bridge
   stays BLOCKED. Real collection remains the PC-side Python/HDC service gap.
 
-## Layout — features added in Phase 11
+**Phase 14** delivers the portable in-app **Log viewer** (previously marked
+Portable-pending in the Phase 12 inventory C2, based on Harmony
+`pages/LogView.ets` / `utils/AppLogger.ets` / `utils/CloudLogOutput.ets`):
+- A **bounded in-app ring buffer** (`log/data/RingBufferInAppLogRepository.kt`,
+  default 512 records, oldest-evicted FIFO) fed by real app code paths (app
+  launch, settings saved + HDC health-check result, chat send / complete /
+  error, gallery OCR states). It **never fabricates** a record and never
+  pretends to read logcat, a native C++ buffer, or AppStorage strings we do not
+  own.
+- **Sensitive-value redaction on insert** (`log/domain/SensitiveLogRedactor.kt`):
+  `Authorization`/Bearer/Basic, `api_key`, `sk-*`, GitHub `ghp_`/`ghs_` tokens,
+  AWS credentials and generic `password=`/`secret=`/`token=` values are scrubbed
+  before a record is stored, so a raw secret can never be rendered or copied
+  from the viewer.
+- A **Compose Log screen** (`log/ui/LogScreen.kt` + `LogViewModel`) reachable
+  from a new 运行日志 Settings section (`SettingsSectionId.RuntimeLogs`): source
+  tabs (应用 / 云端 Agent / 图库分析 / 任务自动化), severity + free-text filters,
+  Refresh, auto-refresh ticker, auto-scroll, copy visible text, clear-source /
+  clear-all, a live count / capacity footer, and an **honest empty state** that
+  never shows an event that did not happen.
+- **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/log/` +
+  extended `SettingsSectionTest`): `SensitiveLogRedactorTest`,
+  `RingBufferInAppLogRepositoryTest`, `LogFilterTest`, and the seventh section /
+  badge "L".
+
+## Layout — features added in Phase 14
+
+```
+app/src/main/java/com/clawmate/app/log/
+├── AppLogger.kt                   # Static in-app logger (Harmony AppLogger.ets port): i/w/e/cloud/gallery/workflow
+├── LogComponent.kt                # Process-wide shared repository (manual DI, like Chat/Gallery/Settings components)
+├── domain/
+│   ├── InAppLogTypes.kt           # LogLevel / LogSource / immutable redacted InAppLogEntry (key for LazyColumn)
+│   ├── LogFilter.kt               # Pure source+level+query filter projection (newest-first preserved)
+│   └── SensitiveLogRedactor.kt    # Deterministic secret redaction applied on insert
+├── data/
+│   └── RingBufferInAppLogRepository.kt  # Capacity-bounded FIFO ring buffer + StateFlow for Compose
+└── ui/
+    ├── LogScreen.kt               # Source tabs / severity+query filter / refresh / auto-refresh / auto-scroll
+    │                              #   / copy / clear-source / clear-all / honest empty state / footer counts
+    ├── LogViewModel.kt            # Viewer chrome state + projects the shared buffer through pure filterLogs
+    └── LogViewModelFactory.kt
+
+(mod) app/src/main/java/com/clawmate/app/ClawMateApplication.kt     # init LogComponent + real "App" launch event
+(mod) app/src/main/java/com/clawmate/app/chat/ui/ChatViewModel.kt   # real send / complete / error cloud-agent events
+(mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryViewModel.kt # real OCR run/empty/model/failed gallery events
+(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt # seventh 运行日志 section (badge "L")
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt  # route the 运行日志 section to LogScreen
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt # settings-saved + HDC health-check events
+
+app/src/test/java/com/clawmate/app/log/
+├── SensitiveLogRedactorTest.kt        # redaction patterns (no raw secret retained)
+├── RingBufferInAppLogRepositoryTest.kt# retention/eviction, scoped & full clear, min-level, redact-on-insert, truncation
+└── LogFilterTest.kt                   # source/level/query, case-insensitive, tag, limit, ordering
+(mod) app/src/test/java/com/clawmate/app/settings/SettingsSectionTest.kt  # seven sections + badge "L"
+```
 
 ```
 app/src/main/java/com/clawmate/app/gallery/ocr/

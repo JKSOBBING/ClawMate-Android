@@ -109,6 +109,13 @@ WeChat tests; the exact total is recorded in `DSH_PHASE_RESULT.md`). The new
 center, and the PC/HDC collection boundary is typed and stays BLOCKED /
 NOT_CONFIGURED absent a verified bridge.
 
+**Phase 14 (portable in-app Log viewer) build verification was actually executed
+in this worktree** with the same toolchain (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`): a single bounded
+`:app:assembleDebug :app:testDebugUnitTest` both pass (new Phase-14 log tests; the
+exact total is recorded in `DSH_PHASE_RESULT.md`). The new `log/` slice and the
+运行日志 Settings section are wired into the Settings center.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -221,6 +228,14 @@ silently dropped:
    on a real device/emulator; this worktree has none, so the real detector is
    documented (the deterministic result mapping is unit-tested device-free).
 6. ShareKit "knock-to-knock" share → approximate with Android Share sheet / NFC.
+7. **Harmony native / AppStorage log sources (Phase 14):** Harmony `LogView.ets`
+   reads `native.getLogs()/clearLogs()` (a C++ ring buffer in `libentry.so`) and
+   `AppStorage` cloud/gallery log strings. Neither has an Android equivalent we
+   own. Phase 14 therefore implements a real in-app ring buffer fed by actual
+   app code paths (app launch / settings save / HDC result / chat / gallery OCR)
+   and surfaces them under application / cloud-Agent / gallery / workflow tabs.
+   It does **not** claim logcat, a C++ buffer, or captured event logs it cannot
+   honestly provide, so the viewer's empty state is truthful.
 
 ---
 
@@ -541,6 +556,37 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 ---
 
 ## 8. Changelog
+
+- **Phase 14 (this phase):** Portable in-app Log viewer (bounded ring buffer).
+  - **Real bounded in-app log ring buffer** (`log/`) ported from the HarmonyOS
+    `entry/src/main/ets/pages/LogView.ets` and `utils/CloudLogOutput.ets`
+    (bounded, append-only + eviction). On Android we implement one honest,
+    in-memory, capacity-bounded buffer
+    (`log/data/RingBufferInAppLogRepository`, default 512 records, oldest
+    evicted FIFO) instead of pretending to read Harmony `native.getLogs()`; no
+    logcat / C++ ring buffer is claimed.
+  - **Real app events wired** into the logger where code paths actually run:
+    app launch (`ClawMateApplication`), settings saved + HDC health-check result
+    (`SettingsViewModel`), chat send/completed/error (`ChatViewModel`), and
+    gallery OCR run/empty/model-download/failed (`GalleryViewModel`). Nothing is
+    fabricated; events that never happen (e.g. an unconfigured cloud call) simply
+    do not appear.
+  - **Compose Log screen** (`log/ui/LogScreen.kt` + `LogViewModel`) reachable from
+    an existing Settings entry (new 运行日志 section, `SettingsSectionId.RuntimeLogs`):
+    source tabs (应用/云端 Agent/图库分析/任务自动化), severity filter, free-text
+    query, Refresh, auto-refresh ticker, auto-scroll, Copy visible text,
+    clear-source / clear-all, and an **honest empty state** that never fabricates
+    records.
+  - **Sensitive-value redaction** (`log/domain/SensitiveLogRedactor.kt`): log
+    messages are cleaned before insertion (authorization/Bearer/Basic, `api_key`,
+    `sk-*`, GitHub tokens, AWS credentials, generic `password=/secret=/token=`),
+    so a raw secret can never be stored or copied from the viewer.
+  - **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/log/` +
+    extended `SettingsSectionTest`): redactor, ring-buffer retention/filter/clear/
+    redaction-on-insert, and pure `filterLogs`. Device-free.
+  - Harmony `native.getLogs()/clearLogs()` and the Harmony AppStorage cloud/gallery
+    log strings have **no direct Android equivalent**; the Android viewer instead
+    surfaces the real wired sources above. See §5 for the honest boundary note.
 
 - **Phase 12 (this phase):** Coverage audit + Profile / Avatar local UI & state.
   - **Coverage audit** compared the complete HarmonyOS `ets` feature inventory under
@@ -980,7 +1026,7 @@ Legend — **Status**:
 | A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (Phase 1)** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. Gap: import/merge pipeline + Android NFC "knock" approximation (documented, deferred). |
 | B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Blocked** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). AutoAgentAbility itself is not portable; kept as a doc'd platform blocker. |
 | C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Blocked → controlled state | **Blocked** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay needs Android `SYSTEM_ALERT_WINDOW` runtime permission. Not wired; documented controlled disabled state (§5 #2) — no fake overlay. |
-| C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Portable-pending | **Portable-pending** | `AppLogger` ports to kotlin `Log` (§4); an in-app log ring-buffer UI (native/cloud/gallery tabs) is straightforward but not yet built. Gap: in-app log viewer. |
+| C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
 | D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Boundary (NOT_CONFIGURED) | **Boundary** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent; remote embedding needs a base URL + API key. `galleryEmbeddingMode` key exists in settings; the service stays NOT_CONFIGURED. Gap: an optional remote-embedding client behind config. |
 | D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Portable-pending | **Portable-pending** | `GalleryMonthlyInsights.build` is pure logic over `GalleryAnalysisResult`; Android already stores the equivalent `GalleryPhotoItem` in Room (Phases 3/9/11). Gap: port the bucketing/tag-counts/LLM-input builder plus a visible insights panel. |
 | D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Defer / boundary | **Defer** | Background scan + cloud memory sync need storage permission + configured vision key; both deliberately not backgrounded on Android. No silent scanning. |

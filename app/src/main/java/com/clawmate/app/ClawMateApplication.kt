@@ -17,6 +17,10 @@ class ClawMateApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         loadEndpointConfig()
+        // Phase 14 — initialise the shared in-app log ring buffer and record a
+        // real app-launch event so the Log viewer is never empty of genuine data.
+        com.clawmate.app.log.LogComponent.repository()
+        com.clawmate.app.log.AppLogger.i("App", "ClawMateApplication initialized; phase 14 log viewer ready")
         Log.i(TAG, "ClawMateApplication initialized")
     }
 

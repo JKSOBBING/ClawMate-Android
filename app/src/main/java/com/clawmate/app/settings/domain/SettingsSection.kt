@@ -19,6 +19,7 @@ enum class SettingsSectionId(val ordinalIndex: Int) {
     TaskAutomation(3),
     StorageAbout(4),
     WechatAutoSummary(5),
+    RuntimeLogs(6),
     ;
 
     companion object {
@@ -51,6 +52,7 @@ data class SettingsSectionItem(
             SettingsSectionId.TaskAutomation -> "T"
             SettingsSectionId.StorageAbout -> "S"
             SettingsSectionId.WechatAutoSummary -> "W"
+            SettingsSectionId.RuntimeLogs -> "L"
         }
 }
 
@@ -62,6 +64,7 @@ val SETTINGS_SECTIONS: List<SettingsSectionItem> = listOf(
     SettingsSectionItem(SettingsSectionId.TaskAutomation, "任务与自动化", "Agent 执行、Workflow 与运行日志"),
     SettingsSectionItem(SettingsSectionId.StorageAbout, "存储与关于", "模型文件、调试产物、版本与说明"),
     SettingsSectionItem(SettingsSectionId.WechatAutoSummary, "微信自动汇总", "微信摘要参数、验证与 PC/HDC 采集边界"),
+    SettingsSectionItem(SettingsSectionId.RuntimeLogs, "运行日志", "应用内日志查看：过滤、清空、复制与敏感遮挡"),
 )
 
 fun settingsSectionTitle(id: SettingsSectionId): String =

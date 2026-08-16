@@ -1,26 +1,43 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 13 (WeChat auto-summary settings + normalization/validation + typed PC/HDC collection boundary)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 14 (in-app Log viewer: bounded ring buffer + AppLogger port + Compose Log screen + redaction)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase13-wechat`
-- Branch: `phase13-wechat-settings`
+- Path: `/opt/deepseek-harness/clawmate-phase14-logviewer`
+- Branch: `phase14-log-viewer`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
-- This delivery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
+- This recovery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
   Android SDK platform 34 / build-tools 34.0.0 at
   `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
   `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
 - Build state used: `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
   `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (both discarded,
   never committed), and the exact same Gradle 8.9 release binary used in Phases
-  2–12 (the wrapper distribution URL is unreachable here). Nothing was written
-  to `/root/ClawMate-Android`; `/root/mobiinfra-oh` was not modified. All Phase
-  1–12 code is preserved.
+  2–13 (the wrapper distribution URL is unreachable here). `/root/mobiinfra-oh`
+  was not modified. All Phase 1–13 code is preserved.
 - Working policy: serial only, single worker, no parallel Gradle processes, no
   servers/emulators, one Gradle build at a time.
 
+## Recovery context
+
+The prior run started Phase 14 in this worktree (created an untracked `log/`
+slice, wired the new 运行日志 Settings section, and edited several ViewModels /
+`ClawMateApplication` / the docs) but **never ran the build or committed** — it
+paused for ~15 minutes without producing a commit. This recovery:
+
+- Reviewed the full prior-run change set against the working tree head
+  (`425f9dc`, i.e. Phase 13) and preserved it.
+- Fixed the only failing tests (the `LogFilterTest` `samples` fixture was
+  ordered oldest-first while the `filterLogs` contract preserves newest-first,
+  exactly the order the ring buffer `snapshot()` returns — reordered the fixture
+  so all 7 filter assertions hold), cleaned up the vestigial `LogSource.System`
+  constant (now `SYSTEM`), removed a redundant always-false null check in
+  `AppLogger`, and switched `LogScreen` to the auto-mirrored `ArrowBack` icon.
+- Ran the actual project checks (see **Command executed**).
+
 ## Commit
 
-The Phase-13 feature changes and documentation were committed as `ca74d3e` (`Phase 13 WeChat settings`).
+The Phase-14 changes are committed on `phase14-log-viewer`. See `git log -1` for
+the real commit hash after committing.
 
 ## Command executed (actual, in this worktree)
 
@@ -35,90 +52,108 @@ ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
 
 Result: **BUILD SUCCESSFUL** (exit code `0`).
 - `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk`
-  (regenerated fresh in this worktree) including the new `wechat/` slice and the
-  existing ML Kit bundled OCR + local-model native stub.
-- `:app:testDebugUnitTest` ran to completion: **448 tests, 0 failures,
-  0 errors** (425 prior Phases 1–12 + **23 new Phase-13 WeChat tests**).
+  (regenerated fresh in this worktree) including the new `log/` slice and the
+  existing bundled ML Kit OCR + local-model native stub (all three NDK ABIs
+  rebuilt).
+- `:app:testDebugUnitTest` ran to completion: **472 tests, 0 failures,
+  0 errors** (448 prior Phases 1–13 + **24 new Phase-14 log tests**:
+  `SensitiveLogRedactorTest` 10, `RingBufferInAppLogRepositoryTest` 7,
+  `LogFilterTest` 7; the `SettingsSectionTest` section/badge assertions were
+  extended within its existing 5 test methods).
 - `:app:connectedAndroidTest` was **not run** — no device/emulator is available
   in this worktree.
 
-## Scope delivered (Phase 13)
+## Scope delivered (Phase 14)
 
-1. **Pure port of the WeChat auto-summary settings/validation types**
-   (`wechat/domain/WechatAutoSummaryTypes.kt`) from
-   `utils/wechat/WechatAutoSummaryTypes.ets`: the settings keys/defaults, the
-   `recent_contacts`/`target_contact` modes, the request/response/message/
-   conversation/time-range data types aligned to the PC bridge snake_case
-   contract, the bounded normalizers (`days` 1..90, `max_contacts` 1..50,
-   `swipe_speed` 0..20000, `history_swipe_ratio` 0.1..0.95, `stable_swipes`
-   1..10, `max_history_swipes` 1..300, `wait` 0..10, mode) and the
-   `validateWechatAutoSummaryRequest` validator (empty when valid; user-
-   presentable Chinese message otherwise). Every function is a pure total
-   function.
-2. **Real Settings center section (微信自动汇总)** — a sixth section wired into the
-   existing five-section shell. Fields (`wechatAutoSummaryEnabled` and the
-   bounded numerics + mode + target contact) are exposed through the existing
-   DataStore-backed `SettingsRepository`/`SettingsCodec` (`SettingsKeys.WECHAT_*`,
-   added to `AppSettings` and `SettingsCodec.encode/decode`), normalized on
-   change, with honest loading/saved/error states. No secrets among the WeChat
-   keys, so no additional masking entry is needed.
-3. **Typed PC/HDC collection boundary** (`wechat/domain/WechatCollectionGate.kt`):
-   derives a truthful `BLOCKED`/`NOT_CONFIGURED` state from the Phase-8 verified
-   bridge (`TaskComponent.currentAdapter().isConfigured`). It **never drives
-   WeChat, never sends arbitrary commands, and `collect()` never fabricates a
-   summary** — the Android `WorkflowDeviceAdapter` exposes no safe
-   `wechat_collect` action, so even a health-verified generic bridge stays
-   `BLOCKED`. The Settings section renders this status live with an explanatory
-   note.
-4. **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/wechat/`):
-   `WechatAutoSummaryTypesTest` (15), `WechatSettingsCodecTest` (4),
-   `WechatCollectionGateTest` (4) — 23 tests covering normalizer bounds,
-   validator, codec round-trips/degradation, repository persistence and the
-   honest boundary. `SettingsSectionTest` extended for the sixth section + "W"
-   badge.
-5. **No Harmony-only binaries / secrets**: no MNN/HiAI `.so` copied; the
-   Phase-10 `libclawmate_local_model.so` stub is unchanged; no secrets or large
-   binaries added (source tree scanned).
+1. **Portable in-app Log viewer** based on the HarmonyOS
+   `entry/src/main/ets/pages/LogView.ets`, `utils/AppLogger.ets` and
+   `utils/CloudLogOutput.ets` (Phase-12 inventory row C2,
+   previously Portable-pending).
+2. **Bounded ring buffer** (`log/data/RingBufferInAppLogRepository.kt`):
+   in-memory, capacity-bounded (`capacity` 512 default, 4096 max) FIFO ring
+   buffer with minimal-level retention gate, message length truncation, and a
+   `StateFlow` projecting the newest-first list for Compose. Only **real events
+   written by actual app code paths** are stored; nothing is fabricated.
+3. **Actual event wiring** (real code runs only): app launch
+   (`ClawMateApplication`), settings saved + HDC health-check result
+   (`SettingsViewModel`), chat send / complete / error (`ChatViewModel`),
+   gallery OCR run/empty/model-download/failed (`GalleryViewModel`). Events that
+   never occur (e.g. an unconfigured cloud call) never appear.
+4. **Sensitive-value redaction** (`log/domain/SensitiveLogRedactor.kt`): applied
+   **on insert** so a raw secret can never be stored, rendered, or copied from
+   the viewer — `Authorization`/Bearer/Basic, `api_key`, `sk-*`, GitHub
+   `ghp_`/`ghs_` tokens, AWS credentials, and generic
+   `password=`/`secret=`/`token=` assignments.
+5. **Compose Log screen** (`log/ui/LogScreen.kt` + `LogViewModel`) reachable from
+   an existing Settings entry (new 运行日志 section,
+   `SettingsSectionId.RuntimeLogs`, badge "L"): source tabs (应用 / 云端 Agent /
+   图库分析 / 任务自动化), severity + free-text filters (pure `LogFilter`),
+   Refresh, auto-refresh ticker, auto-scroll, copy visible (already redacted)
+   text, clear-current-source / clear-all, live count/capacity footer, and an
+   **honest empty state** that never shows a fabricated record.
+6. **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/log/` +
+   extended `SettingsSectionTest`): redactor patterns / determinism,
+   ring-buffer retention & eviction / scoped & full clear / min-level /
+   redact-on-insert / truncation, and pure source/level/query/tag/limit/ordering
+   filtering.
 
-## Files changed (Phase 13)
+## Files changed (Phase 14)
 
 New:
-- `app/src/main/java/com/clawmate/app/wechat/domain/WechatAutoSummaryTypes.kt`
-- `app/src/main/java/com/clawmate/app/wechat/domain/WechatCollectionGate.kt`
-- `app/src/main/java/com/clawmate/app/settings/ui/WechatSettingsSection.kt`
-- `app/src/test/java/com/clawmate/app/wechat/WechatAutoSummaryTypesTest.kt`
-- `app/src/test/java/com/clawmate/app/wechat/WechatSettingsCodecTest.kt`
-- `app/src/test/java/com/clawmate/app/wechat/WechatCollectionGateTest.kt`
+- `app/src/main/java/com/clawmate/app/log/AppLogger.kt`
+- `app/src/main/java/com/clawmate/app/log/LogComponent.kt`
+- `app/src/main/java/com/clawmate/app/log/domain/InAppLogTypes.kt`
+- `app/src/main/java/com/clawmate/app/log/domain/LogFilter.kt`
+- `app/src/main/java/com/clawmate/app/log/domain/SensitiveLogRedactor.kt`
+- `app/src/main/java/com/clawmate/app/log/data/RingBufferInAppLogRepository.kt`
+- `app/src/main/java/com/clawmate/app/log/ui/LogScreen.kt`
+- `app/src/main/java/com/clawmate/app/log/ui/LogViewModel.kt`
+- `app/src/main/java/com/clawmate/app/log/ui/LogViewModelFactory.kt`
+- `app/src/test/java/com/clawmate/app/log/SensitiveLogRedactorTest.kt`
+- `app/src/test/java/com/clawmate/app/log/RingBufferInAppLogRepositoryTest.kt`
+- `app/src/test/java/com/clawmate/app/log/LogFilterTest.kt`
 
 Modified:
-- `app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt` (WECHAT_* keys + ALL_KEYS)
-- `app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt` (wechatAutoSummary*/wechatCollection* fields)
-- `app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt` (sixth WechatAutoSummary section)
-- `app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt` (encode/decode the WeChat fields)
-- `app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt` (setters + wechatCollectionGate()/wechatSummaryRequestOrNull())
-- `app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt` (section dispatch)
-- `app/src/test/java/com/clawmate/app/settings/SettingsSectionTest.kt` (six sections + badge "W")
+- `app/src/main/java/com/clawmate/app/ClawMateApplication.kt` (init LogComponent +
+  real "App" launch event)
+- `app/src/main/java/com/clawmate/app/chat/ui/ChatViewModel.kt` (cloud-agent
+  events)
+- `app/src/main/java/com/clawmate/app/gallery/ui/GalleryViewModel.kt` (gallery
+  events)
+- `app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt`
+  (seventh 运行日志 section, badge "L")
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt` (route the
+  section to `LogScreen`)
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt`
+  (settings-saved + HDC events)
+- `app/src/test/java/com/clawmate/app/settings/SettingsSectionTest.kt`
+  (seven sections + badge "L")
 - `README.md`, `MIGRATION_STATUS.md`, this `DSH_PHASE_RESULT.md`
 
 ## Verification summary
 
 - `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**, exit `0`.
-- Fresh test execution in this worktree → **448 tests, 0 failures, 0 errors**.
+- Fresh test execution in this worktree → **472 tests, 0 failures, 0 errors**.
+- No secrets / large files in the source tree (scan: none; gitignore already
+  excludes `*.jks/*.keystore/*.p12`, `local.properties`, build output, APKs).
 - `:app:connectedAndroidTest` not run (no device/emulator).
 
 ## Known gaps / notes (recorded honestly)
 
-- **WeChat auto-summary collection is not implemented on Android** — it is a
-  PC-side Python/HDC GUI-automation service (`wechat_collect`). The typed
-  `WechatCollectionGate` reports an honest BLOCKED / NOT_CONFIGURED state and
-  never runs collection or fabricates a summary. Real collection remains a
-  documented remaining gap (Phase-12 inventory E2).
-- **No dynamic WeChat conversation screen / summary rendering** — Phase 13 is
-  the settings/normalization/validation slice only; summary storage/rendering
-  (Harmony `WechatAutoSummaryStorage.ets`) remains portable-pending.
-- **Local profile → Home recommendation pipeline** (Phase 12 profile slice) is
-  unchanged and still deferred; not in Phase-13 scope.
+- **No logcat / native C++ / AppStorage log capture.** Harmony `LogView.ets`
+  reads `libentry.so` `getLogs()/clearLogs()` and `AppStorage` cloud/gallery log
+  strings. Neither has an Android equivalent this app owns, so the Android
+  viewer surfaces the real wired in-app sources (application / cloud-Agent /
+  gallery / workflow) and the empty state stays truthful — it never claims
+  events that did not happen.
+- **In-memory only (no disk persistence).** The ring buffer is deliberately a
+  process-lifetime in-memory buffer (app-private, bounded, redacted) so a raw
+  secret can never touch storage; it is not persisted across app restarts.
+- **Only the wired code paths emit events.** Other modules still use `Log.i`
+  directly; a broader migration to the in-app `AppLogger` across all modules is
+  a natural follow-up, not part of Phase 14.
 
 ## Commit hash
 
-- `Phase 13 WeChat settings` → **ca74d3e**.
+Committed on `phase14-log-viewer` — record the real hash from `git log -1` after
+committing.

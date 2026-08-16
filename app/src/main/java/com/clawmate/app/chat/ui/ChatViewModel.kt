@@ -146,6 +146,11 @@ class ChatViewModel(
         sendingJob = viewModelScope.launch {
             _state.update { it.copy(isSending = true, error = null, agentRunning = true) }
             val sessionId = repository.ensureActiveSession()
+            com.clawmate.app.log.AppLogger.cloud(
+                com.clawmate.app.log.domain.LogLevel.INFO,
+                "Chat",
+                "用户消息已发送 session=$sessionId",
+            )
             try {
                 repository.sendAgentMessage(text).collect { event ->
                     when (event) {
@@ -204,6 +209,11 @@ class ChatViewModel(
                             }
                         }
                         is ChatSendEvent.Completed -> {
+                            com.clawmate.app.log.AppLogger.cloud(
+                                com.clawmate.app.log.domain.LogLevel.INFO,
+                                "Chat",
+                                "回复完成 session=$sessionId",
+                            )
                             _state.update { current ->
                                 val finalized = current.messages
                                     .toMutableList()
@@ -225,6 +235,11 @@ class ChatViewModel(
                 }
             } catch (e: ChatException) {
                 // Roll back the tentative assistant bubble (if any) and show the error.
+                com.clawmate.app.log.AppLogger.cloud(
+                    com.clawmate.app.log.domain.LogLevel.ERROR,
+                    "Chat",
+                    "对话失败: ${e.userMessage}",
+                )
                 _state.update { current ->
                     current.copy(
                         isSending = false,

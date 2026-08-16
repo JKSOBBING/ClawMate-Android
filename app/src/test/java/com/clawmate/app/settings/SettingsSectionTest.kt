@@ -11,7 +11,7 @@ import org.junit.Test
 class SettingsSectionTest {
 
     @Test
-    fun `six sections in the correct order`() {
+    fun `seven sections in the correct order`() {
         val ids = SETTINGS_SECTIONS.map { it.id }
         assertEquals(
             listOf(
@@ -21,6 +21,7 @@ class SettingsSectionTest {
                 SettingsSectionId.TaskAutomation,
                 SettingsSectionId.StorageAbout,
                 SettingsSectionId.WechatAutoSummary,
+                SettingsSectionId.RuntimeLogs,
             ),
             ids,
         )
@@ -31,6 +32,7 @@ class SettingsSectionTest {
         assertEquals(0, SettingsSectionId.normalize(SettingsSectionId.PersonalPrivacy.ordinalIndex))
         assertEquals(4, SettingsSectionId.normalize(SettingsSectionId.StorageAbout.ordinalIndex))
         assertEquals(5, SettingsSectionId.normalize(SettingsSectionId.WechatAutoSummary.ordinalIndex))
+        assertEquals(6, SettingsSectionId.normalize(SettingsSectionId.RuntimeLogs.ordinalIndex))
         assertEquals(SettingsSectionId.NONE, SettingsSectionId.normalize(999))
         assertEquals(SettingsSectionId.NONE, SettingsSectionId.normalize(-1))
     }
@@ -39,6 +41,7 @@ class SettingsSectionTest {
     fun `isSelected reflects real sections only`() {
         assertTrue(SettingsSectionId.isSelected(2))
         assertTrue(SettingsSectionId.isSelected(5))
+        assertTrue(SettingsSectionId.isSelected(6))
         assertFalse(SettingsSectionId.isSelected(-1))
         assertFalse(SettingsSectionId.isSelected(7))
     }
@@ -59,6 +62,8 @@ class SettingsSectionTest {
         assertTrue(com.clawmate.app.settings.domain.settingsSectionSubtitle(SettingsSectionId.StorageAbout).isNotEmpty())
         assertEquals("微信自动汇总", com.clawmate.app.settings.domain.settingsSectionTitle(SettingsSectionId.WechatAutoSummary))
         assertTrue(com.clawmate.app.settings.domain.settingsSectionSubtitle(SettingsSectionId.WechatAutoSummary).isNotEmpty())
+        assertEquals("运行日志", com.clawmate.app.settings.domain.settingsSectionTitle(SettingsSectionId.RuntimeLogs))
+        assertTrue(com.clawmate.app.settings.domain.settingsSectionSubtitle(SettingsSectionId.RuntimeLogs).isNotEmpty())
     }
 
     @Test
@@ -69,6 +74,7 @@ class SettingsSectionTest {
         assertEquals("T", badge(SettingsSectionId.TaskAutomation))
         assertEquals("S", badge(SettingsSectionId.StorageAbout))
         assertEquals("W", badge(SettingsSectionId.WechatAutoSummary))
+        assertEquals("L", badge(SettingsSectionId.RuntimeLogs))
     }
 
     private fun badge(id: SettingsSectionId): String =

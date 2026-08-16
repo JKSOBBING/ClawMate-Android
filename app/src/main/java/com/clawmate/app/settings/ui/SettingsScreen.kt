@@ -46,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.settings.SettingsComponent
 import com.clawmate.app.settings.domain.SETTINGS_SECTIONS
 import com.clawmate.app.settings.domain.SettingsSectionId
+import com.clawmate.app.log.ui.LogScreen
 
 /**
  * Compose Settings screen — the Android vertical slice of the HarmonyOS 设置 tab
@@ -78,6 +79,10 @@ fun SettingsScreen(context: Context, modifier: Modifier = Modifier) {
         if (SettingsSectionId.isSelected(state.selectedSectionId)) {
             val active = SettingsSectionId.entries.firstOrNull { it.ordinalIndex == state.selectedSectionId }
             if (active != null) {
+                if (active == SettingsSectionId.RuntimeLogs) {
+                    LogScreen(onBack = vm::closeSection)
+                    return@Box
+                }
                 SectionDetail(
                     section = SETTINGS_SECTIONS.first { it.id == active },
                     state = state,
@@ -227,6 +232,9 @@ private fun SectionDetail(
             SettingsSectionId.TaskAutomation -> TaskAutomationSection(state, vm, context)
             SettingsSectionId.StorageAbout -> StorageAboutSection(state, vm, context)
             SettingsSectionId.WechatAutoSummary -> WechatSettingsSection(state, vm)
+            // Unreachable here: RuntimeLogs is handled earlier in SettingsScreen
+            // as a full-page Log viewer (no settings form).
+            SettingsSectionId.RuntimeLogs -> Unit
         }
 
         // Save / reset actions

@@ -234,6 +234,7 @@ class SettingsViewModel(
             // Push normalized cloud endpoint into runtime config for the chat/gallery.
             runCatching { EndpointBridge.applyToRuntime(clean) }
 
+            com.clawmate.app.log.AppLogger.i("Settings", "设置已保存")
             _state.update {
                 it.copy(
                     saveBusy = false,
@@ -269,6 +270,11 @@ class SettingsViewModel(
             when (result) {
                 is com.clawmate.app.task.hdc.HdcActionResult.Success -> {
                     TaskComponent.setDeviceAdapter(adapter)
+                    com.clawmate.app.log.AppLogger.workflow(
+                        com.clawmate.app.log.domain.LogLevel.INFO,
+                        "HDC",
+                        "HDC bridge 健康检查通过",
+                    )
                     _state.update {
                         it.copy(
                             hdcTesting = false,
@@ -291,6 +297,11 @@ class SettingsViewModel(
                 }
                 is com.clawmate.app.task.hdc.HdcActionResult.TransportError -> {
                     TaskComponent.setDeviceAdapter(null)
+                    com.clawmate.app.log.AppLogger.workflow(
+                        com.clawmate.app.log.domain.LogLevel.ERROR,
+                        "HDC",
+                        "HDC 健康检查失败: ${result.message}",
+                    )
                     _state.update {
                         it.copy(
                             hdcTesting = false,

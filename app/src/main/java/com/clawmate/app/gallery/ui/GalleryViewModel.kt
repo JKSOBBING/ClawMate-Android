@@ -310,6 +310,11 @@ class GalleryViewModel(
             when (result) {
                 is OcrResult.Text -> {
                     if (result.value.isNotBlank()) {
+                        com.clawmate.app.log.AppLogger.gallery(
+                            com.clawmate.app.log.domain.LogLevel.INFO,
+                            "Gallery",
+                            "图库 OCR 完成 id=$id，识别 ${result.value.length} 字符",
+                        )
                         repository.updateOcr(id, result.value, GalleryPhotoItem.ANALYSIS_STATE_ANALYZED)
                         updateDetailOcr(id, OcrViewState.Success(result.value))
                     } else {
@@ -319,12 +324,31 @@ class GalleryViewModel(
                     }
                 }
                 is OcrResult.Empty -> {
+                    com.clawmate.app.log.AppLogger.gallery(
+                        com.clawmate.app.log.domain.LogLevel.INFO,
+                        "Gallery",
+                        "图库 OCR 无文本 id=$id",
+                    )
                     repository.updateOcr(id, "", GalleryPhotoItem.ANALYSIS_STATE_ANALYZED)
                     updateDetailOcr(id, OcrViewState.Empty)
                 }
                 is OcrResult.Cancelled -> updateDetailOcr(id, OcrViewState.Idle)
-                is OcrResult.ModelDownload -> updateDetailOcr(id, OcrViewState.ModelDownload(result.message))
-                is OcrResult.Failed -> updateDetailOcr(id, OcrViewState.Error(result.reason, result.kind))
+                is OcrResult.ModelDownload -> {
+                    com.clawmate.app.log.AppLogger.gallery(
+                        com.clawmate.app.log.domain.LogLevel.INFO,
+                        "Gallery",
+                        "图库 OCR 模型下载中",
+                    )
+                    updateDetailOcr(id, OcrViewState.ModelDownload(result.message))
+                }
+                is OcrResult.Failed -> {
+                    com.clawmate.app.log.AppLogger.gallery(
+                        com.clawmate.app.log.domain.LogLevel.ERROR,
+                        "Gallery",
+                        "图库 OCR 失败 id=$id: ${result.reason}",
+                    )
+                    updateDetailOcr(id, OcrViewState.Error(result.reason, result.kind))
+                }
                 is OcrResult.Unavailable -> updateDetailOcr(id, OcrViewState.Unavailable)
             }
             refreshSelectedIfVisible()
