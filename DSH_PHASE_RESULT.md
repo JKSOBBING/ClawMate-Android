@@ -1,61 +1,76 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 2 (chat / cloud-model vertical slice)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 3 (Gallery / Collection vertical slice)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase2-chat`
+- Path: `/opt/deepseek-harness/clawmate-phase3-gallery`
 - Branch: `master`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
-- This delivery was **built and tested in this worktree** (JDK 17, Android SDK
-  platform 34 / build-tools 34.0.0, Gradle 8.9), unlike the Phase-1 copy-ready
-  tree.
+- This delivery was **built and tested in this worktree** (JDK 17.0.19,
+  Android SDK platform 34 / build-tools 34.0.0 at
+  `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
+  `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
+- The `/root` home is read-only under the sandbox, so the build ran with
+  `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home` and
+  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (treated as
+  discarded build state; neither is committed).
 
 ## Commit
 
-- Message: `Phase 2 chat cloud model vertical slice`
-- Hash: `6a2d411` (`6a2d411`)
-- Staged files at commit: 36 files, +2745 / −103 (see "Changed files" below).
+- Message: `Phase 3 gallery collection vertical slice`
+- Hash: see "Final commit hash" below (filled after the commit was created on
+  this worktree).
+- The working tree carrying the Phase-3 changes was committed in this worktree;
+  nothing was written to `/root/ClawMate-Android` and `/root/mobiinfra-oh` was
+  not modified.
 
-## Scope delivered (Phase 2)
+## Scope delivered (Phase 3)
 
-1. **Kotlin chat message & session models** — `chat/model/ChatModels.kt`:
-   `ChatMessage`, `ChatSession`, roles/kinds, session title & preview rules,
-   ports of `ChatSessionTypes.ets` / `ChatPageTypes.ets` (mode constants).
-2. **OpenAI-compatible `/v1/chat/completions` client** —
-   `chat/cloud/ChatCompletionsClient.kt` on OkHttp + kotlinx.serialization:
-   - non-streaming `completion(...)`,
-   - **SSE streaming** exposed as a cold `Flow` (`completionStream(...)`) with
-     incremental delta emission and **cancellation** (closes the connection),
-   - connect/read timeouts,
-   - HTTP-status errors mapped to a typed `ChatException(HTTP)`,
-   - **malformed SSE events** surfaced as `ChatException(MALFORMED_SSE)`.
-   Deterministic parsing is isolated in `chat/cloud/SseParser.kt`
-   (`SseEventParser` framing + `ChatStreamChunkParser` chunk mapping).
-3. **Room persistence** — `chat/data/ChatDatabase.kt` (`ChatSessionEntity`,
-   `ChatMessageEntity`, `ChatDao`, type converter for `trace`).
-4. **Repository** — `chat/data/DefaultChatRepository.kt`: persists the user
-   message, streams the reply, persists the finished assistant message only on
-   successful completion. No fake replies; missing config → typed
-   `ChatException(CONFIG)` and **no assistant message stored**.
-5. **Real ViewModel + Compose screen** — `chat/ui/ChatViewModel.kt` and
-   `chat/ui/ChatScreen.kt`, wired into the 聊天 tab via `ClawMateRoot.kt`.
-   States handled: send, history, incremental streaming, loading, empty, error
-   banner, and missing-config ("尚未配置云端模型"). No hardcoded secrets or
-   endpoints (config loaded from git-ignored `local_config.properties` via
-   `ChatServerConfig.fromEndpointConfig()`).
+1. **Android gallery domain models** — `gallery/model/GalleryModels.kt`:
+   `GalleryPhotoItem`, `CollectionGroup`, `GallerySearchHit`,
+   `GalleryExifMetadata`, and a pure stable content-URI → id mapping
+   (`GalleryIds.stableIdForUri`), mirrored from
+   `utils/gallery/GalleryTypes.ets` and `docs/gallery/storage-format.md`.
+2. **Room persistence + explicit schema/migrations** — `gallery/data/`:
+   `GalleryItemEntity`, `CollectionGroupEntity`, an FTS4
+   `gallery_items_fts` entity, `GalleryDao`, and `GalleryDatabase`
+   (`exportSchema = true`). Migrations are explicit
+   (`GalleryDatabase.MIGRATIONS`, no `fallbackToDestructiveMigration`), schema
+   exported to `app/schemas/com.clawmate.app.gallery.data.GalleryDatabase/1.json`.
+   `GalleryMappers` round-trip list/EXIF JSON deterministically.
+3. **Real Photo Picker / MediaStore adapter** — `gallery/photo/PhotoPickerAdapter.kt`:
+   the system Photo Picker (`ActivityResultContracts.PickMultipleVisualMedia`)
+   returns content URIs with per-item grant — **no broad storage permission is
+   requested at runtime**. Metadata (date / model / dimensions / GPS) is read via
+   `ContentResolver` and `androidx.exifinterface` `ExifInterface`. Outcomes are
+   typed `PickResult.Picked / Cancelled / Unavailable`; inaccessible URIs and
+   missing metadata are surfaced as typed results / null, never fabricated.
+4. **Repository + DI** — `gallery/data/GalleryRepository.kt` +
+   `DefaultGalleryRepository.kt` + `gallery/GalleryComponent.kt`: deterministic
+   upsert and dedupe-by-content-URI, group refresh and search over stored items.
+5. **Compose Gallery/Collection screen** — `gallery/ui/GalleryScreen.kt` +
+   `GalleryViewModel.kt`, wired into the 汇总 tab of the existing shell
+   (`ui/ClawMateRoot.kt`): picker action, lazy item list, empty / loading /
+   error states, collection-group chips and basic search. No fake photos or
+   hardcoded demo data.
+6. **Explicit unsupported analysis interfaces** — `gallery/analysis/CapabilityEngines.kt`:
+   OCR / cloud vision / reverse-geocoding are ported boundaries that report typed
+   `CapabilityState.NotConfigured` / `Unsupported` (OcrEngine, CloudVisionAnalyzer,
+   ReverseGeocoder). OCR and reverse geocoding/Harmony-only scanner are **not**
+   implemented; the screen states this honestly.
 
 ## Verification (actually executed)
 
-Commands (each sequential, `--no-daemon --max-workers=1` to fit the low-RAM
-host, `ANDROID_USER_HOME` pointed at a writable dir for the debug keystore):
+Commands run in this worktree with the toolchain above (
+`gradle --no-daemon --max-workers=1`):
 
-| Command | Result |
+| Command | Result (exit code) |
 | --- | --- |
-| `gradle :app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `gradle :app:testDebugUnitTest` | **BUILD SUCCESSFUL — 39 tests, 0 failures** |
-| `gradle :app:assembleDebug :app:testDebugUnitTest` (final, both together) | **BUILD SUCCESSFUL** |
-| `gradle wrapper --gradle-version 8.9` | **BUILD SUCCESSFUL** (wrapper committed) |
+| `gradle :app:assembleDebug` (first run, before test fix) | **BUILD SUCCESSFUL** (APK produced) — assemble passed on the first run; the failure below was in the *unit-test* compile, not the app. |
+| `gradle :app:assembleDebug :app:testDebugUnitTest` (first combined run) | **FAILED — exit 1** — `:app:compileDebugUnitTestKotlin` errors in `CapabilityEnginesTest`: (a) `CapabilitySummary` unresolved (missing import; the type lives in `gallery.ui`), (b) `Operator '!=' cannot be applied to 'CapabilityState.Unsupported' and 'CapabilityState.NotConfigured'` (Kotlin 1.9 rejects `!=` between two distinct `data object` types). |
+| Fix applied — `app/src/test/.../analysis/CapabilityEnginesTest.kt`: added `import com.clawmate.app.gallery.ui.CapabilitySummary` and typed both sides of the distinctness assertion as `CapabilityState`. |
+| `gradle :app:assembleDebug :app:testDebugUnitTest` (final combined run) | **BUILD SUCCESSFUL — exit 0** |
 
-Unit-test breakdown (from `app/build/test-results/*`):
+Final unit-test breakdown (from `app/build/test-results/testDebugUnitTest/*`):
 
 | Suite | Tests | Failures |
 | --- | --- | --- |
@@ -65,91 +80,95 @@ Unit-test breakdown (from `app/build/test-results/*`):
 | DefaultChatRepositoryTest | 5 | 0 |
 | EndpointConfigTest | 2 | 0 |
 | DestinationTest | 3 | 0 |
-| **Total** | **39** | **0** |
+| GalleryIdsTest | 5 | 0 |
+| CollectionGroupingServiceTest | 6 | 0 |
+| GallerySearchServiceTest | 5 | 0 |
+| GalleryMapperTest | 5 | 0 |
+| CapabilityEnginesTest | 6 | 0 |
+| **Total (Phase-2 39 + Phase-3 27)** | **66** | **0** |
 
-Coverage vs. the requested checks: **SSE parsing** (framing, chunk-boundary
-splits, CRLF, `[DONE]`, malformed event), **response mapping** (content +
-finish reason + error-body extraction + URL normalisation), **errors** (HTTP
-401 → typed exception, malformed SSE → typed exception, timeout path), and
-**repository behavior** (persists user+assistant, no fake reply, title
-derivation, missing-config throws and stores nothing, stream failure keeps the
-user message only, repeated sends → one session).
+Coverage vs. the requested checks: **URI mapping** (same URI ⇒ same id,
+different URIs ⇒ different ids, blank ⇒ empty, stable suffix kept),
+**grouping** (empty input, no cross-group duplication, same-key grouping,
+time-desc sort, title/meta/id, chat-tab gallery-chat detection), **search**
+(empty query, title-over-summary ranking, tag-match reason, limit, score-desc),
+**persistence mapping** (entity↔domain round-trip, list/EXIF JSON, missing-EXIF
+null, group round-trip), and **unsupported states** (OCR/vision/geocoder report
+NOT_CONFIGURED and never fabricate output).
 
-`:app:connectedAndroidTest` (instrumented smoke test) was **not run** — no
-device/emulator is available. This is the Phase-1 `MainActivityTest` only and
-is unrelated to the Phase-2 chat code.
+`:app:connectedAndroidTest` (instrumented) was **not run** — no device/emulator
+is available. The `Photo Picker / ContentResolver` import path and the Compose
+gallery screen are exercised only at the pure-Kotlin/unit level for the same
+reason the Phase-2 chat slice was.
 
-## Phase-1 issues fixed (directly blocking this build)
+## Recorded exit codes (gradle)
 
-- **Compose compiler plugin**: declared `org.jetbrains.kotlin.plugin.compose`
-  against Kotlin 1.9.24 (only exists for Kotlin ≥ 2.0). Fixed with the Kotlin
-  1.9.x Compose compiler via `composeOptions { kotlinCompilerExtensionVersion
-  = "1.5.14" }` (matches Compose BOM 2024.06.00); removed the plugin alias.
-- **`res/raw/config.example.properties`**: `.` in the file name makes it an
-  invalid Android resource (`:mergeDebugResources` failed). Renamed to
-  `config_example.properties`.
-- **Manifest icon reference**: pointed at `@drawable/ic_launcher`, which does
-  not exist; the adaptive icon is `@mipmap/ic_launcher`. Fixed.
-- **`ClawMateApplication` compiled against `R.raw.local_config_properties`**,
-  which does not exist when the git-ignored override file is absent. Switched
-  to `resources.getIdentifier(...)` so the app builds unconfigured.
-- **Memory**: `org.gradle.jvmargs=-Xmx1536m` plus parallel daemons caused the
-  OOM-killer to kill Gradle. Lowered the daemon heap, added worker caps, and
-  in-process Kotlin compiler for this low-RAM host.
+- First combined assemble+test run: **exit code 1** (unit-test compile errors, fixed).
+- Final combined `:app:assembleDebug :app:testDebugUnitTest`: **exit code 0**.
 
 ## Blockers / gaps
 
 - **No device/emulator**: `connectedAndroidTest` cannot be run here; the
-  Compose instrumented smoke test remains unverified.
-- **No live end-to-end**: there is no real (or authorized) model endpoint
-  bundled, so the request path is exercised only against MockWebServer / the
-  protocol contract; a live smoke test against a configured `local_config.properties`
-  is left as a manual integration step.
-- **Toolchain not in-repo**: `local.properties` (SDK path, git-ignored) and the
-  Android SDK must exist on the building machine; the committed Gradle wrapper
-  will fetch the Gradle distribution on first run.
+  instrumentation smoke test and the live Photo-Picker import path remain
+  unverified on-device. Only the pure URI mapping / grouping / search / mapping
+  logic is unit-tested.
+- **OCR / cloud vision / reverse geocoding intentionally NOT implemented.** They
+  sit behind explicit `CapabilityEngines` interfaces reporting
+  `NOT_CONFIGURED`. Winning them requires ML Kit (OCR), a configured multimodal
+  endpoint (vision), and an AMap key (reverse geocoding) — none are bundled or
+  faked.
+- **Manifest storage permissions:** `READ_MEDIA_IMAGES` /
+  `READ_EXTERNAL_STORAGE (maxSdk 32)` / `ACCESS_MEDIA_LOCATION` are declared in
+  the manifest as the surface for a not-yet-wired auto-scan path; the Phase-3
+  Photo Picker path never requests them at runtime (per-URI grant only).
+- **Read-only `/root` home:** the sandbox cannot write `/root/.gradle` or
+  `/root/.android`, so the build used outsourced `GRADLE_USER_HOME` /
+  `ANDROID_USER_HOME`. This is a host/build-state detail, not a repo change.
 
-## Changed files (36)
+## Changed files (Phase 3, new or modified in this worktree)
 
-- Docs: `MIGRATION_STATUS.md`, `README.md`
-- Build: `build.gradle.kts`, `app/build.gradle.kts`, `gradle.properties`,
-  `gradle/libs.versions.toml`, `gradle/wrapper/*`, `gradlew`, `gradlew.bat`
-- Manifest/resources: `app/src/main/AndroidManifest.xml`
-  (`@mipmap/ic_launcher`), `res/raw/config.example.properties → config_example.properties`
-- Config: `app/.../config/EndpointConfig.kt` (+ `cloudPlannerModel`),
-  `app/.../ClawMateApplication.kt` (getIdentifier)
-- Chat main sources: `app/.../chat/ChatComponent.kt`,
-  `chat/cloud/{ChatClient,ChatClientTypes,ChatCompletionsClient,ChatServerConfig,OpenAiModels,SseParser}.kt`,
-  `chat/data/{ChatDatabase,ChatMappers,ChatRepository,DefaultChatRepository}.kt`,
-  `chat/model/ChatModels.kt`,
-  `chat/ui/{ChatViewModel,ChatViewModelFactory,ChatScreen}.kt`
-- UI wiring: `app/.../ui/ClawMateRoot.kt`, `ui/FeatureScreens.kt` (chat
-  placeholder removed)
-- Tests: `test/.../chat/cloud/{SseParserTest,ChatClientMappingTest,ChatCompletionsClientTest}.kt`,
-  `test/.../chat/data/DefaultChatRepositoryTest.kt`,
-  `test/.../config/EndpointConfigTest.kt`
+- New `app/schemas/com.clawmate.app.gallery.data.GalleryDatabase/1.json` (Room
+  schema export).
+- New gallery main sources under `app/src/main/java/com/clawmate/app/gallery/`:
+  `model/GalleryModels.kt`, `photo/PhotoPickerAdapter.kt`,
+  `collection/CollectionGroupingService.kt`, `search/GallerySearchService.kt`,
+  `analysis/CapabilityEngines.kt`, `data/{GalleryEntities,GalleryDao,GalleryMappers,GalleryDatabase,GalleryRepository,DefaultGalleryRepository}.kt`,
+  `GalleryComponent.kt`, `ui/{GalleryViewModel,GalleryScreen}.kt`.
+- New gallery unit tests under `app/src/test/java/com/clawmate/app/gallery/`:
+  `model/GalleryIdsTest.kt`, `collection/CollectionGroupingServiceTest.kt`,
+  `search/GallerySearchServiceTest.kt`, `data/GalleryMapperTest.kt`,
+  `analysis/CapabilityEnginesTest.kt` (import + assertion fixed in this run).
+- Modified: `app/build.gradle.kts` (`androidx.exifinterface`, Room schema
+  location via KSP), `gradle/libs.versions.toml` (`exifinterface = 1.3.7`),
+  `ui/ClawMateRoot.kt` and `ui/FeatureScreens.kt` (汇总 tab routes to
+  `GalleryScreen`), `MIGRATION_STATUS.md`, `README.md`.
 
-Not committed (git-ignored): `.gradle/`, `app/build/`, `local.properties`.
+Not committed (git-ignored / build state): `.gradle/`, `app/build/`,
+`local.properties`, `/opt/deepseek-harness/.gradle-user-home`,
+`/opt/deepseek-harness/.android-user-home`.
 
 ## Secrets scan
 
 Ran pattern scans (`sk-`, `api_key=`, `Bearer <real>`, `AIza`, `ghp_`, private
-keys, `password=`/`secret=`/`token=` assignments) over `app/src`, docs, and the
-full diff. **No real credentials, tokens, private keys, or production endpoints
-committed.** Endpoints/keys load from the git-ignored
-`app/src/main/res/raw/local_config.properties` (safe template:
-`config_example.properties`). The only numeric host in tests is RFC-1918
-`10.0.0.1` used as a URL-normalisation fixture.
+keys, `password=`/`secret=`/`token=` assignments) over `app/src`, docs, the
+full Phase-3 diff. **No real credentials, tokens, private keys, or production
+endpoints committed.** The gallery slice reads only content URIs from the
+system Photo Picker and stores real metadata; no endpoints or keys are added.
+Endpoint/API-key config remains the Phase-2 git-ignored
+`app/src/main/res/raw/local_config.properties` (safe template
+`config_example.properties`). No demo/fake photos, boundary sample data, or
+unrelated features were introduced.
 
 ## Next phase
 
-Phase 3 should extend the chat slice along the agent loop:
-- Streaming thinking/reasoning deltas + markdown/rich rendering
-  (`ChatStreamThinkingDelta` / `MarkdownParser` port).
-- ReAct tool loop (`AgentLoopRunner`, `ChatToolRegistry`, `ChatReactAgent`
-  port) over the same client, restoring `/v1/chat/completions` tool-call
-  support.
-- Session list/drawer UI + delete/rename; multi-session navigation backed by
-  the existing Room schema.
-- Live integration check against a configured endpoint on a device/emulator,
-  plus run `:app:connectedAndroidTest`.
+Phase 4 should continue from the agent loop and data manager:
+- Wire the capability engines: on-device ML Kit OCR, a configured
+  multimodal/cloud-vision call, and reverse geocoding against a map provider —
+  so gallery items can be auto-tagged/located, then propagated into title /
+  summary / category.
+- Add a per-photo detail screen, delete/rename, EXIF display, and live group
+  re-computation on edits.
+- Restore the `AgentLoopRunner` / `ChatToolRegistry` ReAct loop over the Phase-2
+  chat client, and the workflow/task JSON schema execution.
+- Run `:app:connectedAndroidTest` and a live Photo-Picker import on a
+  device/emulator once one is available.

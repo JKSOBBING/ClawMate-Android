@@ -1,11 +1,50 @@
-# ClawMate Android — Chat / Cloud-model vertical slice (Phase 2)
+# ClawMate Android — Gallery / Collection vertical slice (Phase 3)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
-(5-tab Compose shell, secrets-free endpoint config). **Phase 2** adds the chat /
-cloud-model vertical slice: chat message & session models, an OpenAI-compatible
-`/v1/chat/completions` client (non-streaming + SSE streaming), Room persistence,
-a real `ChatViewModel` and Compose chat screen, and deterministic unit tests.
+(5-tab Compose shell, secrets-free endpoint config); **Phase 2** added the chat /
+cloud-model vertical slice. **Phase 3** adds the gallery / collection vertical
+slice wired into the 汇总 tab: real Android Photo Picker import, Room persistence
+of photo items / collection groups / searchable metadata, deterministic heuristic
+grouping + weighted search, and honest NOT_CONFIGURED states for OCR / cloud
+vision / reverse geocoding.
+
+## Layout — features added in Phase 3 (gallery / collection)
+
+```
+app/src/main/java/com/clawmate/app/gallery/
+├── model/GalleryModels.kt        # GalleryPhotoItem, CollectionGroup, GalleryExifMetadata,
+│                                 #   stable content-URI -> id mapping
+├── photo/PhotoPickerAdapter.kt   # System Photo Picker (PickMultipleVisualMedia, no broad storage
+│                                 #   permission) + ContentResolver/ExifInterface metadata reader;
+│                                 #   typed PickResult (Picked/Cancelled/Unavailable)
+├── collection/CollectionGroupingService.kt  # deterministic heuristic grouping (port)
+├── search/GallerySearchService.kt           # weighted full-text scoring (port)
+├── analysis/CapabilityEngines.kt   # OCR / cloud vision / reverse geocoding as explicit
+│                                   #   interface + typed NOT_CONFIGURED/UNSUPPORTED states
+├── data/
+│   ├── GalleryEntities.kt          # Room entities: items, collection groups, FTS4 search table
+│   ├── GalleryDao.kt
+│   ├── GalleryMappers.kt           # deterministic domain <-> entity (JSON literals for lists/EXIF)
+│   ├── GalleryDatabase.kt          # Room DB, explicit migrations, schema export
+│   ├── GalleryRepository.kt        # repository boundary
+│   └── DefaultGalleryRepository.kt # Room-backed repo; dedupe-by-URI, group refresh, search
+├── GalleryComponent.kt             # lightweight manual DI
+└── ui/
+    ├── GalleryViewModel.kt         # loading/loaded/error state + capability summary
+    └── GalleryScreen.kt            # picker action, item list, empty/loading/error, groups, search
+```
+
+The 汇总 tab in `ui/ClawMateRoot.kt` now routes to `GalleryScreen`.
+
+## No fake analysis
+
+The gallery slice captures real photos, stores them, groups and searches their real
+metadata. OCR, cloud vision and reverse geocoding are **not** implemented: they sit
+behind explicit `CapabilityEngines` interfaces that report `NOT_CONFIGURED`, and the
+screen says so. No fake OCR/vision text is ever produced.
+
+> The sections below describe the Phase-1 skeleton and Phase-2 chat slice.
 
 ## Layout — features added in Phase 2
 
@@ -61,9 +100,12 @@ generated with `gradle wrapper`).
 ./gradlew :app:connectedAndroidTest     # instrumented (device/emulator)
 ```
 
-In this worktree the Phase-2 build and unit tests were actually executed with a
-local JDK 17 / Android SDK (platform 34) / Gradle 8.9 — commands and results are
-recorded in `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`.
+In this worktree the Phase-2 and Phase-3 builds and unit tests were actually
+executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 —
+commands and results are recorded in `MIGRATION_STATUS.md` §6 and
+`DSH_PHASE_RESULT.md`. The Phase-3 run used `GRADLE_USER_HOME` /
+`ANDROID_USER_HOME` pointed outside the read-only `/root` (see
+`MIGRATION_STATUS.md` §0).
 
 ## No secrets
 
