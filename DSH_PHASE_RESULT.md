@@ -17,8 +17,10 @@
 ## Commit
 
 - Message: `Phase 3 gallery collection vertical slice`
-- Hash: see "Final commit hash" below (filled after the commit was created on
-  this worktree).
+- Hash: `e11a120` (`e11a120`, on `master`) — 27 files, +2561 / −159, created on
+  this worktree. (This doc was then updated with the hash and re-committed as
+  the final docs commit; both the feature commit and the result-file update are
+  present below.)
 - The working tree carrying the Phase-3 changes was committed in this worktree;
   nothing was written to `/root/ClawMate-Android` and `/root/mobiinfra-oh` was
   not modified.
