@@ -1,30 +1,33 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 9 (Gallery detail & local analysis)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 10 (Local model capability boundary)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase9-gallery-analysis`
+- Path: `/opt/deepseek-harness/clawmate-phase10-local-model`
 - Branch: `master`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
 - This delivery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
-  Android SDK platform 34 / build-tools 34.0.0 at `/opt/deepseek-harness/android-sdk`,
-  Gradle 8.9 at `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
+  Android SDK platform 34 / build-tools 34.0.0 at
+  `/opt/deepseek-harness/android-sdk`, **Android NDK 25.2.9519653 + Google CMake
+  3.22.1 installed there via the SDK's `sdkmanager`**, Gradle 8.9 at
+  `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
 - Build state used: `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
   `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (discarded, never
   committed). Nothing was written to `/root/ClawMate-Android`; `/root/mobiinfra-oh`
-  was not modified. All Phase 1–8 code is preserved.
+  was not modified. All Phase 1–9 code is preserved.
 - Working policy: serial only, single worker, no parallel Gradle processes, no
-  servers/emulators.
+  servers/emulators. The NDK/cmake install was a single `sdkmanager` invocation
+  (one compatible NDK, no model binaries, no parallel installs).
 
 ## Commits
 
 First commit (feature slice):
-- Message: `Phase 9 gallery detail analysis`
-- Hash: **`522c967`** (`522c9675fc0fef46564e855f6bf51164ccb26beb`) on `master`,
+- Message: `Phase 10 local model capability boundary`
+- Hash: **`936436752f78c9222ddcb03d8133c8594f879d9d`** (`93643675`) on `master`,
   created in this worktree.
 
-The result-file update (this file, with the feature hash filled in) is
-then committed as the final docs commit — both the feature commit and the
-result-file commit are present in the branch history.
+The result-file update (this file, with the feature hash filled in) is then
+committed as the final docs commit — both the feature commit and the result-file
+commit are present in the branch history.
 
 ## Command executed (actual, in this worktree)
 
@@ -38,110 +41,112 @@ ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
 ```
 
 Result: **BUILD SUCCESSFUL — exit code 0**. `:app:assembleDebug` produced
-`app/build/outputs/apk/debug/app-debug.apk` (~18.3 MB); `:app:testDebugUnitTest`
-ran **342 tests, 0 failures, 0 errors** (303 prior Phases 1–8 + **39 new
-Phase-9 gallery tests**). `:app:connectedAndroidTest` was **not run** — no
+`app/build/outputs/apk/debug/app-debug.apk` (~19 MB) and packaged the truthful
+native stub `libclawmate_local_model.so` for **arm64-v8a, armeabi-v7a, x86_64**
+(`externalNativeBuild` via `app/src/main/cpp`). `:app:testDebugUnitTest` ran
+**380 tests, 0 failures, 0 errors** (342 prior Phases 1–9 + **38 new Phase-10
+local-model tests**). `:app:connectedAndroidTest` was **not run** — no
 device/emulator is available in this worktree.
 
-## Scope delivered (Phase 9)
+## Scope delivered (Phase 10)
 
-1. **Real gallery item detail flow** (`gallery/ui/GalleryDetailScreen.kt`),
-   opened from the existing gallery list by tapping a photo row. Shows only
-   real data — content URI, archive date, EXIF capture time / device /
-   dimensions, analysis state, tags / summary and collection membership — with
-   no fabricated values. Deterministic label mapping in
-   `gallery/ui/GalleryDetailLabels.kt`.
+1. **Typed local-model domain** (`localmodel/LocalModelTypes.kt`): typed
+   lifecycle states **NOT_CONFIGURED / UNSUPPORTED / LOADING / READY / ERROR**
+   with typed error kinds (INVALID_PATH, MISSING_CONFIG, MISSING_MODEL_FILE,
+   NOT_READY, NATIVE_LIBRARY_MISSING, LOAD_FAILED) and deterministic labels.
+   Normalization never reports READY from disk state alone.
 
-2. **Explicit safe edit operations** (`GalleryRepository` /
-   `DefaultGalleryRepository` / `GalleryDao`): `updateTitle`, `updateSummary`,
-   `updateTags`, `updateLocation`, and **delete-by-item** (`deleteItem(id)`)
-   with a UI confirmation `AlertDialog`. Edits are persisted to Room; delete
-   removes only the single item row and recomputes collection groups. No broad
-   files are deleted and Photo-Picker URI grants are never revoked; a deleted /
-   inaccessible item is surfaced honestly.
+2. **App-private path validation** (`localmodel/LocalModelPathValidator.kt`):
+   model dirs must live under `filesDir/model` (legacy) or
+   `filesDir/modelscope/{owner}__{repo}` (ModelScope); `..`/`.`/escape/
+   non-whitelisted bases and the `filesDir` root itself are rejected before any
+   load. No arbitrary file/dir deletion path is ever offered.
 
-3. **Android reverse geocoding** (`gallery/geocode/`):
-   - `AndroidGeocoderClient` wraps the platform `android.location.Geocoder`
-     (no AMap/web key, no network endpoint).
-   - Typed outcomes and errors (`ReverseGeocodeOutcome` /
-     `ReverseGeocodeErrorKind` UNAVAILABLE / PERMISSION / LOOKUP_FAILED / IO /
-     NOT_CONFIGURED) with an honest single-line `AddressFormatter` and pure,
-     device-free `AndroidGeocoderMapping` (separated from the platform call so
-     the decision logic is unit-testable).
-   - Wired as an **explicit injected capability** via
-     `GalleryComponent.reverseGeocoder(context)` → `AndroidReverseGeocoder`
-     (the default NOT_CONFIGURED engine remains for tests/injection).
-   - The detail panel exposes 解析/重试 with typed failure text and **never
-     claims a location when a lookup fails**; a resolved place is persisted to
-     the new `address` / `locationProvider` item columns.
+3. **Deterministic inventory scanner** (`localmodel/LocalModelInventory.kt`),
+   porting `Index.ets modelLoadableStatus / hasModelWeightFile /
+   isModelWeightFile`: a model dir is loadable when it has `config.json` + a
+   weight file (`.mnn`/`.om`/`.safetensors`/`.weight`), scanned through an
+   injectable `ModelFolderProbe` seam so tests are device-free.
 
-4. **OCR engine boundary**: ML Kit `text-recognition-chinese` (16.0.x) is
-   resolvable on Google Maven, but it is the download-on-device (Play-Services)
-   model variant and there is no emulator/device here to verify real recognized
-   text — so it is **not** vendored. OCR remains the explicit `OcrEngine`
-   NOT_CONFIGURED boundary with a typed `Unavailable` message; cloud vision
-   remains NOT_CONFIGURED. Documented in `CapabilityEngines.kt` and
-   `MIGRATION_STATUS.md`. No OCR output is ever invented.
+4. **Honest capability boundary** (`localmodel/LocalModelCapability.kt`): the
+   explicit `loadAndTest(modelId)` action validates the path, requires a real
+   complete model dir, requires a supported native adapter, and then performs
+   the native load — reaching **READY only on a genuine native Success**.
+   Missing MNN/LLM on Android always maps to UNSUPPORTED; missing config/weight
+   maps to typed ERROR. No fake completion.
 
-5. **Capability UI reflects actual states**: `CapabilitySummary` now tracks
-   `hasUnconfigured` / `hasUnsupported`; `GalleryScreen` renders Ready /
-   NotConfigured / Unsupported per-capability text, and the detail panel shows
-   retry/unsupported messages (e.g. geocoder unavailable → typed error + 重试).
+5. **JNI/CMake native adapter (truthful stub)** (`app/src/main/cpp/`
+   `CMakeLists.txt` + `local_model_jni.cpp`, built by AGP `externalNativeBuild
+   cmake`, `ndkVersion = "25.2.9519653"`): exposes `nativeStatus`,
+   `nativeLoad`, `nativeUnload`, `nativeSelfCheck`. Because MNN-for-Android and
+   the OHOS N-API/HiAI runtime are **absent** (and not vendored/copied), the
+   stub returns typed `UNSUPPORTED` / `NATIVE_LIBRARY_MISSING` results and
+   documents exactly what a real adapter needs (per-ABI `libMNN` + an
+   `Llm`-equivalent loader). The `.so` is verified packaged into the APK.
 
-6. **Storage / schema**: `GalleryItemEntity` gains `address` / `locationProvider`
-   / `analysisState`; `GalleryDatabase` bumped **v1 → v2** with an explicit,
-   non-destructive `ALTER TABLE ADD COLUMN` migration; the Room v2 schema JSON
-   is exported and committed. Photo-Picker URI-grant import and the existing
-   search/grouping services are preserved; no broad storage permissions added.
+6. **Settings integration** (`localmodel/LocalModelViewModel.kt` +
+   `LocalModelPanel.kt`, wired into `settings/ui/SettingsSections.kt` under the
+   模型与智能体 section): shows the typed status, discovered inventory, and an
+   explicit **"加载/测试 <模型>"** action per loadable model; READY only after a
+   real load success. App launch performs no network and no model load. Cloud
+   chat path unchanged.
 
-7. **Deterministic tests (39 new, §Verification summary)**: detail mapping,
-   edit/delete persistence, geocoder result/error mapping, capability states
-   and group recomputation. No live geocoder/device tests are included.
+7. **Deterministic tests (38 new, §Verification summary)**: state
+   normalization, path validation, inventory scanning, no-fake-output
+   (missing-library / missing-config / missing-weight / invalid-path /
+   native-success-only-READY) and native result-token parsing.
+   Device/native smoke tests documented unavailable (no emulator, no on-device
+   MNN runtime).
 
-## Files changed (Phase 9)
+## Files changed (Phase 10)
 
-New:
-- `app/src/main/java/com/clawmate/app/gallery/geocode/LocationModels.kt`
-- `app/src/main/java/com/clawmate/app/gallery/geocode/AddressFormatter.kt`
-- `app/src/main/java/com/clawmate/app/gallery/geocode/AndroidGeocoderClient.kt`
-- `app/src/main/java/com/clawmate/app/gallery/geocode/AndroidReverseGeocoder.kt`
-- `app/src/main/java/com/clawmate/app/gallery/ui/GalleryDetailScreen.kt`
-- `app/src/main/java/com/clawmate/app/gallery/ui/GalleryDetailLabels.kt`
-- `app/schemas/com.clawmate.app.gallery.data.GalleryDatabase/2.json`
-- `app/src/test/java/com/clawmate/app/gallery/geocode/AndroidGeocoderMappingTest.kt`
-- `app/src/test/java/com/clawmate/app/gallery/geocode/AddressFormatterTest.kt`
-- `app/src/test/java/com/clawmate/app/gallery/data/GalleryRepositoryEditDeleteTest.kt`
-- `app/src/test/java/com/clawmate/app/gallery/ui/GalleryViewModelEditDeleteTest.kt`
-- `app/src/test/java/com/clawmate/app/gallery/ui/GalleryDetailLabelsTest.kt`
+New (Kotlin domain + UI):
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelTypes.kt`
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelPathValidator.kt`
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelInventory.kt`
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelCapability.kt`
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelNative.kt`
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelViewModel.kt`
+- `app/src/main/java/com/clawmate/app/localmodel/LocalModelPanel.kt`
+
+New (native/JNI stub):
+- `app/src/main/cpp/CMakeLists.txt`
+- `app/src/main/cpp/local_model_jni.cpp`
+
+New (tests):
+- `app/src/test/java/com/clawmate/app/localmodel/LocalModelTypesTest.kt`
+- `app/src/test/java/com/clawmate/app/localmodel/LocalModelPathValidatorTest.kt`
+- `app/src/test/java/com/clawmate/app/localmodel/LocalModelInventoryTest.kt`
+- `app/src/test/java/com/clawmate/app/localmodel/LocalModelCapabilityTest.kt`
+- `app/src/test/java/com/clawmate/app/localmodel/LocalModelNativeTest.kt`
 
 Modified:
-- `app/src/main/java/com/clawmate/app/gallery/GalleryComponent.kt`
-- `app/src/main/java/com/clawmate/app/gallery/analysis/CapabilityEngines.kt`
-- `app/src/main/java/com/clawmate/app/gallery/data/GalleryDao.kt`
-- `app/src/main/java/com/clawmate/app/gallery/data/GalleryDatabase.kt` (v1→v2)
-- `app/src/main/java/com/clawmate/app/gallery/data/GalleryEntities.kt`
-- `app/src/main/java/com/clawmate/app/gallery/data/GalleryMappers.kt`
-- `app/src/main/java/com/clawmate/app/gallery/data/GalleryRepository.kt`
-- `app/src/main/java/com/clawmate/app/gallery/model/GalleryModels.kt`
-- `app/src/main/java/com/clawmate/app/gallery/ui/GalleryScreen.kt`
-- `app/src/main/java/com/clawmate/app/gallery/ui/GalleryViewModel.kt`
-- `app/src/test/java/com/clawmate/app/gallery/analysis/CapabilityEnginesTest.kt`
+- `app/build.gradle.kts` (externalNativeBuild cmake, ndkVersion 25.2.9519653,
+  abiFilters)
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt`
+  (LocalModelPanel wired into the 模型与智能体 section)
 
 ## Verification summary
 
 - Baseline (before changes): `:app:assembleDebug :app:testDebugUnitTest` →
-  **BUILD SUCCESSFUL exit 0**, 303 tests green.
-- After Phase 9: `:app:assembleDebug :app:testDebugUnitTest` → **BUILD
-  SUCCESSFUL exit 0**, 342 tests / 0 failures / 0 errors.
+  **BUILD SUCCESSFUL exit 0**, 342 tests green.
+- After Phase 10: `:app:assembleDebug :app:testDebugUnitTest` → **BUILD
+  SUCCESSFUL exit 0**, 380 tests / 0 failures / 0 errors.
+- The native JNI/CMake stub compiled and packaged for all three ABIs
+  (`:app:externalNativeBuildDebug` and `:app:assembleDebug` both succeeded).
 - Device-dependent paths are not exercised here: no emulator for
-  `connectedAndroidTest`; the platform Geocoder reverse lookup and OCR model
-  download run on-device only and are deliberately not faked in unit tests.
+  `connectedAndroidTest`; a real on-device MNN model load cannot run without
+  MNN-for-Android and a device, so the native adapter is a documented truthful
+  stub and no fake model output is produced.
 
 ## Known gaps / notes
 
-- OCR stays NOT_CONFIGURED (documented): wiring ML Kit now without a device to
-  verify real recognized text would risk fabricated output.
-- Reverse geocoding quality/latency depends on the device's platform Geocoder.
-- The Android Geocoder reverse lookup of a provided coordinate needs no location
-  permission; the `PERMISSION` error kind is modelled for future keyed providers
-  and is never falsely raised by the Android adapter.
+- **MNN-for-Android absent:** a real on-device local model requires linking a
+  per-ABI MNN Android prebuilt library plus an `Llm`-equivalent C++ loader
+  (the OHOS N-API/HiAI runtime cannot be reused on Android). The capability
+  boundary and native stub are in place; the adapter honestly reports
+  NOT_CONFIGURED / UNSUPPORTED until MNN is provided.
+- Model files stay app-private (`filesDir/model`, `filesDir/modelscope`) and
+  are never committed; the inventory/path checks prevent arbitrary deletion.
+- `connectedAndroidTest` and an on-device load smoke test are documented as
+  unavailable (no emulator/device, no MNN runtime).
