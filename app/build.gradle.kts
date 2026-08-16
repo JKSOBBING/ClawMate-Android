@@ -53,12 +53,18 @@ android {
     }
 }
 
+// Export Room schemas so explicit migrations can be authored against versioned schema files.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // AndroidX / lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.exifinterface)
 
     // Jetpack Compose
     implementation(platform(libs.androidx.compose.bom))

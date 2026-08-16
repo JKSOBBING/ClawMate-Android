@@ -13,6 +13,10 @@ import androidx.compose.ui.unit.dp
  * Summary / collection tab placeholder (Phase 1).
  * Maps to the HarmonyOS 汇总 tab backed by the collection grouping service.
  *
+ * NOTE: Phase 3 wires the 汇总 tab to the real [com.clawmate.app.gallery.ui
+ * .GalleryScreen]; this composable is retained only as a reference and is no
+ * longer routed.
+ *
  * HarmonyOS source reference:
  *   entry/src/main/ets/pages/collection/CollectionPage.ets
  *   entry/src/main/ets/datamanager/CollectionGroupingService.ets
@@ -24,7 +28,7 @@ fun SummaryScreen(modifier: Modifier = Modifier) {
     ) {
         Text("汇总", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Summary / collection groups — phase 2",
+            "Summary / collection groups — see gallery.ui.GalleryScreen (Phase 3)",
             style = MaterialTheme.typography.bodyMedium,
         )
     }

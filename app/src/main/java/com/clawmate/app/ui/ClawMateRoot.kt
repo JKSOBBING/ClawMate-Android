@@ -24,6 +24,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.clawmate.app.chat.ui.ChatScreen
+import com.clawmate.app.gallery.ui.GalleryScreen
 import com.clawmate.app.ui.home.HomeScreen
 import com.clawmate.app.ui.settings.SettingsScreen
 
@@ -83,7 +84,7 @@ fun ClawMateRoot() {
             val context = LocalContext.current
             when (backStackEntry?.destination?.route) {
                 Destination.Home.route -> HomeScreen()
-                Destination.Summary.route -> SummaryScreen()
+                Destination.Summary.route -> GalleryScreen()
                 Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> TaskScreen()
                 Destination.Settings.route -> SettingsScreen()
