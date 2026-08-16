@@ -58,6 +58,14 @@ class SettingsViewModel(
      */
     private val accessibilityDetector: com.clawmate.app.accessibility.AccessibilityServiceDetector =
         com.clawmate.app.accessibility.RegistryAccessibilityServiceDetector(),
+    /**
+     * Phase 20 — injectable float/edge overlay detector so unit tests can drive
+     * the overlay gate without Android system APIs. Defaults to the live
+     * registry-backed detector that mirrors what the overlay scaffold actually
+     * observes.
+     */
+    private val overlayDetector: com.clawmate.app.overlay.OverlayPermissionDetector =
+        com.clawmate.app.overlay.RegistryOverlayPermissionDetector(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -190,6 +198,7 @@ class SettingsViewModel(
     fun setWorkflowAutomationEnabled(value: Boolean) = updateDraft { it.copy(workflowAutomationEnabled = value) }
     fun setWorkflowHardwareSteps(value: Boolean) = updateDraft { it.copy(workflowHardwareStepsEnabled = value) }
     fun setAccessibilityOptIn(value: Boolean) = updateDraft { it.copy(accessibilityOptIn = value) }
+    fun setOverlayOptIn(value: Boolean) = updateDraft { it.copy(overlayOptIn = value) }
     fun setPcServerUrl(value: String) = updateDraft { it.copy(pcServerUrl = value) }
 
     // ----- WeChat auto-summary (Phase 13) — fields are normalized on change.
@@ -384,6 +393,42 @@ class SettingsViewModel(
             optedIn = d.accessibilityOptIn,
             systemServiceEnabled = accessibilityDetector.isServiceEnabledBySystem(),
             providerConfigured = accessibilityDetector.isProviderConfigured(),
+        )
+    }
+
+    /**
+     * Phase 20 — build the float/edge overlay boundary from live state. The
+     * gate reflects the user's explicit [overlayOptIn] draft, the
+     * *actually-observed* system `SYSTEM_ALERT_WINDOW` grant (via the injected
+     * [overlayDetector], which reads the live overlay registry by default) and
+     * the (always-absent today) safe renderer. It never renders an overlay and
+     * never fabricates a surface.
+     */
+    fun overlayGate(): com.clawmate.app.overlay.OverlayGate {
+        val d = _state.value.draft
+        return com.clawmate.app.overlay.OverlayGate(
+            optedIn = d.overlayOptIn,
+            overlayPermissionGranted = overlayDetector.isOverlayPermissionGranted(),
+            rendererConfigured = overlayDetector.isRendererConfigured(),
+        )
+    }
+
+    /**
+     * Phase 20 — the single descriptive "system-settings permission request
+     * action" for the overlay boundary. It is pure metadata (the Android
+     * `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` action + package + whether it
+     * is currently actionable): it never launches anything by itself. The UI
+     * uses [OverlayPermissionRequest.canRequest] to decide whether showing the
+     * "open system settings to grant overlay" button is valid — i.e. only when
+     * the user opted in but the system grant is still missing.
+     */
+    fun overlayPermissionRequest(): com.clawmate.app.overlay.OverlayPermissionRequest {
+        val d = _state.value.draft
+        return com.clawmate.app.overlay.OverlayPermissionRequest.forGate(
+            baselineAction = com.clawmate.app.overlay.OverlayPermissionContract.ACTION_MANAGE_OVERLAY_PERMISSION,
+            packageName = com.clawmate.app.overlay.OverlayPermissionContract.REQUEST_PACKAGE_NAME_PLACEHOLDER,
+            overlayOptIn = d.overlayOptIn,
+            overlayPermissionGranted = overlayDetector.isOverlayPermissionGranted(),
         )
     }
 

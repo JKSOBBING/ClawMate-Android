@@ -228,10 +228,14 @@ fun createDefaultToolRegistry(): ToolRegistry = ToolRegistry().apply {
         name = "open_app",
         description = "Launch another app on the device. Executing cross-app control requires a PC bridge / AccessibilityService.",
     )
-    registerGuiDisabledTool(
+    // Phase 20 — the float-overlay status tool reports the *live* overlay gate
+    // (opt-in + observed SYSTEM_ALERT_WINDOW grant + renderer). It stays
+    // controlled-disabled (no fake overlay is ever drawn), but its message now
+    // reflects the actually-observed boundary instead of only a generic note.
+    registerOverlayStatusTool(
         this,
         name = "float_overlay_status",
-        description = "Show the agent's float overlay status. Requires the overlay (SYSTEM_ALERT_WINDOW) runtime permission, not granted in this build.",
+        description = "Show the agent's float overlay status. Requires the overlay (SYSTEM_ALERT_WINDOW) runtime permission observed + a safe renderer.",
     )
 }
 
@@ -265,6 +269,53 @@ internal fun autonomousAvailabilityNote(): String {
         "AutoAgent 辅助功能服务已连接，但当前构建没有安全动作执行器（provider 缺失），动作仍受控禁用。"
     } else {
         "AutoAgent 辅助功能服务未连接（NOT_CONFIGURED/BLOCKED），未执行任何跨应用操作。"
+    }
+}
+
+/**
+ * Registers the `float_overlay_status` tool (Phase 20, row C1) so it reflects
+ * the *live* float/edge overlay gate. It never draws an overlay and never fakes
+ * a surface — it always returns a controlled-disabled result, but the message
+ * explains the actually-observed boundary ([overlayAvailabilityNote]).
+ */
+private fun ToolRegistry.registerOverlayStatusTool(registry: ToolRegistry, name: String, description: String) {
+    registry.register(
+        AgentTool(
+            name = name,
+            description = description,
+            parameters = ToolSchemas.simpleStringArg("arguments for the requested float-overlay status (controlled-disabled)"),
+        ) { _, _ ->
+            // Evaluate the note at execution time so it reflects the live gate.
+            val overlayNote = overlayAvailabilityNote()
+            throw ControlledDisabledException(
+                "「$name」在 Android 端暂不可用：不渲染任何智能体悬浮窗。$overlayNote 如需查看智能体状态，请使用 PC/HDC 桥接（已作为受控禁用状态暴露）。",
+            )
+        },
+    )
+}
+
+/**
+ * Builds the float/edge overlay boundary note for the controlled-disabled
+ * `float_overlay_status` tool (Phase 20). Reads the *actually-observed* overlay
+ * gate (opt-in seed + observed system grant from the overlay registry/scaffold,
+ * with the always-absent renderer), so the message reflects the live boundary.
+ * It never claims an overlay rendered — it only explains the honest gate.
+ */
+internal fun overlayAvailabilityNote(): String {
+    val gate = com.clawmate.app.overlay.OverlayGate(
+        optedIn = com.clawmate.app.overlay.OverlayCapabilityFlags.overlayOptedIn,
+        overlayPermissionGranted = com.clawmate.app.overlay.OverlayStateRegistry.isPermissionGranted(),
+        rendererConfigured = com.clawmate.app.overlay.OverlayCapabilityFlags.rendererConfigured,
+    )
+    return when (val surface = gate.surface()) {
+        is com.clawmate.app.overlay.OverlaySurfaceResult.NotConfigured ->
+            "悬浮窗边界未启用（NOT_CONFIGURED）：未渲染任何内容。"
+        is com.clawmate.app.overlay.OverlaySurfaceResult.BlockedPermission ->
+            "已启用悬浮窗边界，但未观察到系统悬浮窗授权（BLOCKED）：未渲染任何内容。"
+        is com.clawmate.app.overlay.OverlaySurfaceResult.BlockedNoRenderer ->
+            "系统已授予悬浮窗权限，但当前构建没有安全浮窗渲染器（BLOCKED）：不渲染任何智能体浮层。"
+        is com.clawmate.app.overlay.OverlaySurfaceResult.ReadyNeutralSurface ->
+            "悬浮窗边界就绪，但仅渲染中性状态浮层；当前没有安全渲染器，不渲染任何智能体内容。"
     }
 }
 

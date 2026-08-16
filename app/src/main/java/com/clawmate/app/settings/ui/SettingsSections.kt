@@ -338,6 +338,64 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
     }
 
     SettingsGroupCard(
+        title = "悬浮窗 Overlay 边界",
+        subtitle = "受控可用性：未勾选时不渲染任何浮层；勾选后仍需系统悬浮窗授权与安全渲染器",
+    ) {
+        SettingToggle(
+            label = "启用悬浮窗 Overlay",
+            desc = "显式开启受控可用性检测（默认关闭；开启不等于获得渲染能力）",
+            selected = state.draft.overlayOptIn,
+            onValueChange = vm::setOverlayOptIn,
+        )
+
+        val gate = vm.overlayGate()
+        val overlayAction = when (gate.status) {
+            com.clawmate.app.overlay.OverlayGateStatus.NOT_CONFIGURED ->
+                SettingsAction("未启用 — NOT_CONFIGURED", SettingsActionKind.Secondary, enabled = false, onClick = {})
+            com.clawmate.app.overlay.OverlayGateStatus.BLOCKED ->
+                SettingsAction("未观察到系统悬浮窗授权 — BLOCKED", SettingsActionKind.Warning, enabled = false, onClick = {})
+            com.clawmate.app.overlay.OverlayGateStatus.READY ->
+                SettingsAction("边界就绪（无安全渲染器，浮层仍受控）", SettingsActionKind.Warning, enabled = false, onClick = {})
+        }
+        SettingsActionRow(actions = listOf(overlayAction))
+
+        // The single "system-settings permission request action": when the user
+        // opted in but the system grant is still missing, present a button that
+        // opens Android's `ACTION_MANAGE_OVERLAY_PERMISSION` settings screen.
+        // Launcher is created unconditionally (remember count must stay stable
+        // across recompositions); only its button is shown conditionally.
+        val overlayRequest = vm.overlayPermissionRequest()
+        val overlayLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+        ) { /* user returns from the system overlay-settings screen; we re-observe on rebuild */ }
+        if (overlayRequest.canRequest) {
+            SettingsActionRow(
+                actions = listOf(
+                    SettingsAction(
+                        label = "打开系统设置授予悬浮窗权限",
+                        kind = SettingsActionKind.Primary,
+                        enabled = true,
+                        onClick = {
+                            overlayLauncher.launch(
+                                android.content.Intent(
+                                    overlayRequest.action,
+                                    android.net.Uri.parse("package:${context.packageName}"),
+                                ),
+                            )
+                        },
+                    ),
+                ),
+            )
+        }
+        Text(
+            "当前构建未包含任何安全浮窗渲染器；OverlayGate 始终返回 NOT_CONFIGURED 或 BLOCKED，不会伪造任何浮层内容。",
+            fontSize = 12.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+
+    SettingsGroupCard(
         title = "PC 控制后端",
         subtitle = "启动云端 PC 控制后端供 Agent 自动化使用",
     ) {

@@ -120,6 +120,9 @@ object SettingsKeys {
     /** Phase 19 — user opt-in to the AutoAgent controlled-accessibility boundary. */
     const val ACCESSIBILITY_OPT_IN = "accessibility_autoagent_opt_in"
 
+    /** Phase 20 — user opt-in to the float/edge overlay boundary. */
+    const val OVERLAY_OPT_IN = "overlay_float_opt_in"
+
     /** PC control backend URL (Harmony: `pcServerUrl`). */
     const val PC_SERVER_URL = "pc_server_url"
 
@@ -179,7 +182,7 @@ object SettingsKeys {
         HDC_SERVER_URL, WIRELESS_HDC_TARGET, HDC_CONNECTED,
         CHAT_COMPRESSION_THRESHOLD_PERCENT, CHAT_RECENT_ROUNDS,
         WORKFLOW_AUTOMATION_ENABLED, WORKFLOW_HARDWARE_STEPS_ENABLED, ACCESSIBILITY_OPT_IN,
-        PC_SERVER_URL, PC_CONNECTED,
+        OVERLAY_OPT_IN, PC_SERVER_URL, PC_CONNECTED,
         WECHAT_AUTO_SUMMARY_ENABLED, WECHAT_AUTO_SUMMARY_DAYS, WECHAT_AUTO_SUMMARY_MAX_CONTACTS,
         WECHAT_AUTO_SUMMARY_SWIPE_SPEED, WECHAT_AUTO_SUMMARY_HISTORY_SWIPE_RATIO,
         WECHAT_AUTO_SUMMARY_STABLE_SWIPES, WECHAT_AUTO_SUMMARY_MAX_HISTORY_SWIPES, WECHAT_AUTO_SUMMARY_WAIT,

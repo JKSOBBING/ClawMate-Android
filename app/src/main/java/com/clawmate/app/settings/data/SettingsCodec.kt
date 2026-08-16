@@ -75,6 +75,7 @@ object SettingsCodec {
         out[SettingsKeys.WORKFLOW_AUTOMATION_ENABLED] = s.workflowAutomationEnabled.toString()
         out[SettingsKeys.WORKFLOW_HARDWARE_STEPS_ENABLED] = s.workflowHardwareStepsEnabled.toString()
         out[SettingsKeys.ACCESSIBILITY_OPT_IN] = s.accessibilityOptIn.toString()
+        out[SettingsKeys.OVERLAY_OPT_IN] = s.overlayOptIn.toString()
         out[SettingsKeys.PC_SERVER_URL] = SettingsNormalizers.normalizeUrl(s.pcServerUrl)
 
         // WeChat auto-summary (Phase 13) — normalized before persistence.
@@ -152,6 +153,7 @@ object SettingsCodec {
             workflowHardwareStepsEnabled =
                 SettingsNormalizers.boolean(s(SettingsKeys.WORKFLOW_HARDWARE_STEPS_ENABLED), false),
             accessibilityOptIn = SettingsNormalizers.boolean(s(SettingsKeys.ACCESSIBILITY_OPT_IN), false),
+            overlayOptIn = SettingsNormalizers.boolean(s(SettingsKeys.OVERLAY_OPT_IN), false),
             pcServerUrl = SettingsNormalizers.normalizeUrl(s(SettingsKeys.PC_SERVER_URL)),
             wechatAutoSummaryEnabled =
                 SettingsNormalizers.boolean(s(SettingsKeys.WECHAT_AUTO_SUMMARY_ENABLED), false),

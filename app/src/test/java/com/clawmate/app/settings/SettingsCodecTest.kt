@@ -70,6 +70,23 @@ class SettingsCodecTest {
     }
 
     @Test
+    fun `overlay opt-in round trips and defaults to false`() {
+        // Phase 20 — the float/edge overlay opt-in is persisted and decodes deterministically.
+        assertFalse(AppSettings.defaults().overlayOptIn)
+        val flat = SettingsCodec.encode(AppSettings.defaults().copy(overlayOptIn = true))
+        assertEquals("true", flat[SettingsKeys.OVERLAY_OPT_IN])
+        assertTrue(SettingsCodec.decode(emptyMap()).overlayOptIn ==
+            false && SettingsCodec.decode(flat).overlayOptIn)
+
+        // Corrupt value degrades to the safe off default.
+        assertFalse(
+            SettingsCodec.decode(
+                mapOf(SettingsKeys.OVERLAY_OPT_IN to "not-a-bool"),
+            ).overlayOptIn,
+        )
+    }
+
+    @Test
     fun `decode degrades corrupt values instead of throwing`() {
         val corrupt: Map<String, String> = SettingsKeys.ALL_KEYS.associateWith { "not-a-number-or-bool" } +
             mapOf(

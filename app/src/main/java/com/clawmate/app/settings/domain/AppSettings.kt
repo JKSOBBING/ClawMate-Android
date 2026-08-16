@@ -54,6 +54,11 @@ data class AppSettings(
     // sufficient: the Android system accessibility grant + a real provider are
     // still required (see accessibility.AccessibilityGate).
     val accessibilityOptIn: Boolean = false,
+    // Phase 20 — explicit user opt-in to the float/edge overlay boundary. Off by
+    // default (safe, explicit opt-in). On alone is not sufficient: the Android
+    // system `SYSTEM_ALERT_WINDOW` grant + a safe renderer are still required
+    // (see overlay.OverlayGate).
+    val overlayOptIn: Boolean = false,
     val pcServerUrl: String = "",
     val pcConnected: Boolean = false,
     // WeChat auto-summary — 微信自动汇总 (Phase 13; settings/normalization only)

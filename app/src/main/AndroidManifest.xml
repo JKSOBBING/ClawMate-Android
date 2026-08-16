@@ -14,6 +14,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+        Phase 20 (row C1) — float/edge overlay boundary.
+        Declaring SYSTEM_ALERT_WINDOW is the manifest prerequisite for the
+        truthful overlay gate: Settings.canDrawOverlays() can only ever report
+        true when this permission is declared, and the grant itself is made by
+        the user in the SYSTEM-Managed overlay settings screen
+        (ACTION_MANAGE_OVERLAY_PERMISSION) — never by a runtime prompt and never
+        silently. Declaring it does NOT auto-enable any overlay: nothing in this
+        build starts OverlayFloatService, which in turn is lifecycle-safe (it
+        refuses to start unless the OverlayGate is READY, and renders only a
+        neutral status surface).
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:name=".ClawMateApplication"
         android:allowBackup="true"
@@ -90,5 +104,22 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_autoagent_config" />
         </service>
+
+        <!--
+            Phase 20 (row C1) — float/edge overlay boundary.
+            A lifecycle-safe scaffold. It is neither auto-started anywhere nor
+            exported to other apps (it has no intent-filter and does not bind).
+            On the only paths that could run it, it derives the OverlayGate from
+            observed opt-in + observed system overlay grant and refuses to stay
+            alive unless the gate is READY; in this build the renderer is absent
+            so it always self-terminates. It can only ever render the honest
+            neutral status surface (no agent content, no captured screens, no
+            GUI actions). Availability is surfaced through OverlayGate /
+            OverlayServicePolicy.
+        -->
+        <service
+            android:name=".overlay.OverlayFloatService"
+            android:exported="false"
+            android:label="@string/app_name" />
     </application>
 </manifest>
