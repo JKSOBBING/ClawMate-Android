@@ -15,6 +15,8 @@ okhttp = "4.12.0"
 retrofit = "2.11.0"
 kotlinxSerialization = "1.6.3"
 coil = "2.6.0"
+# Phase 11 — on-device Chinese text recognition (ML Kit).
+mlkitTextRecognitionChinese = "16.0.1"
 coroutines = "1.8.1"
 junit = "4.13.2"
 mockwebserver = "4.12.0"
@@ -46,6 +48,8 @@ retrofit-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "con
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+# ML Kit standalone Chinese text recognition; resolves on Google Maven.
+mlkit-text-recognition-chinese = { group = "com.google.mlkit", name = "text-recognition-chinese", version.ref = "mlkitTextRecognitionChinese" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "mockwebserver" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }

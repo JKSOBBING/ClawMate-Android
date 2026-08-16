@@ -57,6 +57,14 @@ interface GalleryRepository {
     suspend fun updateLocation(id: String, address: String, provider: String): Boolean
 
     /**
+     * Persist on-device OCR output **only after the user's Analyze action really
+     * succeeded**. [ocrText] carries real recognized text (or "" for a genuine
+     * empty image); [analysisState] records the "analyzed" status. Callers must
+     * pass text guarded by the OCR no-fake-output check; never fake text here.
+     */
+    suspend fun updateOcr(id: String, ocrText: String, analysisState: String): Boolean
+
+    /**
      * Delete a single item **by id** (keeps its content-URI record semantics:
      * [deleteItem] removes only the stored item row, never a broad file / URI
      * grant). Returns true when a row was removed.

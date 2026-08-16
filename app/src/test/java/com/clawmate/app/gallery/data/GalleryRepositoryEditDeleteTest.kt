@@ -67,6 +67,15 @@ class GalleryRepositoryEditDeleteTest {
     }
 
     @Test
+    fun updateOcrPersistsRealTextAndAnalyzedState() = runBlocking {
+        val repo = repoWith(item("a"))
+        assertTrue(repo.updateOcr("a", "这是一段中文文字", GalleryPhotoItem.ANALYSIS_STATE_ANALYZED))
+        val stored = repo.getItem("a")!!
+        assertEquals("这是一段中文文字", stored.ocrText)
+        assertEquals(GalleryPhotoItem.ANALYSIS_STATE_ANALYZED, stored.analysisState)
+    }
+
+    @Test
     fun deleteByIdRemovesOnlyThatItemAndRefreshesGroups() = runBlocking {
         val repo = repoWith(item("a"), item("b"))
         assertTrue(repo.deleteItem("a"))
@@ -205,6 +214,15 @@ private class FakeGalleryDao(initial: MutableList<GalleryItemEntity>) : GalleryD
         val idx = list.indexOfFirst { it.id == id }
         if (idx < 0) return 0
         list[idx] = list[idx].copy(analysisState = state)
+        items.value = list
+        return 1
+    }
+
+    override suspend fun updateOcr(id: String, ocrText: String, analysisState: String): Int {
+        val list = items.value.toMutableList()
+        val idx = list.indexOfFirst { it.id == id }
+        if (idx < 0) return 0
+        list[idx] = list[idx].copy(ocrText = ocrText, analysisState = analysisState)
         items.value = list
         return 1
     }

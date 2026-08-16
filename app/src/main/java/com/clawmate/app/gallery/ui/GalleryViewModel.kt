@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.clawmate.app.gallery.analysis.CapabilityState
 import com.clawmate.app.gallery.analysis.CloudVisionAnalyzer
 import com.clawmate.app.gallery.analysis.OcrEngine
+import com.clawmate.app.gallery.analysis.OcrErrorKind
+import com.clawmate.app.gallery.analysis.OcrResult
 import com.clawmate.app.gallery.analysis.ReverseGeocodeResult
 import com.clawmate.app.gallery.analysis.ReverseGeocoder
 import com.clawmate.app.gallery.data.DefaultGalleryRepository
@@ -67,6 +69,35 @@ sealed class LocationViewState {
     data class Failed(val error: ReverseGeocodeError) : LocationViewState()
 }
 
+/**
+ * On-device OCR view state for an item's Analyze action. Only [Success] ever
+ * carries real recognized text. [Empty] means a genuine "no text found" result;
+ * [Error]/[ModelDownload]/[Unavailable] are honest non-text outcomes. Nothing is
+ * fabricated.
+ */
+sealed class OcrViewState {
+    /** No analyze shown/run yet (or an earlier run didn't produce a result). */
+    data object Idle : OcrViewState()
+
+    /** A user-triggered Analyze is in flight. */
+    data object Loading : OcrViewState()
+
+    /** Real recognized text (persisted on successful Analyze). */
+    data class Success(val text: String) : OcrViewState()
+
+    /** The image decoded but contained no recognized text (a real empty). */
+    data object Empty : OcrViewState()
+
+    /** A typed engine/access/decode failure; [kind] classifies the cause. */
+    data class Error(val message: String, val kind: OcrErrorKind) : OcrViewState()
+
+    /** The on-device model is not present yet and must be downloaded. */
+    data class ModelDownload(val message: String) : OcrViewState()
+
+    /** On-device OCR is not available on this device. */
+    data object Unavailable : OcrViewState()
+}
+
 /** Detail-panel state for the selected gallery item. */
 data class GalleryDetailState(
     val itemId: String,
@@ -74,6 +105,7 @@ data class GalleryDetailState(
     val item: GalleryPhotoItem?,
     val groupMembership: List<CollectionGroup>,
     val location: LocationViewState = LocationViewState.NotConfigured,
+    val ocr: OcrViewState = OcrViewState.Idle,
 ) {
     val currentItem: GalleryPhotoItem?
         get() = item?.takeIf { it.id == itemId }
@@ -251,12 +283,74 @@ class GalleryViewModel(
         }
     }
 
+    /**
+     * User-triggered on-device OCR Analyze for the selected item. Runs the
+     * injected [OcrEngine] against the item's content URI, reflects a typed
+     * loading/result state, and persists **only real recognized text** (plus the
+     * "analyzed" status) through Room when the action really succeeds. An honest
+     * empty image stores empty text + "analyzed"; every failure/unavailable/
+     * model-download path surfaces a typed state and never persists fabricated
+     * text nor overwrites a prior real result.
+     */
+    fun analyzeOcr(id: String) {
+        viewModelScope.launch {
+            val item = repository.getItem(id)
+            if (item == null) return@launch
+            updateDetailOcr(id, OcrViewState.Loading)
+            val result = try {
+                ocrEngine.recognize(item)
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce // never convert coroutine cancellation into an OCR error
+            } catch (t: Throwable) {
+                OcrResult.Failed(
+                    t.message ?: "OCR 自动取消或失败",
+                    OcrErrorKind.UNKNOWN,
+                )
+            }
+            when (result) {
+                is OcrResult.Text -> {
+                    if (result.value.isNotBlank()) {
+                        repository.updateOcr(id, result.value, GalleryPhotoItem.ANALYSIS_STATE_ANALYZED)
+                        updateDetailOcr(id, OcrViewState.Success(result.value))
+                    } else {
+                        // A blank success is treated as an honest empty (never fake text).
+                        repository.updateOcr(id, "", GalleryPhotoItem.ANALYSIS_STATE_ANALYZED)
+                        updateDetailOcr(id, OcrViewState.Empty)
+                    }
+                }
+                is OcrResult.Empty -> {
+                    repository.updateOcr(id, "", GalleryPhotoItem.ANALYSIS_STATE_ANALYZED)
+                    updateDetailOcr(id, OcrViewState.Empty)
+                }
+                is OcrResult.Cancelled -> updateDetailOcr(id, OcrViewState.Idle)
+                is OcrResult.ModelDownload -> updateDetailOcr(id, OcrViewState.ModelDownload(result.message))
+                is OcrResult.Failed -> updateDetailOcr(id, OcrViewState.Error(result.reason, result.kind))
+                is OcrResult.Unavailable -> updateDetailOcr(id, OcrViewState.Unavailable)
+            }
+            refreshSelectedIfVisible()
+        }
+    }
+
+    private suspend fun updateDetailOcr(id: String, viewState: OcrViewState) {
+        val d = _detail.value
+        if (d?.itemId == id) {
+            _detail.value = d.copy(ocr = viewState)
+        }
+    }
+
     // ---- private ----
 
     private suspend fun refreshSelectedIfVisible() {
         val id = _selectedItemId.value ?: return
         val preserve = _detail.value?.location
-        rebuildDetail(id, preserveLocation = true, initialLocation = preserve)
+        val preserveOcr = _detail.value?.ocr
+        rebuildDetail(
+            id,
+            preserveLocation = true,
+            initialLocation = preserve,
+            preserveOcr = true,
+            initialOcr = preserveOcr,
+        )
     }
 
     /** Reads the first non-null coordinate pair the item really carries. */
@@ -273,6 +367,8 @@ class GalleryViewModel(
         id: String,
         preserveLocation: Boolean,
         initialLocation: LocationViewState? = null,
+        preserveOcr: Boolean = false,
+        initialOcr: OcrViewState? = null,
     ) {
         // On a fresh selection start at the platform default; on a refresh keep
         // the current transient location (Resolving/Failed/Resolved) so an
@@ -303,11 +399,24 @@ class GalleryViewModel(
         } else {
             baseLocation
         }
+        // OCR view state: preserve a transient in-flight/recent state on refresh,
+        // otherwise derive honestly from the stored item (real text after a
+        // successful Analyze, or Idle when nothing was persisted).
+        val effectiveOcr: OcrViewState = when {
+            initialOcr != null -> initialOcr
+            preserveOcr -> _detail.value?.ocr ?: OcrViewState.Idle
+            storedItem == null -> OcrViewState.Idle
+            storedItem.analysisState == GalleryPhotoItem.ANALYSIS_STATE_ANALYZED ->
+                if (storedItem.ocrText.isBlank()) OcrViewState.Empty
+                else OcrViewState.Success(storedItem.ocrText)
+            else -> OcrViewState.Idle
+        }
         _detail.value = GalleryDetailState(
             itemId = id,
             item = storedItem,
             groupMembership = membership,
             location = effectiveLocation,
+            ocr = effectiveOcr,
         )
     }
 

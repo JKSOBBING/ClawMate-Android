@@ -1,4 +1,4 @@
-# ClawMate Android — Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -80,15 +80,14 @@ geocoding is now a real, **explicitly injected** Android capability
 network key, no endpoint config — with typed unavailable / permission / lookup
 errors; the detail panel exposes a 解析/重试 action and **never claims a location
 when a lookup fails**, persisting a resolved place only after a real success.
-OCR remains an explicit **NOT_CONFIGURED** boundary: ML Kit
-`text-recognition-chinese` resolves on Google Maven but is a download-on-device
-model and there is no device here to verify real recognized text, so it is not
-vendored (Cloud vision stays NOT_CONFIGURED). The capability UI reflects the
-real Ready / NotConfigured / Unsupported states and shows retry/unsupported
-messages. Room schema bumped to v2 (adds `address` / `locationProvider` /
-`analysisState`) via an explicit non-destructive migration. Deterministic unit
-tests (39 new) cover detail mapping, edit/delete persistence, geocoder
-result/error mapping, capability states and group recomputation.
+At Phase 9 OCR remained an explicit **NOT_CONFIGURED** boundary; **Phase 11**
+replaces that boundary with a real on-device Chinese OCR adapter (see below).
+Cloud vision stays NOT_CONFIGURED. The capability UI reflects the real Ready /
+NotConfigured / Unsupported states and shows retry/unsupported messages. Room
+schema bumped to v2 (adds `address` / `locationProvider` / `analysisState`) via
+an explicit non-destructive migration. Deterministic unit tests (39 new) cover
+detail mapping, edit/delete persistence, geocoder result/error mapping,
+capability states and group recomputation.
 
 **Phase 10** adds a truthful **local model capability boundary** for the Harmony
 on-device MNN/HiAI LLM (`entry/src/main/cpp/*` + `ModelDownloadConfig.ets` +
@@ -116,6 +115,54 @@ model-scan logic in `pages/Index.ets`):
 - Deterministic unit tests (38 new) covering state normalization, path
   validation, inventory scanning, and the no-fake-output guarantee
   (missing library / missing file mapping).
+
+**Phase 11** replaces the gallery's Phase-9 OCR `NOT_CONFIGURED` boundary with a
+**real on-device Chinese OCR adapter** (`gallery/ocr/`) backed by ML Kit
+`com.google.mlkit:text-recognition-chinese:16.0.1` (resolved on Google Maven,
+bundled Chinese + Latin model):
+- `AndroidOcrEngine` opens a picked photo's `content://` URI via the platform
+  `ContentResolver` (picker URI grant — **no broad storage permission**), decodes
+  a **bounded** bitmap (≤2048 px side, honest 64 MB pixel budget), runs Chinese
+  text recognition on a background dispatcher, and maps every outcome to the
+  typed `OcrResult` states (`Text / Empty / Cancelled / ModelDownload /
+  Failed(kind) / Unavailable`) with a stable `OcrErrorKind` taxonomy.
+  Only `OcrResult.Text` carries real recognized text — nothing fabricated.
+- Pure, device-free `OcrMapping`/`OcrBitmapDecode` concentrate the decision logic
+  so the no-fake-output guarantee and the bounded-decode planning are
+  deterministic and unit-tested without a device.
+- The gallery detail panel gains an explicit **Analyze OCR** action with
+  loading/success/empty/error/model-download/unavailable states
+  (`GalleryViewModel.analyzeOcr`); only real recognized text (or a genuine
+  empty) and the `analyzed` status are persisted via `GalleryDao.updateOcr`.
+  Failures / model-download / unavailable persist nothing and never claim text.
+- Cloud vision stays NOT_CONFIGURED and reverse geocoding is unchanged. Live ML
+  Kit runtime / any on-device model handling still require a real device
+  (documented — not claimed as on-device-verified). 27 new deterministic unit
+  tests (407 total green in this worktree).
+
+## Layout — features added in Phase 11
+
+```
+app/src/main/java/com/clawmate/app/gallery/ocr/
+├── AndroidOcrEngine.kt      # Real ML Kit Chinese OCR adapter (ContentResolver → bounded Bitmap → recognition)
+├── OcrBitmapDecode.kt       # Pure bounded-decode planning (inSampleSize + memory-budget guard)
+└── OcrMapping.kt            # Pure result mapping (real text vs empty / typed failure / no-fake-output)
+
+app/src/main/java/com/clawmate/app/gallery/
+├── (mod) CapabilityEngines.kt        # Typed OcrResult / OcrErrorKind; suspend OcrEngine.recognize
+├── (mod) GalleryComponent.kt         # ocr(context) now returns the real androidOcrEngine adapter
+├── (mod) data/GalleryDao.kt / GalleryRepository.kt / DefaultGalleryRepository.kt  # updateOcr
+├── (mod) model/GalleryModels.kt      # ANALYSIS_STATE_ANALYZED = "analyzed"
+├── (mod) ui/GalleryViewModel.kt      # analyzeOcr + OcrViewState + detail OCR state
+├── (mod) ui/GalleryDetailScreen.kt   # Analyze OCR section (load/success/empty/error/model states)
+├── (mod) ui/GalleryScreen.kt         # wiring onAnalyzeOcr
+└── (mod) ui/GalleryDetailLabels.kt   # honest "已分析（本地 OCR）" label
+
+(modified) app/build.gradle.kts, gradle/libs.versions.toml  # ML Kit text-recognition-chinese dependency
+app/src/test/java/com/clawmate/app/gallery/ocr/            # OcrMappingTest (12) + OcrBitmapDecodeTest (8)
+app/src/test/java/com/clawmate/app/gallery/ui/OcrAnalysisViewModelTest.kt  # 6 tests
+app/src/test/java/com/clawmate/app/gallery/data/GalleryRepositoryEditDeleteTest.kt  # +updateOcr test
+```
 
 ## Layout — features added in Phase 10
 
@@ -363,13 +410,15 @@ wrapper can be generated with `gradle wrapper`).
                                         # edit/delete persistence, capability states, group recomputation
                                        # Phase 10: local-model state normalization, path validation,
                                        # inventory scanning, no-fake-output (missing lib/model) mapping
-./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS (device/emulator; not run in this worktree)
+                                       # Phase 11: OCR result mapping (real text/empty/typed failure),
+                                       # bounded-bitmap decode planning, Analyze-action persistence
+./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS + ML Kit OCR (device/emulator; not run in this worktree)
 ```
 
-In this worktree the Phase-2 through Phase-10 builds and unit tests were actually
+In this worktree the Phase-2 through Phase-11 builds and unit tests were actually
 executed with a local JDK 17 / Android SDK (platform 34) / **Android NDK
 25.2.9519653 + CMake 3.22.1** / Gradle 8.9 — commands and results (including the
-Phase-10 commands and exit codes) are recorded in `MIGRATION_STATUS.md` §6 and
+Phase-11 commands and exit codes) are recorded in `MIGRATION_STATUS.md` §6 and
 `DSH_PHASE_RESULT.md`. `connectedAndroidTest` was not run because no
 emulator/device is available (the instrumented voice tests are documented as
 unavailable without a device; the platform Geocoder reverse lookup runs on-device

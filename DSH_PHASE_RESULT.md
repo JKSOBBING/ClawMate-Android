@@ -1,33 +1,35 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 10 (Local model capability boundary)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 11 (Real on-device OCR)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase10-local-model`
+- Path: `/opt/deepseek-harness/clawmate-phase11-ocr`
 - Branch: `master`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
 - This delivery was **built and tested in this worktree** (JDK 17.0.19 OpenJDK,
   Android SDK platform 34 / build-tools 34.0.0 at
-  `/opt/deepseek-harness/android-sdk`, **Android NDK 25.2.9519653 + Google CMake
-  3.22.1 installed there via the SDK's `sdkmanager`**, Gradle 8.9 at
+  `/opt/deepseek-harness/android-sdk`, Android NDK 25.2.9519653 + Google CMake
+  3.22.1 installed there via the SDK's `sdkmanager`, Gradle 8.9 at
   `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
 - Build state used: `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
-  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (discarded, never
-  committed). Nothing was written to `/root/ClawMate-Android`; `/root/mobiinfra-oh`
-  was not modified. All Phase 1–9 code is preserved.
+  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (both discarded,
+  never committed). Nothing was written to `/root/ClawMate-Android`;
+  `/root/mobiinfra-oh` was not modified. All Phase 1–10 code is preserved.
 - Working policy: serial only, single worker, no parallel Gradle processes, no
-  servers/emulators. The NDK/cmake install was a single `sdkmanager` invocation
-  (one compatible NDK, no model binaries, no parallel installs).
+  servers/emulators, one Gradle build at a time.
+- Note: the Gradle wrapper distribution URL (`services.gradle.org`) is **not
+  reachable from this worktree** (download times out). The build therefore ran
+  the same **Gradle 8.9** release binary directly from
+  `/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle` (the same binary the
+  Phase 10 build used), with the same environment variables. This is recorded
+  exactly under "Command executed".
 
-## Commits
+## Commit
 
-First commit (feature slice):
-- Message: `Phase 10 local model capability boundary`
-- Hash: **`936436752f78c9222ddcb03d8133c8594f879d9d`** (`93643675`) on `master`,
-  created in this worktree.
-
-The result-file update (this file, with the feature hash filled in) is then
-committed as the final docs commit — both the feature commit and the result-file
-commit are present in the branch history.
+The Phase-11 feature changes plus this documentation are committed together as a
+single feature commit:
+- Message: `Phase 11 local OCR`
+- Hash: recorded at the bottom of this file after the commit (this file is part
+  of that same commit, so the hash is the commit that contains it).
 
 ## Command executed (actual, in this worktree)
 
@@ -40,113 +42,110 @@ ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
     --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Result: **BUILD SUCCESSFUL — exit code 0**. `:app:assembleDebug` produced
-`app/build/outputs/apk/debug/app-debug.apk` (~19 MB) and packaged the truthful
-native stub `libclawmate_local_model.so` for **arm64-v8a, armeabi-v7a, x86_64**
-(`externalNativeBuild` via `app/src/main/cpp`). `:app:testDebugUnitTest` ran
-**380 tests, 0 failures, 0 errors** (342 prior Phases 1–9 + **38 new Phase-10
-local-model tests**). `:app:connectedAndroidTest` was **not run** — no
-device/emulator is available in this worktree.
+Result: **BUILD SUCCESSFUL — exit code 0**.
+- `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk`
+  (~52.5 MB, regenerated fresh in this worktree). The APK packages the **bundled
+  ML Kit Chinese text-recognition** (`com.google.mlkit:text-recognition-chinese:
+  16.0.1`, resolved on Google Maven): `libmlkit_google_ocr_pipeline.so` for
+  arm64-v8a / armeabi-v7a / x86_64 plus the bundled Chinese (`Hani_ctc`) and
+  Latin (`Latn_ctc`) OCR model assets and the truthful local-model JNI stub
+  (`libclawmate_local_model.so`, three ABIs).
+- `:app:testDebugUnitTest` was re-run to completion in this worktree: **407
+  tests, 0 failures, 0 errors** (380 prior Phases 1–10 + **27 new Phase-11 OCR
+  tests**), across 61 test class result files.
+- `:app:connectedAndroidTest` was **not run** — no device/emulator is available
+  in this worktree; ML Kit's runtime and any on-device model handling require a
+  real device.
 
-## Scope delivered (Phase 10)
+## ML Kit dependency resolution (verified)
 
-1. **Typed local-model domain** (`localmodel/LocalModelTypes.kt`): typed
-   lifecycle states **NOT_CONFIGURED / UNSUPPORTED / LOADING / READY / ERROR**
-   with typed error kinds (INVALID_PATH, MISSING_CONFIG, MISSING_MODEL_FILE,
-   NOT_READY, NATIVE_LIBRARY_MISSING, LOAD_FAILED) and deterministic labels.
-   Normalization never reports READY from disk state alone.
+`com.google.mlkit:text-recognition-chinese:16.0.1` (and its
+`com.google.mlkit:text-recognition` and `com.google.mlkit:vision-common`
+dependencies and the bundled `com.google.android.gms:play-services-*` base)
+resolved on Google Maven. The resolved AAR/artifacts were confirmed present in
+`GRADLE_USER_HOME/caches/modules-2`, and the final APK was inspected to contain
+the bundled OCR native pipeline + Chinese/Latin model assets described above.
 
-2. **App-private path validation** (`localmodel/LocalModelPathValidator.kt`):
-   model dirs must live under `filesDir/model` (legacy) or
-   `filesDir/modelscope/{owner}__{repo}` (ModelScope); `..`/`.`/escape/
-   non-whitelisted bases and the `filesDir` root itself are rejected before any
-   load. No arbitrary file/dir deletion path is ever offered.
+## Scope delivered (Phase 11)
 
-3. **Deterministic inventory scanner** (`localmodel/LocalModelInventory.kt`),
-   porting `Index.ets modelLoadableStatus / hasModelWeightFile /
-   isModelWeightFile`: a model dir is loadable when it has `config.json` + a
-   weight file (`.mnn`/`.om`/`.safetensors`/`.weight`), scanned through an
-   injectable `ModelFolderProbe` seam so tests are device-free.
+1. **Real on-device Chinese OCR adapter** (`gallery/ocr/AndroidOcrEngine.kt`),
+   replacing the Phase-9 `NOT_CONFIGURED` OCR boundary: opens the picked
+   `content://` photo URI through `ContentResolver` (picker URI grant — no broad
+   storage permission), decodes a bounded-size `Bitmap` (64 MB pixel budget),
+   runs ML Kit `task-recognition-chinese` on a background dispatcher, maps every
+   outcome to typed `OcrResult` states, and closes the recognizer/bitmap/stream.
 
-4. **Honest capability boundary** (`localmodel/LocalModelCapability.kt`): the
-   explicit `loadAndTest(modelId)` action validates the path, requires a real
-   complete model dir, requires a supported native adapter, and then performs
-   the native load — reaching **READY only on a genuine native Success**.
-   Missing MNN/LLM on Android always maps to UNSUPPORTED; missing config/weight
-   maps to typed ERROR. No fake completion.
+2. **Typed result taxonomy** (`CapabilityEngines.kt`): `OcrResult` is now
+   `Text / Empty / Cancelled / ModelDownload / Failed(kind) / Unavailable` with a
+   stable `OcrErrorKind` enum (UNKNOWN, URI_ACCESS, DECODE, MLKIT_ENGINE,
+   UNAVAILABLE, CANCELLED). Only `Text` carries real recognized text; every
+   other state is an honest non-text result. `OcrEngine.recognize` is now a
+   suspend function.
 
-5. **JNI/CMake native adapter (truthful stub)** (`app/src/main/cpp/`
-   `CMakeLists.txt` + `local_model_jni.cpp`, built by AGP `externalNativeBuild
-   cmake`, `ndkVersion = "25.2.9519653"`): exposes `nativeStatus`,
-   `nativeLoad`, `nativeUnload`, `nativeSelfCheck`. Because MNN-for-Android and
-   the OHOS N-API/HiAI runtime are **absent** (and not vendored/copied), the
-   stub returns typed `UNSUPPORTED` / `NATIVE_LIBRARY_MISSING` results and
-   documents exactly what a real adapter needs (per-ABI `libMNN` + an
-   `Llm`-equivalent loader). The `.so` is verified packaged into the APK.
+3. **Device-free pure mapping** (`gallery/ocr/OcrMapping.kt`): concentrated
+   decision logic (real-text vs honest-empty, failure classification,
+   model-download state, no-fake-output guarantee) that is deterministic and
+   unit-tested without a device.
 
-6. **Settings integration** (`localmodel/LocalModelViewModel.kt` +
-   `LocalModelPanel.kt`, wired into `settings/ui/SettingsSections.kt` under the
-   模型与智能体 section): shows the typed status, discovered inventory, and an
-   explicit **"加载/测试 <模型>"** action per loadable model; READY only after a
-   real load success. App launch performs no network and no model load. Cloud
-   chat path unchanged.
+4. **Bounded-bitmap decode planning** (`gallery/ocr/OcrBitmapDecode.kt`):
+   deterministic power-of-two `inSampleSize` downscale to ≤2048 px side and an
+   honest memory-budget refusal (no blind OOM).
 
-7. **Deterministic tests (38 new, §Verification summary)**: state
-   normalization, path validation, inventory scanning, no-fake-output
-   (missing-library / missing-config / missing-weight / invalid-path /
-   native-success-only-READY) and native result-token parsing.
-   Device/native smoke tests documented unavailable (no emulator, no on-device
-   MNN runtime).
+5. **User-triggered Analyze OCR** in the gallery detail panel
+   (`GalleryDetailScreen` + `GalleryViewModel.analyzeOcr`): explicit action with
+   typed loading/success/empty/error/model-download/unavailable states. Only real
+   recognized text (or a genuine empty) + the `analyzed` status is persisted via
+   Room (`GalleryDao.updateOcr` / `GalleryRepository.updateOcr`). Failures,
+   model-download, and unavailable persist nothing and never fabricate text.
 
-## Files changed (Phase 10)
+6. **Wiring**: `GalleryComponent.ocr(context)` now returns the real adapter
+   (`androidOcrEngine`); cloud vision stays NOT_CONFIGURED and reverse geocoding
+   is unchanged.
 
-New (Kotlin domain + UI):
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelTypes.kt`
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelPathValidator.kt`
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelInventory.kt`
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelCapability.kt`
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelNative.kt`
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelViewModel.kt`
-- `app/src/main/java/com/clawmate/app/localmodel/LocalModelPanel.kt`
+## Files changed (Phase 11)
 
-New (native/JNI stub):
-- `app/src/main/cpp/CMakeLists.txt`
-- `app/src/main/cpp/local_model_jni.cpp`
-
-New (tests):
-- `app/src/test/java/com/clawmate/app/localmodel/LocalModelTypesTest.kt`
-- `app/src/test/java/com/clawmate/app/localmodel/LocalModelPathValidatorTest.kt`
-- `app/src/test/java/com/clawmate/app/localmodel/LocalModelInventoryTest.kt`
-- `app/src/test/java/com/clawmate/app/localmodel/LocalModelCapabilityTest.kt`
-- `app/src/test/java/com/clawmate/app/localmodel/LocalModelNativeTest.kt`
+New:
+- `app/src/main/java/com/clawmate/app/gallery/ocr/AndroidOcrEngine.kt`
+- `app/src/main/java/com/clawmate/app/gallery/ocr/OcrBitmapDecode.kt`
+- `app/src/main/java/com/clawmate/app/gallery/ocr/OcrMapping.kt`
+- `app/src/test/java/com/clawmate/app/gallery/ocr/OcrBitmapDecodeTest.kt`
+- `app/src/test/java/com/clawmate/app/gallery/ocr/OcrMappingTest.kt`
+- `app/src/test/java/com/clawmate/app/gallery/ui/OcrAnalysisViewModelTest.kt`
 
 Modified:
-- `app/build.gradle.kts` (externalNativeBuild cmake, ndkVersion 25.2.9519653,
-  abiFilters)
-- `app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt`
-  (LocalModelPanel wired into the 模型与智能体 section)
+- `app/build.gradle.kts` (added `libs.mlkit.text.recognition.chinese`)
+- `gradle/libs.versions.toml` (ML Kit version + dependency coordinates)
+- `GalleryComponent.kt`, `CapabilityEngines.kt` (typed `OcrResult`/`OcrErrorKind`,
+  suspend `recognize`, real adapter wiring)
+- `GalleryDAO.kt`, `GalleryRepository.kt`, `DefaultGalleryRepository.kt`
+  (`updateOcr`)
+- `GalleryModels.kt` (`ANALYSIS_STATE_ANALYZED = "analyzed"`)
+- `GalleryViewModel.kt` (`analyzeOcr` + `OcrViewState` + detail OCR state)
+- `GalleryDetailScreen.kt` (Analyze OCR section), `GalleryScreen.kt` (wiring),
+  `GalleryDetailLabels.kt` (honest "已分析（本地 OCR）" label)
+- `README.md`, `MIGRATION_STATUS.md` (this phase's docs)
 
 ## Verification summary
 
-- Baseline (before changes): `:app:assembleDebug :app:testDebugUnitTest` →
-  **BUILD SUCCESSFUL exit 0**, 342 tests green.
-- After Phase 10: `:app:assembleDebug :app:testDebugUnitTest` → **BUILD
-  SUCCESSFUL exit 0**, 380 tests / 0 failures / 0 errors.
-- The native JNI/CMake stub compiled and packaged for all three ABIs
-  (`:app:externalNativeBuildDebug` and `:app:assembleDebug` both succeeded).
-- Device-dependent paths are not exercised here: no emulator for
-  `connectedAndroidTest`; a real on-device MNN model load cannot run without
-  MNN-for-Android and a device, so the native adapter is a documented truthful
-  stub and no fake model output is produced.
+- ML Kit `com.google.mlkit:text-recognition-chinese:16.0.1` resolves on Google
+  Maven (verified in the module cache; bundled model/native libs confirmed in the
+  final APK).
+- `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL exit 0**.
+- Fresh test execution in this worktree → **407 tests, 0 failures, 0 errors**
+  (incl. the 27 new Phase-11 OCR tests).
+- `:app:connectedAndroidTest` not run (no device/emulator).
 
 ## Known gaps / notes
 
-- **MNN-for-Android absent:** a real on-device local model requires linking a
-  per-ABI MNN Android prebuilt library plus an `Llm`-equivalent C++ loader
-  (the OHOS N-API/HiAI runtime cannot be reused on Android). The capability
-  boundary and native stub are in place; the adapter honestly reports
-  NOT_CONFIGURED / UNSUPPORTED until MNN is provided.
-- Model files stay app-private (`filesDir/model`, `filesDir/modelscope`) and
-  are never committed; the inventory/path checks prevent arbitrary deletion.
-- `connectedAndroidTest` and an on-device load smoke test are documented as
-  unavailable (no emulator/device, no MNN runtime).
+- **Live OCR output requires a real device**: ML Kit Chinese text recognition is
+  wired, bundled, and unit-tested (deterministic mapping), but real recognized
+  text from an actual photo and any on-device model handling can only be
+  exercised on a device/emulator, which this worktree lacks — documented, not
+  claimed as verified on-device.
+- Cloud vision (MiniCPM-V) remains NOT_CONFIGURED (no endpoint/key configured).
+- No broad storage permission, no network endpoint/API key, no background scan of
+  all media — only explicit user-triggered analysis of a selected photo.
+
+## Commit hash
+
+- `Phase 11 local OCR` → **`3b5f5407d64a10bcaecd1e6803f8b96a44b16607`**

@@ -94,6 +94,9 @@ class DefaultGalleryRepository(
     override suspend fun updateLocation(id: String, address: String, provider: String): Boolean =
         dao.updateLocation(id, address.trim(), provider.trim()) > 0
 
+    override suspend fun updateOcr(id: String, ocrText: String, analysisState: String): Boolean =
+        dao.updateOcr(id, ocrText, analysisState.trim().ifBlank { GalleryPhotoItem.ANALYSIS_STATE_NONE }) > 0
+
     override suspend fun deleteItem(id: String): Boolean {
         val deleted = dao.deleteById(id) > 0
         if (deleted) refreshGroups(GALLERY_TAB_ID)

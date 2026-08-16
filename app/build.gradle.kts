@@ -110,6 +110,11 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
 
+    // Phase 11 — on-device Chinese text recognition (ML Kit). Bundled standalone
+    // SDK; the recognizer may download the Chinese model via Play services on
+    // first use (see OcrEngine model-download state).
+    implementation(libs.mlkit.text.recognition.chinese)
+
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

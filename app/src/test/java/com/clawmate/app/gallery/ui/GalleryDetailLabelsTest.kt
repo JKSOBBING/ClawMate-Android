@@ -27,7 +27,7 @@ class GalleryDetailLabelsTest {
     fun analysisStatesMapToHonestLabels() {
         assertTrue(GalleryDetailLabels.analysisStateLabel("none").contains("未分析"))
         assertTrue(GalleryDetailLabels.analysisStateLabel("unsupported").contains("不支持"))
-        assertEquals("已分析", GalleryDetailLabels.analysisStateLabel("analyzed"))
+        assertTrue(GalleryDetailLabels.analysisStateLabel("analyzed").contains("已分析"))
         assertEquals("分析中", GalleryDetailLabels.analysisStateLabel("analyzing"))
         assertEquals("状态未知", GalleryDetailLabels.analysisStateLabel("mystery"))
     }

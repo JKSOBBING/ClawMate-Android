@@ -14,16 +14,16 @@ object GalleryDetailLabels {
     /** Stable, honest label for an analysis lifecycle state. */
     fun analysisStateLabel(state: String): String = when (state) {
         GalleryPhotoItem.ANALYSIS_STATE_NONE ->
-            "未分析（尚未配置本地 OCR / 云端识别）"
+            "未分析（尚未对图片执行本地 OCR）"
         GalleryPhotoItem.ANALYSIS_STATE_UNSUPPORTED ->
-            "不支持（当前平台未提供该分析能力）"
-        "analyzed" -> "已分析"
+            "不支持（当前平台未提供此分析能力）"
+        GalleryPhotoItem.ANALYSIS_STATE_ANALYZED -> "已分析（本地 OCR）"
         "analyzing" -> "分析中"
         else -> "状态未知"
     }
 
     /** Whether an analysis state means real analysis was produced. */
-    fun isAnalyzed(state: String): Boolean = state == "analyzed"
+    fun isAnalyzed(state: String): Boolean = state == GalleryPhotoItem.ANALYSIS_STATE_ANALYZED
 
     /** Human text for a typed reverse-geocode failure (no location claimed). */
     fun locationFailureText(error: ReverseGeocodeError): String = error.message

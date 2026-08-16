@@ -78,6 +78,18 @@ Phases 1–9 + **38 new Phase-10 local-model tests**). The APK packages
 armeabi-v7a / x86_64. Exact commands and exit codes are recorded in
 `DSH_PHASE_RESULT.md`.
 
+**Phase 11 (real on-device OCR) build verification was actually executed in
+this worktree** with the same toolchain (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, **ML Kit `com.google.mlkit:text-recognition-chinese:16.0.1`
+resolved on Google Maven**, Gradle 8.9, `--no-daemon --max-workers=1`):
+`:app:assembleDebug` and `:app:testDebugUnitTest` both pass — **407 unit tests
+/ 0 failures** (380 prior Phases 1–10 + **27 new Phase-11 OCR tests**). The
+`text-recognition-chinese` SDK is the **bundled** variant: the Chinese + Latin
+OCR models and `libmlkit_google_ocr_pipeline.so` are packaged into the APK.
+ML Kit runtime / any on-device model download still require a real device
+(documented; the typed mapping is covered by device-free tests). Exact commands
+and exit codes are recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -117,7 +129,7 @@ a controlled disabled state), **Defer** (later phase).
 | 1 | **Onboarding** | `pages/onboarding/FirstLaunchOnboarding.ets`, `OnboardingTypes.ets`, spec `docs/superpowers/specs/2026-07-02-first-launch-onboarding-design.md` | Adapt | **Phase 6 shipped** an Android `first-launch` gate before the 5-tab shell: a real Compose `FirstLaunchOnboardingScreen` with the three capability preview slides + a usage-guide page (`home/domain/OnboardingTypes.kt` ports the pure contract; version key `firstLaunchOnboardingVersion` = `2026-07-core-preview-usage-guide`). Completion version persisted to an app-private DataStore `clawmate_home` preferences file via `home/data/DataStoreOnboardingRepository.kt`; works on a configuration-free fresh install with no network. |
 | 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt + **data source Defer** | **Phase 6 shipped** the Compose Home UI (`home/domain/HomeDomain.kt`, `home/ui/HomeScreen.kt`): four persona pillars (理解你/守护你/陪伴你/成就你 as 吃/穿/住/行), honest profile loading/empty/error states, recommendation list with completion toggles + 未完成/全部 filter + pagination + expand, and an **honest NOT_CONFIGURED avatar section** (avatar generation is DISABLED on Android — never fabricated). Recommendation *content* still requires the upstream data-manager pipeline (a later phase); completion flags persist via `home/data/DataStoreHomeRecRepository.kt`. |
 | 3 | **Chat & agent loop** | `pages/chat/*` (ChatPage, ChatPageTypes, ChatMessageDataSource, ChatSessionController); `chat/ChatSessionTypes.ets`; `utils/CloudModelClient.ets` (SSE at :725); `utils/AgentLoopRunner.ets`, `ChatReactAgent.ets`, `ChatToolRegistry.ets`, `AgentActionParser.ets`, `AgentExecutionController.ets`; spec `docs/superpowers/specs/2026-06-10-chat-session-management-design.md` | Adapt | Compose `LazyColumn` chat; Repository + ViewModel; OpenAI-compatible `/v1/chat/completions` via OkHttp SSE exposed as `Flow<String>`; ReAct tool loop; Markdown renderer; Room persistence (source uses JSON files in `filesDir/chat-sessions/`). |
-| 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search, with all analysis behind explicit NOT_CONFIGURED interfaces. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), Android reverse geocoding via the platform `Geocoder` (no key, typed errors, injected), and an orchestrating capability UI. OCR = ML Kit `text-recognition-chinese` is resolvable on Maven but is a download-on-device model and there is no device to verify output → kept NOT_CONFIGURED (documented). Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. |
+| 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), and Android reverse geocoding via the platform `Geocoder`. **Phase 11 shipped** a real on-device Chinese OCR adapter (`gallery/ocr/AndroidOcrEngine`) using ML Kit `com.google.mlkit:text-recognition-chinese` (bundled model) over the picked content URI (ContentResolver → bounded Bitmap → ML Kit), with typed success/empty/cancel/model-download/error/unavailable states, an explicit **Analyze OCR** action in the detail panel, and Room persistence of only real recognized text + `analyzed` status. Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. |
 | 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
@@ -185,7 +197,11 @@ silently dropped:
    NOT_CONFIGURED/UNSUPPORTED; the capability boundary still fully validates
    model inventory + app-private paths and reports a typed ERROR/UNSUPPORTED
    state instead of fabricating output.
-5. ShareKit "knock-to-knock" share → approximate with Android Share sheet / NFC.
+5. Gallery OCR runtime: ML Kit Chinese text recognition is **wired and bundled**
+   (Phase 11) but its runtime + any on-device model handling must be exercised
+   on a real device/emulator; this worktree has none, so the real detector is
+   documented (the deterministic result mapping is unit-tested device-free).
+6. ShareKit "knock-to-knock" share → approximate with Android Share sheet / NFC.
 
 ---
 
@@ -414,6 +430,38 @@ Unit tests added in Phase 10 (deterministic; no device, no live model, no .so):
   unknown→Failed), and the JVM fallback that never throws and never fakes READY
   when the .so is absent.
 
+**Phase 11 — Real on-device OCR — executed in this worktree**
+(JDK 17.0.19, Android SDK platform 34 / build-tools 34.0.0, ML Kit
+`com.google.mlkit:text-recognition-chinese:16.0.1` resolved on Google Maven,
+Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands and exit codes are
+recorded in `DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0).
+- **407 unit tests green** (380 prior Phases 1–10 + **27 new Phase-11 OCR
+  tests**).
+- The `text-recognition-chinese` SDK is the **bundled** ML Kit variant — the
+  Chinese + Latin OCR models and `libmlkit_google_ocr_pipeline.so` are packaged
+  into `app-debug.apk` (all three ABIs).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator; the real ML Kit
+  detector and any model download need a device).
+
+Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
+- `gallery/ocr/OcrMappingTest` — pure result mapping: real text (trimmed) vs
+  honest empty; typed URI-access/decode/engine failures; model-download state;
+  unavailable state; and **no-fake-output** guarantees (blank/null → empty,
+  exceptions/unknown classifier → typed failure, never text).
+- `gallery/ocr/OcrBitmapDecodeTest` — bounded-decode planning: power-of-two
+  downscale, custom bounds, disabled bound, and honest memory-budget refusal for
+  an oversized decode.
+- `gallery/ui/OcrAnalysisViewModelTest` — the user-triggered Analyze action:
+  real text persisted with `analyzed` status; genuine empty persisted; error /
+  model-download / unavailable persist nothing and never claim text; approaching
+  a previously-analyzed item reflects the stored real result.
+- `gallery/data/GalleryRepositoryEditDeleteTest` (extended) — `updateOcr`
+  persists real recognized text + analyzed status through Room.
+- `gallery/analysis/CapabilityEnginesTest` + `GalleryDetailLabelsTest` — updated
+  for the richer typed `OcrResult`/`OcrErrorKind` model and the honest "已分析
+  （本地 OCR）" label.
+
 ---
 
 ## 7. Open items / risks
@@ -425,6 +473,12 @@ Unit tests added in Phase 10 (deterministic; no device, no live model, no .so):
   typed NOT_CONFIGURED / UNSUPPORTED and never fabricates output. See
   `app/src/main/cpp/CMakeLists.txt` and `local_model_jni.cpp` for the exact
   missing pieces.
+- **On-device OCR needs a real device to verify live output:** Phase 11 wires
+  ML Kit Chinese text recognition (bundled model) end-to-end and unit-tests the
+  deterministic result mapping device-free, but a real photo's recognized text
+  and any on-device model-download path can only be exercised on a device/
+  emulator. This worktree has none, so the live detector is documented as
+  requiring device verification (`connectedAndroidTest`).
 - **NDK installed for this worktree:** Android NDK 25.2.9519653 + CMake 3.22.1
   were installed into `/opt/deepseek-harness/android-sdk` via `sdkmanager`.
   This is build infrastructure only (never committed); the project pins
@@ -452,7 +506,28 @@ Unit tests added in Phase 10 (deterministic; no device, no live model, no .so):
 
 ## 8. Changelog
 
-- **Phase 10 (this phase):** Local model capability boundary + native stub.
+- **Phase 11 (this phase):** Real on-device Chinese OCR adapter.
+  - Added `com.google.mlkit:text-recognition-chinese:16.0.1` (bundled ML Kit
+    model) to the dependency set; it resolves on Google Maven and packages the
+    Chinese + Latin OCR models + `libmlkit_google_ocr_pipeline.so` into the APK.
+  - New `gallery/ocr/AndroidOcrEngine` replaces the OCR NOT_CONFIGURED boundary:
+    opens the picked content URI via ContentResolver, decodes a bounded-size
+    Bitmap, runs ML Kit Chinese text recognition on a background dispatcher,
+    maps success/empty/cancel/model-download/error/unavailable to the typed
+    `OcrResult`/`OcrErrorKind` states, and closes recognizer/bitmap/stream.
+  - Pure, device-free mapping (`gallery/ocr/OcrMapping`) + bounded-decode planning
+    (`gallery/ocr/OcrBitmapDecode`) so behaviour is deterministic and testable
+    without a device; no fake text is ever produced.
+  - Gallery detail panel gains an explicit **Analyze OCR** action with
+    loading/success/empty/error/model-unavailable states; only real recognized
+    text (+ the `analyzed` status) is persisted to Room (`updateOcr`) on success.
+  - Cloud vision stays NOT_CONFIGURED and reverse geocoding is unchanged.
+  - No broad storage permission, no network endpoint/API key, no background scan
+    of all media — only explicit user-triggered analysis of a selected item.
+  - Device tests remain unavailable; documented that ML Kit runtime / model
+    download need a device. 27 new deterministic unit tests (407 total green).
+
+- **Phase 10:** Local model capability boundary + native stub.
   - **Typed local-model domain** (`localmodel/LocalModelTypes.kt`): the Android
     boundary ports the Harmony local-model decision logic (`Index.ets`
     `modelLoadableStatus`/`isModelWeightFile`/`hasModelWeightFile` +
@@ -521,13 +596,14 @@ Unit tests added in Phase 10 (deterministic; no device, no live model, no .so):
     (`AndroidReverseGeocoder`). The detail panel exposes a "解析/重试" action and
     **never claims a location when a lookup fails** — resolved places are
     persisted to a new `address`/`locationProvider` item column.
-  - **OCR engine boundary**: ML Kit `text-recognition-chinese` is resolvable on
-    Google Maven (16.0.x) but is the **download-on-device** (Play-Services)
-    variant and there is no emulator/device here to verify real recognized text,
-    so it is **not** vendored. OCR stays behind the explicit `OcrEngine`
-    NOT_CONFIGURED boundary with a typed `Unavailable` message — never invented
-    output. Cloud vision remains NOT_CONFIGURED. Documented in
-    `CapabilityEngines.kt`.
+  - **OCR engine boundary (Phase 9 historical; superseded by Phase 11)**: ML Kit
+    `text-recognition-chinese` was originally held behind the explicit `OcrEngine`
+    NOT_CONFIGURED boundary with a typed `Unavailable` message because it could not
+    be verified on a device. **Phase 11** wires the real on-device adapter
+    (`gallery/ocr/AndroidOcrEngine`) with ML Kit Chinese text recognition and the
+    typed success/empty/cancel/model-download/error/unavailable mapping; the
+    pre-Phase-11 boundary text is kept here for history only. Cloud vision remains
+    NOT_CONFIGURED. Documented in `CapabilityEngines.kt`.
   - **Capability UI reflects actual states**: `CapabilitySummary` now exposes
     `hasUnconfigured`/`hasUnsupported`, and `GalleryScreen` renders Ready /
     NotConfigured / Unsupported per-capability text; unsupported/geocoder-unavailable

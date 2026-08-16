@@ -2,6 +2,7 @@ package com.clawmate.app.gallery.analysis
 
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.ui.CapabilitySummary
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -24,7 +25,7 @@ class CapabilityEnginesTest {
     )
 
     @Test
-    fun ocrEngineIsExplicitlyNotConfigured() {
+    fun ocrEngineIsExplicitlyNotConfigured() = runBlocking {
         val engine = UnconfiguredCapabilities.ocr
         assertEquals(CapabilityState.NotConfigured, engine.state)
         val result = engine.recognize(photo)
@@ -47,10 +48,10 @@ class CapabilityEnginesTest {
     }
 
     @Test
-    fun anInterfaceImplementationCanReportReadyWithoutFaking() {
+    fun anInterfaceImplementationCanReportReadyWithoutFaking() = runBlocking {
         val ready = object : OcrEngine {
             override val state = CapabilityState.Ready("MOCK_ONLY_FOR_TEST")
-            override fun recognize(photo: GalleryPhotoItem): OcrResult = OcrResult.Text("real")
+            override suspend fun recognize(photo: GalleryPhotoItem): OcrResult = OcrResult.Text("real")
         }
         assertEquals(CapabilityState.Ready("MOCK_ONLY_FOR_TEST"), ready.state)
         assertEquals("real", (ready.recognize(photo) as OcrResult.Text).value)

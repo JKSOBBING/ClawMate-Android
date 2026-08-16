@@ -40,7 +40,7 @@ class GalleryViewModelEditDeleteTest {
 
     private val readyOcr = object : OcrEngine {
         override val state = CapabilityState.NotConfigured
-        override fun recognize(photo: GalleryPhotoItem) = com.clawmate.app.gallery.analysis.OcrResult.Unavailable("x")
+        override suspend fun recognize(photo: GalleryPhotoItem) = com.clawmate.app.gallery.analysis.OcrResult.Unavailable("x")
     }
     private val readyVision = object : CloudVisionAnalyzer {
         override val state = CapabilityState.NotConfigured
@@ -233,6 +233,15 @@ private class FakeGalleryRepo(initial: GalleryPhotoItem) : GalleryRepository {
         val idx = list.indexOfFirst { it.id == id }
         if (idx < 0) return false
         list[idx] = list[idx].copy(address = address.trim(), locationProvider = provider.trim())
+        items.value = list
+        return true
+    }
+
+    override suspend fun updateOcr(id: String, ocrText: String, analysisState: String): Boolean {
+        val list = items.value.toMutableList()
+        val idx = list.indexOfFirst { it.id == id }
+        if (idx < 0) return false
+        list[idx] = list[idx].copy(ocrText = ocrText, analysisState = analysisState)
         items.value = list
         return true
     }

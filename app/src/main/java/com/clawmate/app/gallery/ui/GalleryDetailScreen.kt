@@ -43,6 +43,11 @@ import com.clawmate.app.gallery.model.GalleryPhotoItem
  * geocoding is exposed as a retry-able action whose result/errors are surfaced
  * honestly (a failure never claims a location).
  *
+ * Phase 11 adds an explicit **Analyze OCR** action: on-device ML Kit Chinese
+ * text recognition over the picked content URI. It surfaces typed
+ * loading/success/empty/error/model-unavailable states and persists only real
+ * recognized text (+ analysis status) through Room when the action succeeds.
+ *
  * HarmonyOS reference (read-only):
  *   pages/gallery/GalleryPage.ets (ResultDetailPanel)
  *   pages/collection/CollectionGroupDetailPage.ets
@@ -56,6 +61,7 @@ fun GalleryDetailScreen(
     onEditTags: (String, List<String>) -> Unit,
     onDelete: (String) -> Unit,
     onResolveLocation: (String) -> Unit,
+    onAnalyzeOcr: (String) -> Unit,
 ) {
     val item = detail.currentItem
     val itemId = item?.id
@@ -170,6 +176,14 @@ fun GalleryDetailScreen(
 
             item("membership") { membershipSection(detail.groupMembership) }
 
+            item("ocr") {
+                ocrSection(
+                    item = item,
+                    state = detail.ocr,
+                    onAnalyze = onAnalyzeOcr,
+                )
+            }
+
             item("location") { locationSection(item, detail.location, onResolveLocation) }
 
             item("footer") {
@@ -247,6 +261,81 @@ private fun membershipSection(groups: List<com.clawmate.app.gallery.model.Collec
             groups.forEach { g ->
                 AssistChip(onClick = {}, label = { Text("${g.title} · ${g.eventIds.size}") })
             }
+        }
+    }
+}
+
+@Composable
+private fun ocrSection(
+    item: GalleryPhotoItem,
+    state: OcrViewState,
+    onAnalyze: (String) -> Unit,
+) {
+    SectionTitle("本地 OCR（中文）")
+    when (state) {
+        is OcrViewState.Success -> {
+            Text(
+                "已识别文本：",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                state.text.ifBlank { "—" },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(Modifier.padding(top = 4.dp)) {
+                TextButton(onClick = { onAnalyze(item.id) }) { Text("重新分析") }
+            }
+        }
+        is OcrViewState.Empty -> {
+            Text(
+                "已分析，未识别到文字。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            TextButton(onClick = { onAnalyze(item.id) }) { Text("重新分析") }
+        }
+        OcrViewState.Loading -> {
+            Row(
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                CircularProgressIndicator(Modifier.width(18.dp).height(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("正在执行本地 OCR…", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        is OcrViewState.Error -> {
+            Text(
+                "OCR 失败：${state.message}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            TextButton(onClick = { onAnalyze(item.id) }) { Text("重试") }
+        }
+        is OcrViewState.ModelDownload -> {
+            Text(
+                "本地模型尚不可用，可能需要下载：${state.message}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OcrViewState.Unavailable -> {
+            Text(
+                "此设备不提供本地中文 OCR。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OcrViewState.Idle -> {
+            Text(
+                "对选中图片运行一次本地中文文本识别。识别仅在点击时进行，不会扫描全部媒体。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = { onAnalyze(item.id) },
+                modifier = Modifier.padding(top = 6.dp),
+            ) { Text("分析图片") }
         }
     }
 }

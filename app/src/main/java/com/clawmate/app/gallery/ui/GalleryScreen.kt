@@ -66,7 +66,7 @@ fun GalleryScreen() {
     val vm: GalleryViewModel = viewModel(
         factory = GalleryViewModel.Factory(
             repository = repository,
-            ocrEngine = GalleryComponent.ocr,
+            ocrEngine = GalleryComponent.ocr(context),
             visionAnalyzer = GalleryComponent.vision,
             reverseGeocoder = GalleryComponent.reverseGeocoder(context),
         ),
@@ -92,6 +92,7 @@ fun GalleryScreen() {
                 onEditTags = { id, tags -> vm.editTags(id, tags) },
                 onDelete = { id -> vm.deleteItem(id) },
                 onResolveLocation = { id -> vm.resolveLocation(id) },
+                onAnalyzeOcr = { id -> vm.analyzeOcr(id) },
             )
             return
         }
