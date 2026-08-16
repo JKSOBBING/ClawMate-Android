@@ -8,4 +8,6 @@
     <string name="main_tab_settings">设置</string>
     <string name="profile_share_title">导入个人画像</string>
     <string name="profile_share_message">正在导入 ClawMate 个人画像文件…</string>
+    <string name="accessibility_autoagent_description" translatable="false">ClawMate AutoAgent 辅助功能脚手架（受控：仅记录可用性，不执行任何跨应用操作）</string>
+    <string name="accessibility_autoagent_summary" translatable="false">仅用于受控可用性检测；不会执行点击、输入、截图或跨应用控制。</string>
 </resources>

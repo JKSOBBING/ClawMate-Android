@@ -76,4 +76,22 @@ class SettingsRepositoryTest {
         assertFalse(snap.hdcConnected)
         assertFalse(snap.pcConnected)
     }
+
+    @Test
+    fun `accessibility opt-in persists but never grants capability by itself`() = runBlocking {
+        val repo = FakeSettingsRepository()
+        repo.save(AppSettings.defaults().copy(accessibilityOptIn = true))
+        assertTrue("opt-in must persist", repo.snapshot().accessibilityOptIn)
+        // Persisting opt-in is only a settings gate signal — it must not imply
+        // the system accessibility grant or an action provider (the barrier is
+        // still enforced by AccessibilityGate).
+        assertTrue(
+            "opt-in alone must not flip the gate to READY",
+            com.clawmate.app.accessibility.AccessibilityGate(
+                optedIn = repo.snapshot().accessibilityOptIn,
+                systemServiceEnabled = false,
+                providerConfigured = false,
+            ).status != com.clawmate.app.accessibility.AccessibilityGateStatus.READY,
+        )
+    }
 }

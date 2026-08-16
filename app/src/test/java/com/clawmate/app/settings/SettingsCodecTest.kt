@@ -7,6 +7,7 @@ import com.clawmate.app.settings.domain.EmbeddingMode
 import com.clawmate.app.settings.domain.SettingsKeys
 import com.clawmate.app.settings.domain.SensitiveValueUtils
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,6 +50,23 @@ class SettingsCodecTest {
         assertEquals("", decoded.cloudPlannerApiKey)
         assertTrue(decoded.workflowAutomationEnabled)
         assertEquals(85, decoded.chatCompressionThresholdPercent)
+    }
+
+    @Test
+    fun `accessibility opt-in round trips and defaults to false`() {
+        // Phase 19 — the AutoAgent opt-in is persisted and decodes deterministically.
+        assertFalse(AppSettings.defaults().accessibilityOptIn)
+        val flat = SettingsCodec.encode(AppSettings.defaults().copy(accessibilityOptIn = true))
+        assertEquals("true", flat[SettingsKeys.ACCESSIBILITY_OPT_IN])
+        assertTrue(SettingsCodec.decode(emptyMap()).accessibilityOptIn ==
+            false && SettingsCodec.decode(flat).accessibilityOptIn)
+
+        // Corrupt value degrades to the safe off default.
+        assertFalse(
+            SettingsCodec.decode(
+                mapOf(SettingsKeys.ACCESSIBILITY_OPT_IN to "not-a-bool"),
+            ).accessibilityOptIn,
+        )
     }
 
     @Test

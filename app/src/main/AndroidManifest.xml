@@ -67,5 +67,28 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!--
+            Phase 19 — AutoAgent controlled-accessibility boundary (row B1).
+            A lifecycle-safe scaffold: it only records service availability into
+            AccessibilityStateRegistry; it performs no GUI control, no hidden
+            input, no screenshots and no cross-app actions (the service config
+            xml declares no such capabilities). Availability is surfaced through
+            AccessibilityGate as NOT_CONFIGURED / BLOCKED unless the user has
+            opted in AND the system has granted the service AND a real provider
+            is configured (none today).
+        -->
+        <service
+            android:name=".accessibility.AccessibilityAutoAgentService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_autoagent_config" />
+        </service>
     </application>
 </manifest>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Phase 19 — AutoAgent controlled-accessibility boundary (row B1).
+
+  Lifecycle-safe scaffold declaration. Deliberately does NOT enable any
+  dangerous capability:
+    - accessibilityEventTypes = windowStateChanged only: a minimal presence
+      beacon so the app can observe that the service is connected. It does not
+      receive window content, text, or per-node events.
+    - No canPerformGestures (no hidden input / gesture injection).
+    - No canRetrieveWindowContent (no screen / node-tree capture for
+      exfiltration).
+    - No canControlMagnification, no feedback/haptic action flags, no
+      accessibilityFlags that allow cross-app control or screenshots.
+
+  The service performs no on-device GUI control; availability is reported
+  through AccessibilityGate as BLOCKED / NOT_CONFIGURED.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags=""
+    android:canRetrieveWindowContent="false"
+    android:canPerformGestures="false"
+    android:description="@string/accessibility_autoagent_description"
+    android:notificationTimeout="500"
+    android:summary="@string/accessibility_autoagent_summary" />

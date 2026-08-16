@@ -309,6 +309,35 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
     }
 
     SettingsGroupCard(
+        title = "AutoAgent 辅助功能边界",
+        subtitle = "受控可用性：未勾选时不发起任何操作；勾选后仍需系统无障碍授权与安全执行器",
+    ) {
+        SettingToggle(
+            label = "启用 AutoAgent 辅助功能",
+            desc = "显式开启受控可用性检测（默认关闭；开启不等于获得执行能力）",
+            selected = state.draft.accessibilityOptIn,
+            onValueChange = vm::setAccessibilityOptIn,
+        )
+
+        val gate = vm.accessibilityGate()
+        val actionRow = when (gate.status) {
+            com.clawmate.app.accessibility.AccessibilityGateStatus.NOT_CONFIGURED ->
+                SettingsAction("未启用 — NOT_CONFIGURED", SettingsActionKind.Secondary, enabled = false, onClick = {})
+            com.clawmate.app.accessibility.AccessibilityGateStatus.BLOCKED ->
+                SettingsAction("未观察到系统无障碍授权 — BLOCKED", SettingsActionKind.Warning, enabled = false, onClick = {})
+            com.clawmate.app.accessibility.AccessibilityGateStatus.READY ->
+                SettingsAction("边界就绪（无安全执行器，动作仍受控）", SettingsActionKind.Warning, enabled = false, onClick = {})
+        }
+        SettingsActionRow(actions = listOf(actionRow))
+        Text(
+            "当前构建未包含任何跨应用动作执行器；AccessibilityGate 始终返回 NOT_CONFIGURED 或 BLOCKED，不会伪造成功。",
+            fontSize = 12.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+
+    SettingsGroupCard(
         title = "PC 控制后端",
         subtitle = "启动云端 PC 控制后端供 Agent 自动化使用",
     ) {

@@ -126,4 +126,24 @@ class ToolRegistryTest {
         assertTrue(result.success)
         assertTrue(result.truncatedContent.length <= 4000 + 3)
     }
+
+    @Test
+    fun `gui disabled result explains both PC bridge and accessibility boundary`() = runBlocking {
+        // Phase 19 — the controlled-disabled GUI tools now also surface the
+        // AutoAgent accessibility boundary state while keeping the PC-bridge
+        // explanation that earlier phases relied on (backward compatible).
+        com.clawmate.app.accessibility.AccessibilityStateRegistry.reset()
+        val result = createDefaultToolRegistry().execute(
+            ToolCallWire(id = "c1", function = ToolCallFunctionWire("gui_screen_tap", """{"x":0.5,"y":0.5}""")),
+            ToolExecutionContext(),
+        )
+        assertFalse(result.success)
+        assertEquals(ToolResultKind.DISABLED, result.kind)
+        assertTrue("must keep the PC-bridge explanation", result.disabledReason.contains("PC"))
+        assertTrue(
+            "must reference the accessibility boundary",
+            result.disabledReason.contains("AutoAgent") || result.disabledReason.contains("辅助功能"),
+        )
+        assertTrue(result.errorPayload.contains("\"disabled\":true"))
+    }
 }

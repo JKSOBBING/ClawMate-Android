@@ -237,6 +237,7 @@ fun createDefaultToolRegistry(): ToolRegistry = ToolRegistry().apply {
 
 /** Registers a tool whose execution always surfaces a controlled-disabled result. */
 private fun ToolRegistry.registerGuiDisabledTool(registry: ToolRegistry, name: String, description: String) {
+    val accessibilityNote = autonomousAvailabilityNote()
     registry.register(
         AgentTool(
             name = name,
@@ -245,8 +246,25 @@ private fun ToolRegistry.registerGuiDisabledTool(registry: ToolRegistry, name: S
         ) { _, _ ->
             throw ControlledDisabledException(
                 "「$name」在 Android 端暂不可用：该操作需要 PC 侧桥接（adb/hdc + UIAutomator/Appium）" +
-                    "或额外的运行时权限（截图/辅助功能/悬浮窗）。请在电脑端完成该设备操作，或授予相应权限后重试。",
+                    "或额外的运行时权限（截图/辅助功能/悬浮窗）。$accessibilityNote 请在电脑端完成该设备操作，或授予相应权限后重试。",
             )
         },
     )
 }
+
+/**
+ * Builds the AutoAgent accessibility boundary note for the controlled-disabled
+ * GUI tools (Phase 19). Reads the *actually-observed* service state from the
+ * registry (the lifecycle scaffold records it), so the tool message reflects
+ * the live availability instead of only the generic PC-bridge message. It
+ * never claims an action ran — it only explains the boundary.
+ */
+internal fun autonomousAvailabilityNote(): String {
+    val connected = com.clawmate.app.accessibility.AccessibilityStateRegistry.isServiceConnected()
+    return if (connected) {
+        "AutoAgent 辅助功能服务已连接，但当前构建没有安全动作执行器（provider 缺失），动作仍受控禁用。"
+    } else {
+        "AutoAgent 辅助功能服务未连接（NOT_CONFIGURED/BLOCKED），未执行任何跨应用操作。"
+    }
+}
+

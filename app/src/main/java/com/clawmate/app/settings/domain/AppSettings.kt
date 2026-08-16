@@ -49,6 +49,11 @@ data class AppSettings(
     // Task & automation — 任务与自动化
     val workflowAutomationEnabled: Boolean = true,
     val workflowHardwareStepsEnabled: Boolean = false,
+    // Phase 19 — explicit user opt-in to the AutoAgent controlled-accessibility
+    // boundary. Off by default (safe, explicit opt-in). On alone is not
+    // sufficient: the Android system accessibility grant + a real provider are
+    // still required (see accessibility.AccessibilityGate).
+    val accessibilityOptIn: Boolean = false,
     val pcServerUrl: String = "",
     val pcConnected: Boolean = false,
     // WeChat auto-summary — 微信自动汇总 (Phase 13; settings/normalization only)

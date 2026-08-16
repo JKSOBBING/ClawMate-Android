@@ -51,6 +51,13 @@ class SettingsViewModel(
      * without a network. Defaults to the production OkHttp implementation.
      */
     private val hdcClientFactory: (String) -> HdcBridgeClient = { url -> OkHttpHdcBridgeClient(url) },
+    /**
+     * Phase 19 — injectable AutoAgent accessibility detector so unit tests can
+     * drive the gate without Android system APIs. Defaults to the live
+     * registry-backed detector that mirrors what the scaffold actually reports.
+     */
+    private val accessibilityDetector: com.clawmate.app.accessibility.AccessibilityServiceDetector =
+        com.clawmate.app.accessibility.RegistryAccessibilityServiceDetector(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -182,6 +189,7 @@ class SettingsViewModel(
 
     fun setWorkflowAutomationEnabled(value: Boolean) = updateDraft { it.copy(workflowAutomationEnabled = value) }
     fun setWorkflowHardwareSteps(value: Boolean) = updateDraft { it.copy(workflowHardwareStepsEnabled = value) }
+    fun setAccessibilityOptIn(value: Boolean) = updateDraft { it.copy(accessibilityOptIn = value) }
     fun setPcServerUrl(value: String) = updateDraft { it.copy(pcServerUrl = value) }
 
     // ----- WeChat auto-summary (Phase 13) — fields are normalized on change.
@@ -359,6 +367,23 @@ class SettingsViewModel(
         return com.clawmate.app.wechat.domain.WechatCollectionGate(
             verifiedBridgeConfigured = verified,
             summaryEnabled = _state.value.draft.wechatAutoSummaryEnabled,
+        )
+    }
+
+    /**
+     * Phase 19 — build the AutoAgent controlled-accessibility boundary from
+     * live state. The gate reflects the user's explicit [accessibilityOptIn]
+     * draft, the *actually-observed* system accessibility grant (via the
+     * injected [accessibilityDetector], which reads the live service registry
+     * by default) and the (always-absent today) safe provider. It never
+     * executes an action and never fabricates availability.
+     */
+    fun accessibilityGate(): com.clawmate.app.accessibility.AccessibilityGate {
+        val d = _state.value.draft
+        return com.clawmate.app.accessibility.AccessibilityGate(
+            optedIn = d.accessibilityOptIn,
+            systemServiceEnabled = accessibilityDetector.isServiceEnabledBySystem(),
+            providerConfigured = accessibilityDetector.isProviderConfigured(),
         )
     }
 
