@@ -1,176 +1,183 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 3 (Gallery / Collection vertical slice)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 4 (Task / Workflow vertical slice)
 
 ## Worktree
 
-- Path: `/opt/deepseek-harness/clawmate-phase3-gallery`
+- Path: `/opt/deepseek-harness/clawmate-phase4-task`
 - Branch: `master`
 - Source of truth (reference only, not modified): `/root/mobiinfra-oh`
 - This delivery was **built and tested in this worktree** (JDK 17.0.19,
-  Android SDK platform 34 / build-tools 34.0.0 at
+  OpenJDK, Android SDK platform 34 / build-tools 34.0.0 at
   `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
   `/opt/deepseek-harness/gradle-dist/gradle-8.9`).
 - The `/root` home is read-only under the sandbox, so the build ran with
   `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home` and
   `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home` (treated as
   discarded build state; neither is committed).
+- Nothing was written to `/root/ClawMate-Android`; `/root/mobiinfra-oh` was not
+  modified.
 
 ## Commit
 
-- Message: `Phase 3 gallery collection vertical slice`
-- Hash: `e11a120` (`e11a120`, on `master`) — 27 files, +2561 / −159, created on
-  this worktree. (This doc was then updated with the hash and re-committed as
-  the final docs commit; both the feature commit and the result-file update are
-  present below.)
-- The working tree carrying the Phase-3 changes was committed in this worktree;
-  nothing was written to `/root/ClawMate-Android` and `/root/mobiinfra-oh` was
-  not modified.
+- Message: `Phase 4 task workflow vertical slice`
+- Hash: `<<FINAL_COMMIT_HASH>>` (on `master`), created in this worktree.
+  (This doc is updated with the final hash after the feature commit and the
+  result-file change is re-committed as the final docs commit; both the feature
+  commit and the result-file update are present in the branch history.)
 
-## Scope delivered (Phase 3)
+## Scope delivered (Phase 4)
 
-1. **Android gallery domain models** — `gallery/model/GalleryModels.kt`:
-   `GalleryPhotoItem`, `CollectionGroup`, `GallerySearchHit`,
-   `GalleryExifMetadata`, and a pure stable content-URI → id mapping
-   (`GalleryIds.stableIdForUri`), mirrored from
-   `utils/gallery/GalleryTypes.ets` and `docs/gallery/storage-format.md`.
-2. **Room persistence + explicit schema/migrations** — `gallery/data/`:
-   `GalleryItemEntity`, `CollectionGroupEntity`, an FTS4
-   `gallery_items_fts` entity, `GalleryDao`, and `GalleryDatabase`
-   (`exportSchema = true`). Migrations are explicit
-   (`GalleryDatabase.MIGRATIONS`, no `fallbackToDestructiveMigration`), schema
-   exported to `app/schemas/com.clawmate.app.gallery.data.GalleryDatabase/1.json`.
-   `GalleryMappers` round-trip list/EXIF JSON deterministically.
-3. **Real Photo Picker / MediaStore adapter** — `gallery/photo/PhotoPickerAdapter.kt`:
-   the system Photo Picker (`ActivityResultContracts.PickMultipleVisualMedia`)
-   returns content URIs with per-item grant — **no broad storage permission is
-   requested at runtime**. Metadata (date / model / dimensions / GPS) is read via
-   `ContentResolver` and `androidx.exifinterface` `ExifInterface`. Outcomes are
-   typed `PickResult.Picked / Cancelled / Unavailable`; inaccessible URIs and
-   missing metadata are surfaced as typed results / null, never fabricated.
-4. **Repository + DI** — `gallery/data/GalleryRepository.kt` +
-   `DefaultGalleryRepository.kt` + `gallery/GalleryComponent.kt`: deterministic
-   upsert and dedupe-by-content-URI, group refresh and search over stored items.
-5. **Compose Gallery/Collection screen** — `gallery/ui/GalleryScreen.kt` +
-   `GalleryViewModel.kt`, wired into the 汇总 tab of the existing shell
-   (`ui/ClawMateRoot.kt`): picker action, lazy item list, empty / loading /
-   error states, collection-group chips and basic search. No fake photos or
-   hardcoded demo data.
-6. **Explicit unsupported analysis interfaces** — `gallery/analysis/CapabilityEngines.kt`:
-   OCR / cloud vision / reverse-geocoding are ported boundaries that report typed
-   `CapabilityState.NotConfigured` / `Unsupported` (OcrEngine, CloudVisionAnalyzer,
-   ReverseGeocoder). OCR and reverse geocoding/Harmony-only scanner are **not**
-   implemented; the screen states this honestly.
+1. **Android workflow domain models** — `task/model/WorkflowModels.kt`
+   (`WorkflowStep`, `WorkflowDefinition`, `WorkflowTask`, plus
+   `WorkflowMetadata` / `WorkflowDefaults` / `WorkflowCondition` contracts) and
+   `task/model/WorkflowSceneConfig.kt` (the 7 collection scenes), mirrored from
+   `utils/WorkflowTypes.ets` / `WorkflowSceneConfig.ets`.
 
-## Verification (actually executed)
+2. **Tolerant, deterministic JSON parsing** — `task/json/WorkflowJsonParser.kt`
+   + `WorkflowJsonRepair.kt`:
+   - parses `metadata` / `defaults` / `context` / `steps`, including nested
+     `loop` / `if` / `then_steps` / `else_steps`;
+   - **preserves unknown step types and their raw JSON** (never silently drops);
+     they surface as `UNSUPPORTED/BLOCKED` at run time;
+   - repairs common malformed text (fenced blocks, truncation, literal casing,
+     CJK punctuation) and degrades unrecoverable input to a typed `Err` so one
+     corrupt config card never crashes the Task screen.
 
-Commands run in this worktree with the toolchain above (
-`gradle --no-daemon --max-workers=1`):
+3. **Bundled configs + repository** — the source's 11
+   `resources/rawfile/workflows/configs/*.json` were copied verbatim into
+   `app/src/main/res/raw/` **after a secrets/personal-data scan**. The two
+   WeChat configs' sample `contact_name: "小赵"` was replaced with a neutral
+   placeholder (`联系人`) so no personal data is bundled. A file-backed
+   repository (`task/data/DefaultWorkflowRepository.kt` +
+   `WorkflowTaskIndexCodec.kt` + `AndroidBundledConfigReader.kt`) installs the
+   configs into app-private `filesDir/workflows/…`, derives default tasks from
+   config metadata (title = description, source = name — identical to the
+   source), and persists **user edits (editable JSON), enabled toggles, and run
+   status** in a versioned, deterministic `task-index.json` (tolerant decode of
+   extra/unknown fields).
 
-| Command | Result (exit code) |
-| --- | --- |
-| `gradle :app:assembleDebug` (first run, before test fix) | **BUILD SUCCESSFUL** (APK produced) — assemble passed on the first run; the failure below was in the *unit-test* compile, not the app. |
-| `gradle :app:assembleDebug :app:testDebugUnitTest` (first combined run) | **FAILED — exit 1** — `:app:compileDebugUnitTestKotlin` errors in `CapabilityEnginesTest`: (a) `CapabilitySummary` unresolved (missing import; the type lives in `gallery.ui`), (b) `Operator '!=' cannot be applied to 'CapabilityState.Unsupported' and 'CapabilityState.NotConfigured'` (Kotlin 1.9 rejects `!=` between two distinct `data object` types). |
-| Fix applied — `app/src/test/.../analysis/CapabilityEnginesTest.kt`: added `import com.clawmate.app.gallery.ui.CapabilitySummary` and typed both sides of the distinctness assertion as `CapabilityState`. |
-| `gradle :app:assembleDebug :app:testDebugUnitTest` (final combined run) | **BUILD SUCCESSFUL — exit 0** |
+4. **Bounded, honest `WorkflowRunner`** — `task/runner/WorkflowRunner.kt` +
+   `WorkflowVariableResolver.kt`:
+   - only deterministic non-GUI steps run for real: `sleep` (bounded),
+     `loop` (with `loop.index` / `loop.last`), `if` (condition evaluation over
+     `${context.*}` / `${defaults.*}` / `${steps.*.output.*}`), and a test-only
+     `echo` tool;
+   - every `gui_task` / `gui_action` GUI / HDC / open-app / device-control step
+     is returned as `StepOutcome.Unsupported` → overall `RunStatus.BLOCKED`;
+     every VLM/cloud `tool` (`vlm_qa`, etc.) is `NOT_CONFIGURED`;
+   - **a run is never fabricated as successful when blocked**; bounds: max total
+     steps, per-loop capacity, wall-clock timeout; cooperative cancellation →
+     `CANCELLED`. Never calls `Runtime.exec`, shell, adb, hdc, or an
+     `AccessibilityService`.
 
-Final unit-test breakdown (from `app/build/test-results/testDebugUnitTest/*`):
+5. **Real Compose Task screen** — `task/ui/TaskScreen.kt` + `TaskViewModel.kt`
+   + `TaskViewModelFactory.kt`, wired into the 任务 tab via `TaskComponent.kt`
+   (manually DI'd repository + runner). Provides: scene/filter chip bar
+   (全部 + 7 scenes), workflow cards (title, source, enabled `Switch`, last
+   status badge, last run), an expandable step-summary / honest run-outcome
+   section, and loading / empty / error / reload states. A run action parses the
+   task's persisted config and executes the bounded runner. The Phase-1
+   placeholder `ui/TaskScreen` is retained only as a reference doc (no longer
+   routed).
 
-| Suite | Tests | Failures |
+6. **Deterministic unit tests** — 33 new tests (see §Test count) in
+   `task/json/*Test.kt`, `task/runner/WorkflowRunnerTest.kt`,
+   `task/data/DefaultWorkflowRepositoryTest.kt`, and
+   `task/data/WorkflowTaskIndexCodecTest.kt`.
+
+## Commands run & exit codes
+
+Environment: `ANDROID_HOME=/opt/deepseek-harness/android-sdk`,
+`ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk`,
+`GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
+`ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home`.
+Gradle binary: `/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle`.
+
+| # | Command | Result |
 | --- | --- | --- |
-| SseParserTest | 13 | 0 |
-| ChatClientMappingTest | 12 | 0 |
-| ChatCompletionsClientTest (MockWebServer) | 4 | 0 |
-| DefaultChatRepositoryTest | 5 | 0 |
-| EndpointConfigTest | 2 | 0 |
-| DestinationTest | 3 | 0 |
-| GalleryIdsTest | 5 | 0 |
-| CollectionGroupingServiceTest | 6 | 0 |
-| GallerySearchServiceTest | 5 | 0 |
-| GalleryMapperTest | 5 | 0 |
-| CapabilityEnginesTest | 6 | 0 |
-| **Total (Phase-2 39 + Phase-3 27)** | **66** | **0** |
+| 1 | `gradle --no-daemon --max-workers=1 :app:compileDebugKotlin` | **SUCCESS** (exit 0) — baseline + during development |
+| 2 | `gradle --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest` | **SUCCESS** (exit code `0`) |
+| 3 | `gradle --no-daemon --max-workers=1 :app:testDebugUnitTest --tests 'com.clawmate.app.task.*'` | **SUCCESS** (exit 0) — 33 Phase-4 task tests green |
+| 4 | `gradle --no-daemon --max-workers=1 :app:connectedAndroidTest` | **not run** — no emulator/device available (same as Phases 1–3) |
 
-Coverage vs. the requested checks: **URI mapping** (same URI ⇒ same id,
-different URIs ⇒ different ids, blank ⇒ empty, stable suffix kept),
-**grouping** (empty input, no cross-group duplication, same-key grouping,
-time-desc sort, title/meta/id, chat-tab gallery-chat detection), **search**
-(empty query, title-over-summary ranking, tag-match reason, limit, score-desc),
-**persistence mapping** (entity↔domain round-trip, list/EXIF JSON, missing-EXIF
-null, group round-trip), and **unsupported states** (OCR/vision/geocoder report
-NOT_CONFIGURED and never fabricate output).
+## Test count
 
-`:app:connectedAndroidTest` (instrumented) was **not run** — no device/emulator
-is available. The `Photo Picker / ContentResolver` import path and the Compose
-gallery screen are exercised only at the pure-Kotlin/unit level for the same
-reason the Phase-2 chat slice was.
+- Total unit tests green: **129** (94 prior Phases 1–3 + **33 new Phase-4
+  Task/Workflow tests**); **0 failures / 0 errors** across
+  `:app:testDebugUnitTest`.
+- New Phase-4 tests by area:
+  - `task/json/WorkflowJsonParserTest` (7) — metadata/defaults/context/steps,
+    nested loop/if, unknown-step preservation, malformed tolerance, repair of
+    casing/braces, `times` as String.
+  - `task/json/WorkflowJsonRepairTest` (6) — object extraction, fence
+    stripping, truncation, CJK punctuation, literal casing.
+  - `task/runner/WorkflowRunnerTest` (11) — GUI/HDC → BLOCKED (never success),
+    VLM tool → NOT_CONFIGURED, deterministic sleep/echo, real `if` branch,
+    cancellation → CANCELLED, loop/time-step bounds, unknown step → BLOCKED,
+    `loop.index/loop.last`.
+  - `task/data/WorkflowTaskIndexCodecTest` (4) — deterministic round-trip,
+    tolerant decode, malformed → null.
+  - `task/data/DefaultWorkflowRepositoryTest` (5) — bundled bootstrap, task
+    derivation, user-edit persistence, enabled toggle, run-status persistence.
 
-## Recorded exit codes (gradle)
+## Changed files (this phase)
 
-- First combined assemble+test run: **exit code 1** (unit-test compile errors, fixed).
-- Final combined `:app:assembleDebug :app:testDebugUnitTest`: **exit code 0**.
+```
+app/src/main/java/com/clawmate/app/task/TaskComponent.kt                     (new)
+app/src/main/java/com/clawmate/app/task/model/WorkflowModels.kt              (new)
+app/src/main/java/com/clawmate/app/task/model/WorkflowSceneConfig.kt         (new)
+app/src/main/java/com/clawmate/app/task/json/WorkflowJsonParser.kt           (new)
+app/src/main/java/com/clawmate/app/task/json/WorkflowJsonRepair.kt           (new)
+app/src/main/java/com/clawmate/app/task/data/WorkflowRepository.kt           (new)
+app/src/main/java/com/clawmate/app/task/data/DefaultWorkflowRepository.kt    (new)
+app/src/main/java/com/clawmate/app/task/data/WorkflowTaskIndexCodec.kt       (new)
+app/src/main/java/com/clawmate/app/task/data/AndroidBundledConfigReader.kt   (new)
+app/src/main/java/com/clawmate/app/task/runner/WorkflowVariableResolver.kt    (new)
+app/src/main/java/com/clawmate/app/task/runner/WorkflowRunner.kt              (new)
+app/src/main/java/com/clawmate/app/task/ui/TaskScreen.kt                      (new)
+app/src/main/java/com/clawmate/app/task/ui/TaskViewModel.kt                   (new)
+app/src/main/java/com/clawmate/app/task/ui/TaskViewModelFactory.kt            (new)
+app/src/main/res/raw/default_alipay_bill.json … default_xiaohongshu_history.json  (new, secrets-free)
+app/src/test/java/com/clawmate/app/task/json/WorkflowJsonParserTest.kt        (new)
+app/src/test/java/com/clawmate/app/task/json/WorkflowJsonRepairTest.kt        (new)
+app/src/test/java/com/clawmate/app/task/runner/WorkflowRunnerTest.kt          (new)
+app/src/test/java/com/clawmate/app/task/data/DefaultWorkflowRepositoryTest.kt (new)
+app/src/test/java/com/clawmate/app/task/data/WorkflowTaskIndexCodecTest.kt    (new)
+app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt                        (modified — route 任务 tab to TaskScreen)
+app/src/main/java/com/clawmate/app/ui/FeatureScreens.kt                      (modified — note placeholder no longer routed)
+README.md                                                                    (modified)
+MIGRATION_STATUS.md                                                          (modified)
+DSH_PHASE_RESULT.md                                                          (rewritten — this file)
+```
 
-## Blockers / gaps
+## Limitations & platform blockers
 
-- **No device/emulator**: `connectedAndroidTest` cannot be run here; the
-  instrumentation smoke test and the live Photo-Picker import path remain
-  unverified on-device. Only the pure URI mapping / grouping / search / mapping
-  logic is unit-tested.
-- **OCR / cloud vision / reverse geocoding intentionally NOT implemented.** They
-  sit behind explicit `CapabilityEngines` interfaces reporting
-  `NOT_CONFIGURED`. Winning them requires ML Kit (OCR), a configured multimodal
-  endpoint (vision), and an AMap key (reverse geocoding) — none are bundled or
-  faked.
-- **Manifest storage permissions:** `READ_MEDIA_IMAGES` /
-  `READ_EXTERNAL_STORAGE (maxSdk 32)` / `ACCESS_MEDIA_LOCATION` are declared in
-  the manifest as the surface for a not-yet-wired auto-scan path; the Phase-3
-  Photo Picker path never requests them at runtime (per-URI grant only).
-- **Read-only `/root` home:** the sandbox cannot write `/root/.gradle` or
-  `/root/.android`, so the build used outsourced `GRADLE_USER_HOME` /
-  `ANDROID_USER_HOME`. This is a host/build-state detail, not a repo change.
-
-## Changed files (Phase 3, new or modified in this worktree)
-
-- New `app/schemas/com.clawmate.app.gallery.data.GalleryDatabase/1.json` (Room
-  schema export).
-- New gallery main sources under `app/src/main/java/com/clawmate/app/gallery/`:
-  `model/GalleryModels.kt`, `photo/PhotoPickerAdapter.kt`,
-  `collection/CollectionGroupingService.kt`, `search/GallerySearchService.kt`,
-  `analysis/CapabilityEngines.kt`, `data/{GalleryEntities,GalleryDao,GalleryMappers,GalleryDatabase,GalleryRepository,DefaultGalleryRepository}.kt`,
-  `GalleryComponent.kt`, `ui/{GalleryViewModel,GalleryScreen}.kt`.
-- New gallery unit tests under `app/src/test/java/com/clawmate/app/gallery/`:
-  `model/GalleryIdsTest.kt`, `collection/CollectionGroupingServiceTest.kt`,
-  `search/GallerySearchServiceTest.kt`, `data/GalleryMapperTest.kt`,
-  `analysis/CapabilityEnginesTest.kt` (import + assertion fixed in this run).
-- Modified: `app/build.gradle.kts` (`androidx.exifinterface`, Room schema
-  location via KSP), `gradle/libs.versions.toml` (`exifinterface = 1.3.7`),
-  `ui/ClawMateRoot.kt` and `ui/FeatureScreens.kt` (汇总 tab routes to
-  `GalleryScreen`), `MIGRATION_STATUS.md`, `README.md`.
-
-Not committed (git-ignored / build state): `.gradle/`, `app/build/`,
-`local.properties`, `/opt/deepseek-harness/.gradle-user-home`,
-`/opt/deepseek-harness/.android-user-home`.
-
-## Secrets scan
-
-Ran pattern scans (`sk-`, `api_key=`, `Bearer <real>`, `AIza`, `ghp_`, private
-keys, `password=`/`secret=`/`token=` assignments) over `app/src`, docs, the
-full Phase-3 diff. **No real credentials, tokens, private keys, or production
-endpoints committed.** The gallery slice reads only content URIs from the
-system Photo Picker and stores real metadata; no endpoints or keys are added.
-Endpoint/API-key config remains the Phase-2 git-ignored
-`app/src/main/res/raw/local_config.properties` (safe template
-`config_example.properties`). No demo/fake photos, boundary sample data, or
-unrelated features were introduced.
+- **GUI / HDC / accessibility automation is not implemented and not faked.**
+  `gui_task` / `gui_action` steps (open-app, screenshot, tap, swipe, coordinates,
+  deep links) are reported as `UNSUPPORTED` with a clear reason and the run is
+  `BLOCKED`. A VLM/cloud `tool` is `NOT_CONFIGURED` (no endpoint on this
+  device). There is no `Runtime.exec`/shell/adb/hdc/`AccessibilityService`, so a
+  workflow is only ever `SUCCESS` when its steps are deterministic, non-GUI, and
+  fully executed.
+- **Cloud VLM execution boundary** — `tool: vlm_qa` and similar require a cloud
+  model + screenshot pipeline; out of scope for this slice, reported
+  `NOT_CONFIGURED`.
+- **Daily-log / run-dir artifact generation** from the HarmonyOS runner is not
+  ported (no real runs produce artifacts because runs with GUI steps are
+  blocked).
+- **connectedAndroidTest** not run (no device/emulator); `assembleDebug` and all
+  129 JVM unit tests pass.
+- **Some benign Kotlin warnings** remain (unused params/safe calls) — non-fatal,
+  no compilation errors.
 
 ## Next phase
 
-Phase 4 should continue from the agent loop and data manager:
-- Wire the capability engines: on-device ML Kit OCR, a configured
-  multimodal/cloud-vision call, and reverse geocoding against a map provider —
-  so gallery items can be auto-tagged/located, then propagated into title /
-  summary / category.
-- Add a per-photo detail screen, delete/rename, EXIF display, and live group
-  re-computation on edits.
-- Restore the `AgentLoopRunner` / `ChatToolRegistry` ReAct loop over the Phase-2
-  chat client, and the workflow/task JSON schema execution.
-- Run `:app:connectedAndroidTest` and a live Photo-Picker import on a
-  device/emulator once one is available.
+1. A **cloud/PC bridge adapter for GUI automation**: the source drives real
+   devices over HDC via a PC-side Python service (`hdc_server.py` :9124,
+   `harmony_agent.py`). The Android equivalent would be an HTTP bridge to a
+   PC/adb service (or UIAutomator/Shizuku) — wire that adapter behind the
+   `WorkflowRunner` so `gui_task`/`gui_action` can become executable, with the
+   currently `UNSUPPORTED`/`NOT_CONFIGURED` states as the honest fallback.
+2. **Settings tab** (the 5th major phase): port the 7 settings sections from
+   `pages/Index.ets` key inventory + `SettingsCenter*` to DataStore/Compose.
+3. Optionally: daily-log normalization (`WorkflowDateContext`) and run-result
+   artifact persistence once GUI/HDC steps can actually run.

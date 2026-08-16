@@ -1,4 +1,4 @@
-# ClawMate Android — Chat / cloud-model vertical slice (Phase 2) + Agent/ReAct slice (Phase 3)
+# ClawMate Android — Chat / cloud-model slice (Phase 2) + Agent/ReAct slice (Phase 3) + Task/Workflow slice (Phase 4)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -11,6 +11,40 @@ typed tool-call/tool-result wire models (incl. streaming tool-call deltas), a
 safe Android tool registry with controlled-disabled adapters, a cancellable
 coroutine/Flow ReAct loop with max-step + timeout guards, and minimal chat-UI
 integration to surface tool execution and disabled/error states.
+**Phase 4** adds a bounded Task/Workflow vertical slice on the 任务 tab:
+tolerant workflow JSON parsing (metadata/defaults/context/steps incl. nested
+`loop`/`if` and unknown-step preservation), bundled workflow configs +
+app-private persistence, a real Compose Task screen (scene/filter bar, cards,
+expandable step summary), and a bounded, honest `WorkflowRunner` that reports
+every GUI/HDC/device-control step as `UNSUPPORTED/BLOCKED` (and VLM tools as
+`NOT_CONFIGURED`) instead of fabricating a result.
+
+## Layout — features added in Phase 4
+
+```
+app/src/main/java/com/clawmate/app/task/
+├── TaskComponent.kt                # Manual DI (repository + bounded runner)      [Phase 4]
+├── model/
+│   ├── WorkflowModels.kt           # WorkflowStep/Definition/Task + metadata/defaults/condition
+│   └── WorkflowSceneConfig.kt      # The 7 collection scenes (from WorkflowSceneConfig.ets)
+├── json/
+│   ├── WorkflowJsonParser.kt       # Tolerant parser (nested if/loop, unknown-step preservation)
+│   └── WorkflowJsonRepair.kt       # Deterministic text repair (fence, truncation, casing, CJK)
+├── data/
+│   ├── WorkflowRepository.kt       # Repository interface + BundledConfigReader
+│   ├── DefaultWorkflowRepository.kt# file-backed, bundles configs into filesDir/workflows
+│   ├── WorkflowTaskIndexCodec.kt   # deterministic task-index.json codec
+│   └── AndroidBundledConfigReader.kt # reads res/raw bundled configs
+├── runner/
+│   ├── WorkflowVariableResolver.kt # ${steps.x.output.y} / ${context.k} / ${loop.index|last}
+│   └── WorkflowRunner.kt           # bounded, honest runner (gui/hdc -> UNSUPPORTED)
+└── ui/
+    ├── TaskViewModel.kt            # scenes/filter, cards, expand, run, states
+    ├── TaskViewModelFactory.kt
+    └── TaskScreen.kt               # Compose Task screen (wired into the 任务 tab)
+
+resource bundled configs: app/src/main/res/raw/default_*.json   (secrets-free)
+```
 
 ## Layout — features added in Phase 2
 
@@ -74,14 +108,16 @@ generated with `gradle wrapper`).
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest        # SSE parsing, mapping, tool-call mapping, action parsing,
-                                        # ReAct loop guards, disabled adapters, repository tests
+                                        # ReAct loop guards, disabled adapters, repository tests,
+                                        # Phase 4: workflow JSON parse/repair, nested steps,
+                                        # repository persistence, unsupported GUI/HDC, runner cancel/bounds
 ./gradlew :app:connectedAndroidTest     # instrumented (device/emulator)
 ```
 
-In this worktree the Phase-2 and Phase-3 builds and unit tests were actually
-executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 —
-commands and results are recorded in `MIGRATION_STATUS.md` §6 and
-`DSH_PHASE_RESULT.md`.
+In this worktree the Phase-2, Phase-3 and Phase-4 builds and unit tests were
+actually executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 —
+commands and results (including the Phase-4 commands and exit codes) are
+recorded in `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`.
 
 ## No secrets
 

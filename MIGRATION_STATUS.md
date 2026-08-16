@@ -29,6 +29,12 @@ same toolchain (JDK 17, SDK platform 34, Gradle 8.9, `--max-workers=1`): the
 Agent/ReAct vertical slice compiles and its unit tests pass (see §6). Exact
 commands and exit codes are recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 4 (Task/Workflow) build verification was actually executed in this
+worktree** with the same toolchain (JDK 17, SDK platform 34, Gradle 8.9,
+`--no-daemon --max-workers=1`): the Task/Workflow vertical slice compiles and
+all 129 unit tests pass (33 new Phase-4 tests). Exact commands and exit codes
+are recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -185,6 +191,31 @@ Unit tests added in Phase 3 (deterministic; no network unless noted):
 - `chat/data/AgentRepositoryTest` — `sendAgentMessage` persists user + streamed
   assistant (with tool trace), and persists user only on model-level failure.
 
+**Phase 4 — executed in this worktree** (JDK 17, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands
+and exit codes are recorded in `DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0).
+- 129 unit tests green (94 prior + **33 new Phase-4 Task/Workflow tests**).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available).
+
+Unit tests added in Phase 4 (deterministic; no network):
+- `task/json/WorkflowJsonParserTest` — metadata/defaults/context/steps parsing,
+  **nested `loop`/`if` with branch steps**, unknown-step preservation (`raw`),
+  `times` as String, malformed JSON → tolerant `Err`.
+- `task/json/WorkflowJsonRepairTest` — container-object extraction, fence
+  stripping, truncated-JSON closing, CJK punctuation, literal casing.
+- `task/runner/WorkflowRunnerTest` — **GUI/HDC `gui_task`/`gui_action` → BLOCKED**
+  (never faked as success), **`tool` VLM → NOT_CONFIGURED**, deterministic
+  `sleep`/`echo`, real condition-based `if` branch, **cancellation → CANCELLED**,
+  **max-step and per-loop bounds**, unknown step type → BLOCKED, `loop.index/
+  loop.last` resolution.
+- `task/data/WorkflowTaskIndexCodecTest` — deterministic persistence mapping,
+  tolerant decode of extra/unknown fields, malformed → null.
+- `task/data/DefaultWorkflowRepositoryTest` — bundles configs from a
+  bundled source dir into app-private storage, derives default tasks from
+  config metadata (title=description, source=name), and persists user edits /
+  enabled toggles / run status deterministically across repository instances.
+
 ---
 
 ## 7. Open items / risks
@@ -212,6 +243,35 @@ Unit tests added in Phase 3 (deterministic; no network unless noted):
 
 ## 8. Changelog
 
+- **Phase 4 (this phase):** Task / Workflow vertical slice.
+  - Android workflow domain models (`task/model/WorkflowModels.kt`,
+    `WorkflowSceneConfig.kt`) ported from `utils/WorkflowTypes.ets` /
+    `WorkflowSceneConfig.ets`; the 7 collection scenes are mirrored verbatim.
+  - Tolerant, deterministic JSON parsing (`task/json/WorkflowJsonParser.kt`,
+    `WorkflowJsonRepair.kt`): metadata/defaults/context/steps including nested
+    `loop` / `if` / then-else structures; **unknown step types preserved in
+    `raw`** (never dropped) and reported as unsupported; malformed/broken JSON
+    is repaired or degrades to a typed `Err` so one corrupt card never crashes
+    the Task screen.
+  - Bundled workflow configs copied into `res/raw/` (no secrets — two WeChat
+    configs' sample `contact_name` replaced with a neutral placeholder), and a
+    file-backed repository (`task/data/DefaultWorkflowRepository.kt`) that
+    installs them into app-private `filesDir/workflows/…` and persists user
+    edits (editable JSON), enabled toggles and run status in a versioned
+    `task-index.json` (deterministic, tolerant codec).
+  - Bounded, honest runner (`task/runner/WorkflowRunner.kt`): only deterministic
+    non-GUI steps execute (`sleep`, `loop`, `if`, and a test `echo` tool); every
+    `gui_task` / `gui_action` GUI/HDC/open-app step is reported as
+    `UNSUPPORTED/BLOCKED` and every VLM `tool` as `NOT_CONFIGURED` — **a run is
+    never fabricated as successful when blocked**. Bounds: max total steps,
+    per-loop cap, wall-clock timeout; cooperative cancellation → `CANCELLED`.
+  - Real Compose `TaskScreen` (scene/filter bar, workflow cards with enabled
+    toggle + last status, expandable step summary + honest run outcome,
+    loading/empty/error/reload states) wired into the 任务 tab via a manual
+    `TaskComponent` (Phase-4 replaces the Phase-1 placeholder).
+  - Deterministic unit tests (see §6) for JSON parsing/repair, nested step
+    handling, repository persistence mapping, unsupported GUI/HDC + NOT_CONFIGURED
+    states, and runner cancellation/bounds.
 - **Phase 3 (this phase):** Agent / ReAct vertical slice.
   - Typed tool-call & tool-result models in the OpenAI layer (`OpenAiModels.kt`,
     `ChatClientTypes.kt`, `SseParser.kt`): `tools`/`tool_choice` on the request,

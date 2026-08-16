@@ -38,6 +38,10 @@ fun SummaryScreen(modifier: Modifier = Modifier) {
  * Task / workflow tab placeholder (Phase 1).
  * Maps to the HarmonyOS 任务 tab backed by the WorkflowRunner.
  *
+ * NOTE: Phase 4 wires the 任务 tab to the real
+ * [com.clawmate.app.task.ui.TaskScreen]; this composable is retained only as a
+ * reference and is no longer routed.
+ *
  * HarmonyOS source reference:
  *   entry/src/main/ets/pages/task/TaskPage.ets
  *   entry/src/main/ets/utils/WorkflowRunner.ets
