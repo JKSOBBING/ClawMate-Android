@@ -79,4 +79,34 @@ class CapabilityEnginesTest {
         val notConfigured: CapabilityState = CapabilityState.NotConfigured
         assertTrue(unsupported != notConfigured)
     }
+
+    @Test
+    fun capabilitySummaryTracksUnsupported() {
+        val unsupported = CapabilitySummary(
+            ocr = CapabilityState.Unsupported,
+            vision = CapabilityState.NotConfigured,
+            reverseGeocoding = CapabilityState.Ready("x"),
+        )
+        assertTrue(unsupported.hasUnsupported)
+        assertTrue(unsupported.hasUnconfigured)
+
+        val allReady = CapabilitySummary(
+            ocr = CapabilityState.Ready("a"),
+            vision = CapabilityState.Ready("b"),
+            reverseGeocoding = CapabilityState.Ready("c"),
+        )
+        assertFalse(allReady.hasUnsupported)
+        assertFalse(allReady.hasUnconfigured)
+    }
+
+    @Test
+    fun resolvedOutcomeMapsToCapabilityResolved() {
+        val outcome = com.clawmate.app.gallery.geocode.ReverseGeocodeOutcome.Resolved(
+            com.clawmate.app.gallery.geocode.GalleryLocationInfo(formattedAddress = "上海市世纪大道"),
+        )
+        val cap = outcome.asCapabilityResult()
+        assertTrue(cap is ReverseGeocodeResult.Resolved)
+        val resolved = cap as ReverseGeocodeResult.Resolved
+        assertEquals("上海市世纪大道", resolved.location.formattedAddress)
+    }
 }

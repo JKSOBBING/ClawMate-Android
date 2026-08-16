@@ -102,7 +102,7 @@ a controlled disabled state), **Defer** (later phase).
 | 1 | **Onboarding** | `pages/onboarding/FirstLaunchOnboarding.ets`, `OnboardingTypes.ets`, spec `docs/superpowers/specs/2026-07-02-first-launch-onboarding-design.md` | Adapt | **Phase 6 shipped** an Android `first-launch` gate before the 5-tab shell: a real Compose `FirstLaunchOnboardingScreen` with the three capability preview slides + a usage-guide page (`home/domain/OnboardingTypes.kt` ports the pure contract; version key `firstLaunchOnboardingVersion` = `2026-07-core-preview-usage-guide`). Completion version persisted to an app-private DataStore `clawmate_home` preferences file via `home/data/DataStoreOnboardingRepository.kt`; works on a configuration-free fresh install with no network. |
 | 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt + **data source Defer** | **Phase 6 shipped** the Compose Home UI (`home/domain/HomeDomain.kt`, `home/ui/HomeScreen.kt`): four persona pillars (理解你/守护你/陪伴你/成就你 as 吃/穿/住/行), honest profile loading/empty/error states, recommendation list with completion toggles + 未完成/全部 filter + pagination + expand, and an **honest NOT_CONFIGURED avatar section** (avatar generation is DISABLED on Android — never fabricated). Recommendation *content* still requires the upstream data-manager pipeline (a later phase); completion flags persist via `home/data/DataStoreHomeRecRepository.kt`. |
 | 3 | **Chat & agent loop** | `pages/chat/*` (ChatPage, ChatPageTypes, ChatMessageDataSource, ChatSessionController); `chat/ChatSessionTypes.ets`; `utils/CloudModelClient.ets` (SSE at :725); `utils/AgentLoopRunner.ets`, `ChatReactAgent.ets`, `ChatToolRegistry.ets`, `AgentActionParser.ets`, `AgentExecutionController.ets`; spec `docs/superpowers/specs/2026-06-10-chat-session-management-design.md` | Adapt | Compose `LazyColumn` chat; Repository + ViewModel; OpenAI-compatible `/v1/chat/completions` via OkHttp SSE exposed as `Flow<String>`; ReAct tool loop; Markdown renderer; Room persistence (source uses JSON files in `filesDir/chat-sessions/`). |
-| 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore; on-device OCR via ML Kit (source: Harmony textRecognition); cloud vision LLM (MiniCPM-V) server call; Room + JSON for gallery-log; search via Room FTS; reverse geocoding via a map provider (source: AMap). |
+| 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search, with all analysis behind explicit NOT_CONFIGURED interfaces. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), Android reverse geocoding via the platform `Geocoder` (no key, typed errors, injected), and an orchestrating capability UI. OCR = ML Kit `text-recognition-chinese` is resolvable on Maven but is a download-on-device model and there is no device to verify output → kept NOT_CONFIGURED (documented). Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. |
 | 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
@@ -333,6 +333,37 @@ live remote endpoint):
   not-connected; the health check runs only on explicit click; connected is
   reported only after a real ok reply; failures keep the bridge disabled.
 
+**Phase 9 — executed in this worktree** (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands
+and exit codes are recorded in `DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0).
+- **342 unit tests green** (303 prior + **39 new Phase-9 gallery tests**).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available; the
+  platform Geocoder path runs on-device only and is intentionally not faked in
+  unit tests).
+
+Unit tests added in Phase 9 (deterministic; no device, no live geocoder):
+- `gallery/geocode/AndroidGeocoderMappingTest` — pure coordinate validity/
+  placeholder rejection and `AddressFields -> GalleryLocationInfo` mapping
+  (blanks omitted, never fabricated).
+- `gallery/geocode/AddressFormatterTest` — hierarchy join/omission, feature-name
+  anchor, city/province/district selection; `ReverseGeocodeError` typed messages
+  and `ReverseGeocodeOutcome -> ReverseGeocodeResult` adapter.
+- `gallery/data/GalleryRepositoryEditDeleteTest` — explicit title/summary/tags/
+  location edits persist via the DAO contract; delete removes only the one item
+  and recomputes groups; missing-id edits are no-ops; item-group membership and
+  group recomputation follow item-set changes (in-memory fake DAO, no Room).
+- `gallery/ui/GalleryViewModelEditDeleteTest` — edit/delete through the
+  ViewModel persist to the repository and clear the detail on delete;
+  reverse-geocode resolution stores an address **only** on a real resolved
+  result; a failed lookup surfaces `LocationViewState.Failed` and never
+  claims/persists a location; no-coordinate items report honestly.
+- `gallery/ui/GalleryDetailLabelsTest` — deterministic detail label mapping
+  (analysis state, location failure text, tags text, title fallback, content URI,
+  capture time) with an honest "unknown/—" fallback.
+- `gallery/analysis/CapabilityEnginesTest` (extended) — `CapabilitySummary`
+  `hasUnsupported`/`hasUnconfigured` and the typed `Resolved` outcome mapping.
+
 ---
 
 ## 7. Open items / risks
@@ -359,6 +390,50 @@ live remote endpoint):
 ---
 
 ## 8. Changelog
+
+- **Phase 9 (this phase):** Gallery detail flow + local analysis boundaries.
+  - **Real gallery item detail flow** from the existing gallery list
+    (`gallery/ui/GalleryDetailScreen.kt`, opened via `PhotoRow` click). Shows
+    only real data: content URI, archive date, EXIF capture time/device/
+    dimensions, analysis state, tags/summary and collection membership — no
+    fabricated values. Deterministic label mapping in
+    `gallery/ui/GalleryDetailLabels.kt`.
+  - **Explicit safe edit operations** (`GalleryRepository` + `DefaultGalleryRepository`
+    + `GalleryDao`): `updateTitle` / `updateSummary` / `updateTags` / `updateLocation`,
+    and **delete-by-item** (`deleteItem(id)` removing only that single row) with
+    a UI confirmation dialog. Edits/deletes are persisted to Room; collection
+    groups recompute after a delete (and stay recomputable via `refreshGroups`).
+    No broad files, no URI/Photo-Picker grants are ever removed.
+  - **Android reverse geocoding** (`gallery/geocode/`):
+    `AndroidGeocoderClient` wraps the platform `android.location.Geocoder`
+    (no network key, no endpoint config). Typed outcomes/errors
+    (`ReverseGeocodeOutcome` / `ReverseGeocodeErrorKind` UNAVAILABLE / PERMISSION /
+    LOOKUP_FAILED / IO / NOT_CONFIGURED) with an honest single-line formatter
+    (`AddressFormatter`) and pure, device-free mapping (`AndroidGeocoderMapping`).
+    Wired as an **explicit injected capability** via `GalleryComponent.reverseGeocoder`
+    (`AndroidReverseGeocoder`). The detail panel exposes a "解析/重试" action and
+    **never claims a location when a lookup fails** — resolved places are
+    persisted to a new `address`/`locationProvider` item column.
+  - **OCR engine boundary**: ML Kit `text-recognition-chinese` is resolvable on
+    Google Maven (16.0.x) but is the **download-on-device** (Play-Services)
+    variant and there is no emulator/device here to verify real recognized text,
+    so it is **not** vendored. OCR stays behind the explicit `OcrEngine`
+    NOT_CONFIGURED boundary with a typed `Unavailable` message — never invented
+    output. Cloud vision remains NOT_CONFIGURED. Documented in
+    `CapabilityEngines.kt`.
+  - **Capability UI reflects actual states**: `CapabilitySummary` now exposes
+    `hasUnconfigured`/`hasUnsupported`, and `GalleryScreen` renders Ready /
+    NotConfigured / Unsupported per-capability text; unsupported/geocoder-unavailable
+    states surface a retry/unsupported message in the detail panel.
+  - **Storage/schema**: `GalleryItemEntity` gains `address`, `locationProvider`,
+    `analysisState` columns; `GalleryDatabase` bumped **v1 → v2** with an
+    explicit, never-destructive `ALTER TABLE ADD COLUMN` migration; Room v2 schema
+    exported and committed.
+  - **Preservation**: Photo Picker URI-grant import flow and the existing
+    search/grouping services are unchanged; no broad storage permissions added.
+  - Deterministic unit tests (39 new, see §6) for detail mapping, edit/delete
+    persistence, geocoder result/error mapping, capability states and group
+    recomputation. No live geocoder/device tests are included.
 
 - **Phase 8 (this phase):** Safe PC HDC bridge adapter.
   - Typed bridge models + tolerant parsing (`task/hdc/HdcBridgeModels.kt`, port

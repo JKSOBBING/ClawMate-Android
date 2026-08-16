@@ -44,7 +44,18 @@ data class GalleryPhotoItem(
     val longitude: Double? = null,
     val exif: GalleryExifMetadata? = null,
     val createdAt: Long,
-)
+    /** Resolved reverse-geocoded place (only set after a real lookup succeeds). */
+    val address: String = "",
+    /** Which provider resolved [address] ("geocoder" vs "" for none). */
+    val locationProvider: String = "",
+    /** Deterministic analysis lifecycle state (never fabricated). */
+    val analysisState: String = ANALYSIS_STATE_NONE,
+) {
+    companion object {
+        const val ANALYSIS_STATE_NONE = "none"
+        const val ANALYSIS_STATE_UNSUPPORTED = "unsupported"
+    }
+}
 
 /** A collection group produced by [GroupingService] over a set of photo items. */
 data class CollectionGroup(

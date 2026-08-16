@@ -1,4 +1,4 @@
-# ClawMate Android — PC/HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -66,6 +66,49 @@ caller explicitly supplies a configured adapter:
 - Deterministic unit tests (49 new) for tolerant parsing, URL normalization,
   the disabled adapter, runner integration (SUCCESS / FAILED / BLOCKED), errors,
   timeout/deadline handling, and cancellation.
+
+**Phase 9** advances the **Gallery / collection detail + local analysis**
+(汇总 tab). Tapping a photo opens a real detail flow
+(`gallery/ui/GalleryDetailScreen.kt`) that shows only real data: content URI,
+archive date, EXIF capture time / device / dimensions, analysis state, tags /
+summary and collection membership — nothing fabricated. It adds explicit safe
+edits (title / summary / tags) persisted to Room and a **delete-by-item** action
+with confirmation that removes only that single stored row (the photo file and
+its Photo-Picker URI grant are never touched, and groups recompute). Reverse
+geocoding is now a real, **explicitly injected** Android capability
+(`gallery/geocode/`) backed by the platform `android.location.Geocoder` — no
+network key, no endpoint config — with typed unavailable / permission / lookup
+errors; the detail panel exposes a 解析/重试 action and **never claims a location
+when a lookup fails**, persisting a resolved place only after a real success.
+OCR remains an explicit **NOT_CONFIGURED** boundary: ML Kit
+`text-recognition-chinese` resolves on Google Maven but is a download-on-device
+model and there is no device here to verify real recognized text, so it is not
+vendored (Cloud vision stays NOT_CONFIGURED). The capability UI reflects the
+real Ready / NotConfigured / Unsupported states and shows retry/unsupported
+messages. Room schema bumped to v2 (adds `address` / `locationProvider` /
+`analysisState`) via an explicit non-destructive migration. Deterministic unit
+tests (39 new) cover detail mapping, edit/delete persistence, geocoder
+result/error mapping, capability states and group recomputation.
+
+## Layout — features added in Phase 9
+
+```
+app/src/main/java/com/clawmate/app/gallery/geocode/
+├── LocationModels.kt            # ReverseGeocodeOutcome / ReverseGeocodeErrorKind / GalleryLocationInfo
+├── AddressFormatter.kt          # Pure single-line place formatter (device-free, deterministic)
+├── AndroidGeocoderClient.kt     # Platform android.location.Geocoder client + pure mapping (AddressFields)
+└── AndroidReverseGeocoder.kt    # Explicit injected ReverseGeocoder capability
+
+app/src/main/java/com/clawmate/app/gallery/ui/
+├── GalleryDetailScreen.kt       # Item detail flow (URI/date/EXIF/state/tags/summary/membership + edit/delete + location)
+└── GalleryDetailLabels.kt       # Pure deterministic label mapping
+
+(modified) GalleryViewModel.kt / GalleryScreen.kt / GalleryComponent.kt / CapabilityEngines.kt
+(modified) GalleryModels.kt / GalleryEntities.kt / GalleryDao.kt / GalleryMappers.kt
+(modified) GalleryRepository.kt / DefaultGalleryRepository.kt / gallery database v1→v2 migration
+
+app/src/test/java/com/clawmate/app/gallery/...      (geocode + ui + data edit/delete tests, extended capability test)
+```
 
 ## Layout — features added in Phase 8
 
@@ -267,15 +310,18 @@ generated with `gradle wrapper`).
                                         # disabled adapter, OkHttp health/workflow mapping, timeouts,
                                         # cancellation, runner <-> adapter integration, settings
                                         # explicit health flow (no network on launch)
+                                       # Phase 9: geocoder mapping/error mapping, detail labels,
+                                       # edit/delete persistence, capability states, group recomputation
 ./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS (device/emulator; not run in this worktree)
 ```
 
-In this worktree the Phase-2 through Phase-8 builds and unit tests were actually
+In this worktree the Phase-2 through Phase-9 builds and unit tests were actually
 executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 — commands
-and results (including the Phase-8 commands and exit codes) are recorded in
+and results (including the Phase-9 commands and exit codes) are recorded in
 `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`. `connectedAndroidTest` was
 not run because no emulator/device is available (the instrumented voice tests
-are documented as unavailable without a device).
+are documented as unavailable without a device; the platform Geocoder reverse
+lookup runs on-device only and is not faked in unit tests).
 
 ## No secrets
 

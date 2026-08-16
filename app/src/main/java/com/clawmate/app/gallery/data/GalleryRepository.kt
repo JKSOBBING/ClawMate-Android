@@ -41,4 +41,28 @@ interface GalleryRepository {
 
     /** Search stored items. */
     suspend fun search(query: String): List<GallerySearchHit>
+
+    // ---- Explicit safe edit operations (persisted to Room) ----
+
+    /** Set an item's display title. No-op if the item or the id is absent. */
+    suspend fun updateTitle(id: String, title: String): Boolean
+
+    /** Set an item's summary. */
+    suspend fun updateSummary(id: String, summary: String): Boolean
+
+    /** Replace an item's tags list. */
+    suspend fun updateTags(id: String, tags: List<String>): Boolean
+
+    /** Persist a resolved reverse-geocoded place (only after a real success). */
+    suspend fun updateLocation(id: String, address: String, provider: String): Boolean
+
+    /**
+     * Delete a single item **by id** (keeps its content-URI record semantics:
+     * [deleteItem] removes only the stored item row, never a broad file / URI
+     * grant). Returns true when a row was removed.
+     */
+    suspend fun deleteItem(id: String): Boolean
+
+    /** All collection groups the item belongs to (by stored event ids). */
+    suspend fun itemGroupMembership(itemId: String): List<CollectionGroup>
 }

@@ -20,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CollectionGroupEntity::class,
         GalleryItemFtsEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class GalleryDatabase : RoomDatabase() {
@@ -31,14 +31,22 @@ abstract class GalleryDatabase : RoomDatabase() {
         private const val DB_NAME = "clawmate_gallery.db"
 
         /**
-         * Migration table. The gallery schema debuts at version 1 in this
-         * phase, so there are no upgrades yet — add them here (in dependency
-         * order) whenever `@Database(version=...)` is bumped. Explicit, never
-         * destructive.
+         * Migration table, in dependency order. Every schema change gets an
+         * explicit, never-destructive migration.
+         *
+         * v1 -> v2 (Phase 9): the gallery item grows a resolved reverse-geocoded
+         * address, its provider, and a deterministic analysis lifecycle state.
+         * New columns are added empty so existing items stay truthful (no
+         * inferred address, no fake analysis state).
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
-            // v1 -> v2:
-            // object : Migration(1, 2) { override fun migrate(db: SupportSQLiteDatabase) { ... } }
+            object : Migration(1, 2) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE gallery_items ADD COLUMN address TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE gallery_items ADD COLUMN locationProvider TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE gallery_items ADD COLUMN analysisState TEXT NOT NULL DEFAULT ''")
+                }
+            },
         )
 
         fun build(context: Context): GalleryDatabase =

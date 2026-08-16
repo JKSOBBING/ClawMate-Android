@@ -6,6 +6,7 @@ import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.model.GallerySearchHit
 import com.clawmate.app.gallery.search.GallerySearchService
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
@@ -79,6 +80,30 @@ class DefaultGalleryRepository(
     override suspend fun search(query: String): List<GallerySearchHit> {
         val items = dao.getAllItems().map(GalleryMappers::fromEntity)
         return searchService.search(query, items)
+    }
+
+    override suspend fun updateTitle(id: String, title: String): Boolean =
+        dao.updateTitle(id, title.trim()) > 0
+
+    override suspend fun updateSummary(id: String, summary: String): Boolean =
+        dao.updateSummary(id, summary.trim()) > 0
+
+    override suspend fun updateTags(id: String, tags: List<String>): Boolean =
+        dao.updateTags(id, GalleryMappers.listToJson(tags)) > 0
+
+    override suspend fun updateLocation(id: String, address: String, provider: String): Boolean =
+        dao.updateLocation(id, address.trim(), provider.trim()) > 0
+
+    override suspend fun deleteItem(id: String): Boolean {
+        val deleted = dao.deleteById(id) > 0
+        if (deleted) refreshGroups(GALLERY_TAB_ID)
+        return deleted
+    }
+
+    override suspend fun itemGroupMembership(itemId: String): List<CollectionGroup> {
+        return dao.observeGroupsForTab(GALLERY_TAB_ID).first()
+            .map(GalleryMappers::fromGroupEntity)
+            .filter { it.eventIds.contains(itemId) }
     }
 
     companion object {

@@ -31,6 +31,24 @@ interface GalleryDao {
     @Query("SELECT COUNT(*) FROM gallery_items")
     suspend fun count(): Int
 
+    @Query("DELETE FROM gallery_items WHERE id = :id")
+    suspend fun deleteById(id: String): Int
+
+    @Query("UPDATE gallery_items SET title = :title WHERE id = :id")
+    suspend fun updateTitle(id: String, title: String): Int
+
+    @Query("UPDATE gallery_items SET summary = :summary WHERE id = :id")
+    suspend fun updateSummary(id: String, summary: String): Int
+
+    @Query("UPDATE gallery_items SET tags = :tagsJson WHERE id = :id")
+    suspend fun updateTags(id: String, tagsJson: String): Int
+
+    @Query("UPDATE gallery_items SET address = :address, locationProvider = :provider WHERE id = :id")
+    suspend fun updateLocation(id: String, address: String, provider: String): Int
+
+    @Query("UPDATE gallery_items SET analysisState = :state WHERE id = :id")
+    suspend fun updateAnalysisState(id: String, state: String): Int
+
     @Query("DELETE FROM gallery_items")
     suspend fun clear()
 

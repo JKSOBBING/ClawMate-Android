@@ -68,15 +68,33 @@ fun GalleryScreen() {
             repository = repository,
             ocrEngine = GalleryComponent.ocr,
             visionAnalyzer = GalleryComponent.vision,
-            reverseGeocoder = GalleryComponent.reverseGeocoder,
+            reverseGeocoder = GalleryComponent.reverseGeocoder(context),
         ),
     )
     val uiState by vm.state.collectAsState()
+    val selectedId by vm.selectedItemId.collectAsState()
+    val detail by vm.detail.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
 
     val launchPicker = rememberPhotoPicker(maxSelectNumber = 9) { result ->
         vm.onPickResult(context, result)
+    }
+
+    if (selectedId != null && detail?.itemId == selectedId) {
+        val d = detail
+        if (d != null) {
+            GalleryDetailScreen(
+                detail = d,
+                onBack = { vm.deselectItem() },
+                onEditTitle = { id, title -> vm.editTitle(id, title) },
+                onEditSummary = { id, summary -> vm.editSummary(id, summary) },
+                onEditTags = { id, tags -> vm.editTags(id, tags) },
+                onDelete = { id -> vm.deleteItem(id) },
+                onResolveLocation = { id -> vm.resolveLocation(id) },
+            )
+            return
+        }
     }
 
     Scaffold(
@@ -121,6 +139,7 @@ fun GalleryScreen() {
                 is GalleryUiState.Loaded -> LoadedBlock(
                     state = s,
                     query = searchQuery,
+                    onOpenItem = { id -> vm.selectItem(id) },
                 )
             }
         }
@@ -150,12 +169,13 @@ private fun ErrorBlock(message: String) {
 private fun LoadedBlock(
     state: GalleryUiState.Loaded,
     query: String,
+    onOpenItem: (String) -> Unit,
 ) {
     val visibleItems = if (query.isBlank()) state.items
     else filterByQuery(state.items, query)
 
-    // Honest capability summary.
-    if (state.capability.hasUnconfigured) {
+    // Honest capability summary reflecting real states.
+    if (state.capability.hasUnconfigured || state.capability.hasUnsupported) {
         CapabilityNotice(
             ocr = state.capability.ocr,
             vision = state.capability.vision,
@@ -181,7 +201,9 @@ private fun LoadedBlock(
         state.items.isEmpty() -> EmptyBlock()
         visibleItems.isEmpty() -> Text("没有匹配的结果", style = MaterialTheme.typography.bodyMedium)
         else -> LazyColumn(Modifier.fillMaxWidth()) {
-            items(visibleItems, key = { it.id }) { item -> PhotoRow(item) }
+            items(visibleItems, key = { it.id }) { item ->
+                PhotoRow(item, onClick = { onOpenItem(item.id) })
+            }
         }
     }
 }
@@ -205,21 +227,21 @@ private fun CapabilityNotice(
     reverseGeocoding: CapabilityState,
 ) {
     val parts = mutableListOf<String>()
-    if (ocr == CapabilityState.NotConfigured) parts += "本地 OCR 未配置"
-    if (vision == CapabilityState.NotConfigured) parts += "云端视觉分析未配置"
-    if (reverseGeocoding == CapabilityState.NotConfigured) parts += "逆地理编码未配置"
+    appendCapability(parts, "本地 OCR", ocr)
+    appendCapability(parts, "云端视觉分析", vision)
+    appendCapability(parts, "逆地理编码", reverseGeocoding)
     if (parts.isNotEmpty()) {
         Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Column(Modifier.padding(12.dp)) {
                 Text(
-                    "分析能力（尚未实现）",
+                    "分析能力（本地）",
                     style = MaterialTheme.typography.titleSmall,
                 )
                 parts.forEach { p ->
                     Text("· $p", style = MaterialTheme.typography.bodySmall)
                 }
                 Text(
-                    "图片会被保存为图库条目，但不会进行 OCR / 云端识别 / 位置解析。",
+                    "位置解析使用系统内置地理编码服务，无需网络 Key；OCR / 云端识别仍受平台能力与配置限制。每一项失败都不会伪造结果。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -228,9 +250,20 @@ private fun CapabilityNotice(
     }
 }
 
+private fun appendCapability(parts: MutableList<String>, label: String, state: CapabilityState) {
+    when (state) {
+        is CapabilityState.NotConfigured -> parts += "$label：未配置"
+        CapabilityState.Unsupported -> parts += "$label：设备不支持"
+        is CapabilityState.Ready -> parts += "$label：可用（${state.description}）"
+    }
+}
+
 @Composable
-private fun PhotoRow(item: GalleryPhotoItem) {
-    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+private fun PhotoRow(item: GalleryPhotoItem, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
         Column(Modifier.padding(12.dp)) {
             Text(item.title.ifBlank { item.id }, style = MaterialTheme.typography.titleMedium)
             Text("日期 ${item.date}", style = MaterialTheme.typography.bodySmall)

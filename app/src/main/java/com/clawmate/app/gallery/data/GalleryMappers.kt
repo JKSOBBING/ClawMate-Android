@@ -39,6 +39,9 @@ object GalleryMappers {
         longitude = item.longitude,
         exifJson = exifToJson(item.exif),
         createdAt = item.createdAt,
+        address = item.address,
+        locationProvider = item.locationProvider,
+        analysisState = item.analysisState,
     )
 
     fun fromEntity(entity: GalleryItemEntity): GalleryPhotoItem = GalleryPhotoItem(
@@ -57,6 +60,9 @@ object GalleryMappers {
         longitude = entity.longitude,
         exif = exifFromJson(entity.exifJson),
         createdAt = entity.createdAt,
+        address = entity.address,
+        locationProvider = entity.locationProvider,
+        analysisState = entity.analysisState,
     )
 
     fun toGroupEntity(tabId: String, group: CollectionGroup): CollectionGroupEntity =

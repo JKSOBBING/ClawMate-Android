@@ -8,13 +8,21 @@ import com.clawmate.app.gallery.analysis.UnconfiguredCapabilities
 import com.clawmate.app.gallery.data.DefaultGalleryRepository
 import com.clawmate.app.gallery.data.GalleryDatabase
 import com.clawmate.app.gallery.data.GalleryRepository
+import com.clawmate.app.gallery.geocode.androidReverseGeocoder
 
 /**
  * Lightweight manual dependency container for the gallery slice.
  *
  * Held by [ClawMateApplication] so the database and repository live across
- * configuration changes. Capability engines default to the explicit
- * NOT_CONFIGURED implementations.
+ * configuration changes.
+ *
+ * Capability wiring (Phase 9):
+ *  - OCR / cloud vision stay on the explicit NOT_CONFIGURED implementations (see
+ *    CapabilityEngines / the ML Kit note below) — no fake analysis is produced.
+ *  - Reverse geocoding is a real, *explicitly injected* Android capability backed
+ *    by the platform [android.location.Geocoder] (no key). [reverseGeocoder] builds
+ *    the Android adapter; a caller/tests may inject [UnconfiguredCapabilities] to
+ *    take it out. The adapter never claims a location when a lookup fails.
  */
 object GalleryComponent {
 
@@ -44,7 +52,9 @@ object GalleryComponent {
 
     val ocr: OcrEngine get() = UnconfiguredCapabilities.ocr
     val vision: CloudVisionAnalyzer get() = UnconfiguredCapabilities.vision
-    val reverseGeocoder: ReverseGeocoder get() = UnconfiguredCapabilities.reverseGeocoder
+
+    /** Real Android reverse geocoder (platform Geocoder), implicitly injected. */
+    fun reverseGeocoder(context: Context): ReverseGeocoder = androidReverseGeocoder(context)
 
     /** Release caches (mostly for tests). */
     fun reset() {

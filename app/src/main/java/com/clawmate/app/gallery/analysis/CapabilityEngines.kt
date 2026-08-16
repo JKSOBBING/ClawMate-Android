@@ -1,23 +1,35 @@
 package com.clawmate.app.gallery.analysis
 
+import com.clawmate.app.gallery.geocode.GalleryLocationInfo
+import com.clawmate.app.gallery.geocode.ReverseGeocodeError
+import com.clawmate.app.gallery.geocode.ReverseGeocodeOutcome
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 
 /**
  * OCR / cloud-vision / reverse-geocoding capability boundaries.
  *
- * These HarmonyOS features have no 1:1 Android port shipped in this phase:
- *   - OCR: Harmony CoreVisionKit `textRecognition` -> would need on-device
- *     ML Kit (a separate dependency + model download) — NOT brought in here.
- *   - Cloud vision: Harmony `CloudModelClient` calls a multimodal model
- *     (MiniCPM-V) — the endpoint/keys are not configured and no such client is
- *     wired for the gallery pipeline yet — NOT implemented here.
- *   - Reverse geocoding: Harmony AMap Web Service — requires an AMap key,
- *     which is not configured — NOT implemented here.
+ * Phase-9 status (honesty first — a capability is only ever claimed when it
+ * really works):
+ *   - OCR: Harmony CoreVisionKit `textRecognition` maps on Android to on-device
+ *     ML Kit `text-recognition-chinese` (version 16.0.x is resolvable on Google
+ *     Maven). It is **not vendored** because the Chinese model is a
+ *     download-on-device Play-Services dependency (not bundled in the repo), and
+ *     there is no emulator/device here to verify real recognized text — shipping
+ *     a wired-but-unverifiable OCR path would risk fabricating output. The
+ *     engine stays behind the explicit [OcrEngine] NOT_CONFIGURED boundary.
+ *   - Cloud vision (MiniCPM-V multimodal model): requires an endpoint/key that is
+ *     not configured and no client is wired — NOT implemented, explicit
+ *     NOT_CONFIGURED.
+ *   - Reverse geocoding: Harmony uses AMap Web Service (keyed). On Android the
+ *     same concept is served by the platform [android.location.Geocoder] with no
+ *     key; the Android adapter is wired as an explicit injected capability (see
+ *     com.clawmate.app.gallery.geocode). It reports [CapabilityState.Ready] only
+ *     when the device has a geocoder and never claims a location on failure.
  *
- * Instead of silently claiming these work, each capability is behind an
- * explicit interface. Callers receive a typed [CapabilityState] describing
- * NOT_CONFIGURED / UNSUPPORTED and must surface it to the user. No fake OCR /
- * vision text is ever produced.
+ * Instead of silently claiming work, each capability is behind an explicit
+ * interface. Callers receive a typed [CapabilityState] describing
+ * NOT_CONFIGURED / UNSUPPORTED / READY and must surface it to the user. No fake
+ * OCR / vision text or location is ever produced.
  */
 sealed class CapabilityState {
     /** The capability exists but is not configured (no key / no endpoint). */
@@ -65,8 +77,11 @@ sealed class VisionResult {
 }
 
 /**
- * Port of Harmony `GalleryReverseGeocoder` (AMap Web Service). Requires an
- * AMap web key; not configured on Android, so the default reports NOT_CONFIGURED.
+ * Port of Harmony `GalleryReverseGeocoder`. On Android this maps to the
+ * platform [android.location.Geocoder] (a local heuristics lookup the device
+ * exposes; no web-service key). A provider is always injected explicitly; a
+ * caller may inject the default NOT_CONFIGURED engine or the Android adapter
+ * ([com.clawmate.app.gallery.geocode.AndroidReverseGeocoder]).
  */
 interface ReverseGeocoder {
     val state: CapabilityState
@@ -74,8 +89,24 @@ interface ReverseGeocoder {
 }
 
 sealed class ReverseGeocodeResult {
+    /** The provider is not configured (default). */
     data object NotConfigured : ReverseGeocodeResult()
-    data class Failed(val reason: String) : ReverseGeocodeResult()
+
+    /** A real place was resolved (never fabricated). */
+    data class Resolved(val location: GalleryLocationInfo) : ReverseGeocodeResult()
+
+    /** The platform has no geocoder / the lookup failed for the given reason. */
+    data class Failed(val error: ReverseGeocodeError) : ReverseGeocodeResult()
+}
+
+/**
+ * Direct adapter from the typed [com.clawmate.app.gallery.geocode]
+ * ReverseGeocodeOutcome to the capability-boundary [ReverseGeocodeResult].
+ */
+fun ReverseGeocodeOutcome.asCapabilityResult(): ReverseGeocodeResult = when (this) {
+    is ReverseGeocodeOutcome.Resolved -> ReverseGeocodeResult.Resolved(location)
+    is ReverseGeocodeOutcome.Failed -> ReverseGeocodeResult.Failed(error)
+    ReverseGeocodeOutcome.NotConfigured -> ReverseGeocodeResult.NotConfigured
 }
 
 /** Default unconfigured engine instances (controllable, no fake data). */

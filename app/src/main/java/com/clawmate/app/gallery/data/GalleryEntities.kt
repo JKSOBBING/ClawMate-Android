@@ -33,6 +33,12 @@ data class GalleryItemEntity(
     val longitude: Double?,
     val exifJson: String,
     val createdAt: Long,
+    /** Resolved place; empty until a real reverse-geocode lookup succeeds. */
+    val address: String = "",
+    /** Which provider resolved [address] ("geocoder" or ""). */
+    val locationProvider: String = "",
+    /** Deterministic analysis lifecycle state (never fabricated). */
+    val analysisState: String = "",
 )
 
 @Entity(tableName = "collection_groups")
