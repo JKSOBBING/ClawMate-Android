@@ -56,6 +56,13 @@ worktree** with the same toolchain (JDK 17.0.19, SDK platform 34, Gradle 8.9,
 Phases 1–6 + **55 new Phase-7 voice tests**). Exact commands and exit codes are
 recorded in `DSH_PHASE_RESULT.md`.
 
+**Phase 8 (PC HDC bridge adapter) build verification was actually executed in
+this worktree** with the same toolchain (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`):
+`:app:assembleDebug` and `:app:testDebugUnitTest` both pass — **303 unit tests
+/ 0 failures** (254 prior Phases 1–7 + **49 new Phase-8 HDC-bridge tests**).
+Exact commands and exit codes are recorded in `DSH_PHASE_RESULT.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a
@@ -102,8 +109,8 @@ a controlled disabled state), **Defer** (later phase).
 | 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | **Phase 7 shipped** the chat voice-interaction vertical slice (`chat/voice/`): typed domain models + deterministic normalization (`VoiceInteractionTypes.kt`), ASR transcript merge + duplicate-final suppression (`VoiceTranscriptLogic.kt`), PCM16→WAV builder (`PcmWav.kt`), voice presets (`VoiceTtsPresets.kt`), voice-input start/stop guards (`VoiceOrchestratorLogic.kt`). ASR = Android `android.speech.SpeechRecognizer` adapter with explicit permission/unavailable/error/cancel states and **no hidden mic access** (RECORD_AUDIO surfaced in the UI, requested only on the mic tap). Output = Android `TextToSpeech` adapter (lifecycle-safe init, speak/pause/stop/replay, typed unavailable/error states). Cloud MiMO streaming/TTS stays behind an explicit **NOT_CONFIGURED** interface (`CloudMimoVoiceClient`) — never claimed configured or faked. Chat UI gained mic/listening/transcript + speak/stop/replay controls; a real final ASR transcript becomes ordinary editable chat input. Digital avatar remains DISABLED (not part of this slice). |
 | 9 | **Local model** | `entry/src/main/cpp/*` (napi_init.cpp, HIAIModelManager.cpp, MNN headers), `docs/local_mnn/prompt-loading.md` | **Blocked → Adapt later** | Source loads an `MNN` LLM via N-API (`libentry.so`) and a HiAI/NNRT path (`HIAIModelManager`). MNN has Android builds → port the C++ LLM via JNI; drop the Harmony-only HiAI/OMC pieces. In-app model download flow (`ModelDownloadConfig`) → Android DownloadManager. Controlled disabled state until JNI model loader lands. |
 | 10 | **Cloud model** | `utils/CloudModelClient.ets`, `CloudDeciderPrompt.ets`, `CloudLogOutput.ets`, `gallery/GalleryEmbeddingService.ets` | Direct/Adapt | OpenAI-compatible `/v1/chat/completions` already used → OkHttp + kotlinx.serialization. Supports Planner/Decider separate base URLs, `/v1/chat/completions`, cancellation, retries. Preserve streaming + error states. |
-| 11 | **HDC / GUI automation** | `utils/MobileGuiTask*.ets`, `HdcWorkflowBridge.ets`, `PcServerMonitor.ets`; `python/hdc_server.py`, `python/harmony_agent.py` | **Blocked → Adapter** | Harmony auto-agent drives a physical device via **PC-side Python over HDC** (`hdc fport` + HTTP bridge on :9124, in-app TCP :9126). On Android: UIAutomator / adb over `adb reverse` or a PC-side Appium/adb service. Arbitrary cross-app GUI automation on Android requires either root / Shizuku / AccessibilityService — implement a cloud/PC bridge adapter first, plus a controlled disabled state. |
-| 12 | **Python bridge** | `entry/src/main/python/*` (hdc_server.py :9124, harmony_agent.py, serve_model.py :9123, wechat_collect/*) | **Blocked → Defer** | Not runnable on-device on Android. Keep as a PC-side component; Android app talks to it over HTTP (localhost/LAN). Do not bundle Python in the APK. |
+| 11 | **HDC / GUI automation** | `utils/MobileGuiTask*.ets`, `HdcWorkflowBridge.ets`, `PcServerMonitor.ets`; `python/hdc_server.py`, `python/harmony_agent.py` | **Blocked → Adapter (Phase 8 shipped the safe client + adapter)** | Harmony auto-agent drives a physical device via **PC-side Python over HDC** (`hdc fport` + HTTP bridge on :9124, in-app TCP :9126). On Android **Phase 8** ships a safe PC HDC bridge client: a typed OkHttp `HdcBridgeClient` for `GET /api/health` + `POST /api/workflow` (normalized URLs, bounded timeouts, cancellation, tolerant parsing, typed errors) and a `WorkflowDeviceAdapter` boundary (`app_start`/`screenshot`/`gui_action`/`execute_decider_action` only). **No** `Runtime.exec`/`ProcessBuilder`/shell/adb/hdc/AccessibilityService/`/api/run_cmd`. `TaskComponent` starts DISABLED (default `DisabledWorkflowDeviceAdapter`) and only an explicitly injected, health-verified adapter makes protocol calls; the settings UI runs a health check **only on an explicit button tap** and connects only after a real `ok` + control-ready reply. Workflow `gui_action` steps return honest bridge results/errors only when a configured adapter is registered; otherwise they stay `BLOCKED`. |
+| 12 | **Python bridge** | `entry/src/main/python/*` (hdc_server.py :9124, harmony_agent.py, serve_model.py :9123, wechat_collect/*) | **Blocked → Adapter (Phase 8 HTTP-over-LAN client)** | Not runnable on-device on Android. Keep as a PC-side component; Android app talks to it over HTTP (localhost/LAN) via the Phase-8 `OkHttpHdcBridgeClient`. Do not bundle Python in the APK. A verified bridge + adapter is required for workflow GUI steps; until then they are `BLOCKED`. |
 | 13 | **Native C++ / MNN** | `entry/src/main/cpp/**` (CMakeLists, MNN/llm includes, libentry N-API), `entry/libs/arm64-v8a` | Adapt (later) | Reuse the MNN C++ sources via NDK/CMake + JNI instead of N-API. Need Android prebuilt MNN library + NDK. Defer to the local-model phase. |
 | 14 | **Profile share / knock** | `utils/ProfileKnockShareService.ets`, `module.json5` (UTD `com.mobiinfra.profile-json`, MIME `application/vnd.mobiinfra.profile+json`, `.mobi-profile`) | Adapt | Android `ACTION_VIEW`/`ACTION_SEND` + `<intent-filter>` + `FileProvider`. Phase 1 ships `ProfileShareActivity` (intent receivable stub); import/merge pipeline later. Source uses ShareKit knock-to-knock → Android NFC as a coarse approximation (defer). |
 | 15 | **Float window / overlay** | `entryability/EntryAbility.ets`, `pages/EdgeFlowWindow.ets`, `pages/FloatWindow.ets`, `utils/AgentExecutionController.ets` | **Blocked → Adapter** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay during active agent → Android needs `SYSTEM_ALERT_WINDOW` (overlay permission) + MediaProjection for capture-safe hiding. Requires user opt-in; controlled disabled state until then. **Defer to agent-loop phase.** |
@@ -149,7 +156,11 @@ These HarmonyOS capabilities have no 1:1 Android equivalent and must not be
 silently dropped:
 1. On-device GUI automation of arbitrary apps (Huawei agent via PC/HDC) →
    Android requires root / Shizuku / AccessibilityService or a PC bridge.
-   Ship `<devices> off` + "requires PC bridge" message until adapter lands.
+   **Phase 8 ships a safe PC HDC bridge client + adapter** (typed HTTP calls to
+   the PC Python bridge, no `Runtime.exec`/`ProcessBuilder`/shell/adb/hdc/
+   AccessibilityService/`/api/run_cmd`). It stays `<devices> off` (DISABLED)
+   until a caller explicitly registers a health-verified adapter; workflow GUI
+   steps report `BLOCKED` with a "requires a configured PC HDC bridge" reason.
 2. System float overlay during agent execution (`SYSTEM_FLOAT_WINDOW`) → needs
    `SYSTEM_ALERT_WINDOW` runtime permission; gate behind user consent.
 3. Harmony CoreSpeechKit → `android.speech.SpeechRecognizer`.
@@ -291,6 +302,37 @@ Unit tests added in Phase 7 (deterministic; no network/device):
   **NOT_CONFIGURED** and never fabricates audio; streaming is explicitly
   unconfigured.
 
+**Phase 8 — executed in this worktree** (JDK 17.0.19, Android SDK platform 34 /
+build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`). Exact commands
+and exit codes (including the final unit-test count) are recorded in
+`DSH_PHASE_RESULT.md`. In short:
+- `:app:assembleDebug :app:testDebugUnitTest` — **PASS** (exit code 0).
+- **303 unit tests green** (254 prior + **49 new Phase-8 PC/HDC-bridge tests**).
+- `:app:connectedAndroidTest` — **not run** (no device/emulator available).
+
+Unit tests added in Phase 8 (deterministic; MockWebServer is in-process, no
+live remote endpoint):
+- `task/hdc/HdcBridgeParsingTest` — tolerant health/workflow envelope parsing
+  (numeric-as-string, wrong-typed/missing fields, tunnel/target/ports, honest
+  error/partial-degradation never claims connected).
+- `task/hdc/HdcUrlNormalizerTest` — deterministic URL normalization (trim,
+  scheme-relative `//`, scheme-less→http, trailing-slash collapse/dedup,
+  empty-port drop, http(s)-only rejection).
+- `task/hdc/OkHttpHdcBridgeClientTest` — GET health vs POST workflow mapping,
+  HTTP non-2xx → HTTP, malformed JSON, invalid URL (no request), connection
+  refused → IO, call timeout → TIMEOUT, cancellation → CANCELLED (MockWebServer).
+- `task/hdc/WorkflowDeviceAdapterTest` — default disabled adapter only
+  Unsupported/never configured; bridge-backed adapter becomes configured only
+  after a live `ok` + control-ready health; safe action mapping; **never sends
+  `run_cmd`**.
+- `task/runner/WorkflowRunnerAdapterIntegrationTest` — default adapter keeps
+  `gui_action`/`gui_task` BLOCKED; a configured adapter lets a `gui_action`
+  succeed honestly and surfaces bridge/transport errors as FAILED; a
+  configured-but-unverified adapter still BLOCKS.
+- `settings/SettingsHdcHealthTest` — app launch performs no network and starts
+  not-connected; the health check runs only on explicit click; connected is
+  reported only after a real ok reply; failures keep the bridge disabled.
+
 ---
 
 ## 7. Open items / risks
@@ -318,6 +360,64 @@ Unit tests added in Phase 7 (deterministic; no network/device):
 
 ## 8. Changelog
 
+- **Phase 8 (this phase):** Safe PC HDC bridge adapter.
+  - Typed bridge models + tolerant parsing (`task/hdc/HdcBridgeModels.kt`, port
+    of `utils/HdcWorkflowBridge.ets` / `utils/WorkflowTypes.ets`, reference-only):
+    `HdcBridgeStatus` / `HdcBridgeResponse` / `HdcBridgeHealth`
+    (`hdc_connected`, `target`, `tunnel_ready`, `fport_ready`, `rport_ready`,
+    ports, tunnel/PC/app URLs, loop flags) and the health envelopes — every
+    member parses tolerantly (missing/wrong-typed/numeric-as-string degrade to
+    safe defaults) and **`controlReady` requires `ok` + both `fport_ready` and
+    `rport_ready`**, so a partial reply never claims a usable device.
+  - Deterministic URL normalization (`task/hdc/HdcUrlNormalizer.kt`): trim,
+    collapse scheme-relative `//`, scheme-less → default `http`, strip trailing
+    slashes, drop an empty trailing port, reject anything but `http`/`https`;
+    builds `…/api/health` and `…/api/workflow`. Pure total function, never
+    throws.
+  - Typed client boundary (`task/hdc/HdcBridgeClient.kt`): `health()` and
+    `workflow(action, payload)` returning `HdcBridgeResult.{Response,Health,
+    Error}` with typed `HdcBridgeErrorKind` (HTTP / MALFORMED_JSON / TIMEOUT /
+    IO / CANCELLED / INVALID_URL / UNKNOWN).
+  - OkHttp implementation (`task/hdc/OkHttpHdcBridgeClient.kt`): normalizes and
+    rejects invalid URLs with no request; bounded connect/read/write/call
+    timeouts; cooperative cancellation cancels the in-flight `Call`; maps HTTP
+    non-2xx, malformed JSON, socket/call timeouts, connection-refused/DNS, and
+    cancellation to typed errors. **No secret logging** — only the action name,
+    the response `summary()`, and the health URL host. Encodes the
+    `{action,payload}` envelope with kotlinx-serialization (strings, numbers,
+    booleans, null, nested maps/lists).
+  - Safe device-control boundary (`task/hdc/WorkflowDeviceAdapter.kt`): only
+    `health` / `startApp` / `screenshot` / `guiAction` / `executeDeciderAction` —
+    **never** `/api/run_cmd`, shell, `adb`, `hdc`, AccessibilityService, or
+    spawned processes. The default `DisabledWorkflowDeviceAdapter` (used unless
+    an explicit adapter is injected) reports every action `Unsupported` and is
+    never configured.
+  - Health-gated bridge adapter (`task/hdc/BridgeBackedWorkflowDeviceAdapter.kt`):
+    maps the safe protocol calls through the client; `isConfigured` becomes true
+    **only after a live `ok` + control-ready health reply**; a bridge `error`
+    envelope is an honest `BridgeError`, transport failures are typed
+    `TransportError`.
+  - Runner integration (`task/runner/WorkflowRunner.kt`): `gui_action`
+    device-control steps route through the adapter only when `isConfigured`; a
+    configured adapter returns honest SUCCESS / FAILED / BLOCKED results/errors,
+    otherwise the default keeps them `BLOCKED` and never fabricates device
+    control. `gui_task` (screenshot+VLM decider loop) stays honestly
+    `UNSUPPORTED` — the safe adapter exposes only discrete protocol calls.
+  - Explicit DI gate (`task/TaskComponent.kt`): starts with the disabled
+    adapter; a caller may `setDeviceAdapter(...)` with a health-verified adapter
+    (rebuilding the runner) or null to revert. No network call happens on app
+    launch.
+  - Settings UI (`settings/ui/`): the HDC section now has an explicit
+    **"测试 HDC 健康"** button that performs a live `GET /api/health` only when
+    the user taps it (`SettingsViewModel.testHdcHealth()` with an injectable
+    `hdcClientFactory` for tests); app launch performs **no network**. A connected
+    (`hdcTestConnected`) state is reported only after a real successful response;
+    loading/error/disabled states are driven by explicit test state. On success
+    a health-verified adapter is registered with `TaskComponent`.
+  - Deterministic unit tests (49 new, see §6): HdcBridgeParsing, HdcUrlNormalizer,
+    OkHttpHdcBridgeClient (MockWebServer), WorkflowDeviceAdapter,
+    WorkflowRunnerAdapterIntegration, and SettingsHdcHealth (app-launch-no-network,
+    explicit-click-only, connect-only-after-real-ok).
 - **Phase 7 (this phase):** Voice interaction vertical slice.
   - Typed voice domain models + deterministic normalization
     (`chat/voice/VoiceInteractionTypes.kt`, port of

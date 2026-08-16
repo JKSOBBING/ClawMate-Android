@@ -227,14 +227,44 @@ fun ModelAgentsSection(state: SettingsUiState, vm: SettingsViewModel, context: C
             placeholder = "ip:port",
             enabled = state.draft.hdcBridgeConfigured) { vm.setWirelessHdcTarget(it) }
 
-        val status = if (state.draft.hdcConnected) {
-            SettingsAction("已连接", SettingsActionKind.Success, onClick = {})
-        } else if (state.draft.hdcBridgeConfigured) {
-            SettingsAction("未连接（需自动配对）", SettingsActionKind.Warning, onClick = {})
-        } else {
-            SettingsAction("未配置 — DISABLED", SettingsActionKind.Secondary, enabled = false, onClick = {})
+        // Live health test — ONLY on explicit click. Loading / error / disabled
+        // states are driven by hdcTesting / hdcTestMessage / hdcBridgeConfigured.
+        val testEnabled = state.draft.hdcBridgeConfigured && !state.hdcTesting
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = if (state.hdcTesting) "正在检查…" else "测试 HDC 健康",
+                    kind = SettingsActionKind.Primary,
+                    enabled = testEnabled,
+                    onClick = { vm.testHdcHealth() },
+                ),
+            ),
+        )
+        val status = when {
+            state.hdcTesting -> SettingsAction("正在检查连接…", SettingsActionKind.Warning, enabled = false, onClick = {})
+            state.hdcTestConnected -> SettingsAction("HDC 已连接", SettingsActionKind.Success, onClick = {})
+            state.hdcTestMessage != null ->
+                SettingsAction("连接失败", SettingsActionKind.Danger, enabled = false, onClick = {})
+            state.draft.hdcConnected -> SettingsAction("已连接", SettingsActionKind.Success, onClick = {})
+            state.draft.hdcBridgeConfigured ->
+                SettingsAction("未连接（需测试）", SettingsActionKind.Warning, onClick = {})
+            else -> SettingsAction("未配置 — DISABLED", SettingsActionKind.Secondary, enabled = false, onClick = {})
         }
         SettingsActionRow(actions = listOf(status))
+        state.hdcTestMessage?.let { message ->
+            Text(
+                message,
+                fontSize = 12.sp,
+                color = if (state.hdcTestConnected) SettingsThemeColors.Success else SettingsThemeColors.Danger,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Text(
+            "测试仅在显式点击时进行，应用启动不会发起网络请求。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 
     SettingsGroupCard(

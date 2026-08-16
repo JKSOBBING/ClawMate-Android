@@ -1,4 +1,4 @@
-# ClawMate Android — Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — PC/HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -44,6 +44,49 @@ builder and MiMO voice presets, and cloud MiMO streaming/TTS kept behind an
 explicit **NOT_CONFIGURED** interface — never claimed configured or faked. The
 chat UI gains mic / listening / transcript and speak / stop / replay controls;
 a real final ASR transcript becomes ordinary editable chat input.
+**Phase 8** adds a truthful **PC HDC bridge adapter** (`task/hdc/`) that lets GUI
+workflow steps talk to the PC-side Python bridge over HTTP — but only when a
+caller explicitly supplies a configured adapter:
+- A typed OkHttp `HdcBridgeClient` for `GET {base}/api/health` and
+  `POST {base}/api/workflow` with normalized URLs, bounded connect/read/call
+  timeouts, cooperative cancellation, tolerant response parsing, and typed
+  transport errors (HTTP / malformed-JSON / TIMEOUT / IO / CANCELLED /
+  INVALID_URL). No `Runtime.exec`, `ProcessBuilder`, shell, `adb`, `hdc`,
+  AccessibilityService, `/api/run_cmd`, or arbitrary command execution —
+  only the safe protocol calls `app_start` / `screenshot` / `gui_action` /
+  `execute_decider_action`.
+- A `WorkflowDeviceAdapter` boundary whose default `DisabledWorkflowDeviceAdapter`
+  keeps every GUI/HDC step `UNSUPPORTED/BLOCKED` (a run is never fabricated as
+  success). `TaskComponent` registers the adapter **explicitly and only after**
+  a live health check reports `ok` + control-ready.
+- A settings **explicit "测试 HDC 健康"** button (activity performed only on
+  click; app launch performs **no network call**). A connected state is reported
+  only after a real successful response; failures keep the bridge
+  NOT_CONFIGURED / DISABLED and show an honest error.
+- Deterministic unit tests (49 new) for tolerant parsing, URL normalization,
+  the disabled adapter, runner integration (SUCCESS / FAILED / BLOCKED), errors,
+  timeout/deadline handling, and cancellation.
+
+## Layout — features added in Phase 8
+
+```
+app/src/main/java/com/clawmate/app/task/hdc/
+├── HdcBridgeModels.kt          # Tolerant typed models + parsing (health/workflow envelopes)
+├── HdcUrlNormalizer.kt         # Deterministic scheme://host[:port]/path normalization
+├── HdcBridgeClient.kt          # Typed client boundary (HdcBridgeResult / HdcBridgeErrorKind)
+├── OkHttpHdcBridgeClient.kt    # OkHttp impl: bounded timeouts, cancellation, typed errors
+├── WorkflowDeviceAdapter.kt    # Safe device-control boundary + default disabled adapter
+└── BridgeBackedWorkflowDeviceAdapter.kt # Health-gated protocol adapter (no run_cmd / no exec)
+
+app/src/main/java/com/clawmate/app/task/TaskComponent.kt          (modified: explicit setDeviceAdapter; default disabled)
+app/src/main/java/com/clawmate/app/task/runner/WorkflowRunner.kt  (modified: gui_action routes through a configured adapter; else BLOCKED)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt (modified: explicit testHdcHealth() + injected client factory)
+app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt / SettingsUiState.kt (modified: explicit health button + honest status)
+
+app/src/test/java/com/clawmate/app/task/hdc/*Test.kt             (5 new test classes)
+app/src/test/java/com/clawmate/app/task/runner/WorkflowRunnerAdapterIntegrationTest.kt (new)
+app/src/test/java/com/clawmate/app/settings/SettingsHdcHealthTest.kt                  (new)
+```
 
 ## Layout — features added in Phase 7
 
@@ -220,12 +263,16 @@ generated with `gradle wrapper`).
                                         # replay guards, ASR merge/duplicate suppression, orchestration
                                         # guards, TTS presets, unavailable/permission/error mappings,
                                         # PCM→WAV, MiMO NOT_CONFIGURED truthfulness
+                                        # Phase 8: HDC bridge tolerant parsing, URL normalization,
+                                        # disabled adapter, OkHttp health/workflow mapping, timeouts,
+                                        # cancellation, runner <-> adapter integration, settings
+                                        # explicit health flow (no network on launch)
 ./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS (device/emulator; not run in this worktree)
 ```
 
-In this worktree the Phase-2 through Phase-7 builds and unit tests were actually
+In this worktree the Phase-2 through Phase-8 builds and unit tests were actually
 executed with a local JDK 17 / Android SDK (platform 34) / Gradle 8.9 — commands
-and results (including the Phase-7 commands and exit codes) are recorded in
+and results (including the Phase-8 commands and exit codes) are recorded in
 `MIGRATION_STATUS.md` §6 and `DSH_PHASE_RESULT.md`. `connectedAndroidTest` was
 not run because no emulator/device is available (the instrumented voice tests
 are documented as unavailable without a device).
@@ -245,3 +292,11 @@ exist; and voice ASR uses the on-device `SpeechRecognizer` (RECORD_AUDIO surface
 and requested only on the mic tap — no fake transcript), with output via the
 on-device `TextToSpeech` engine — cloud MiMO streaming/TTS stays explicitly
 **NOT_CONFIGURED** and never claims to be connected.
+
+The Phase-8 **PC HDC bridge** is DISABLED by default and makes **no network call
+on app launch**. `TaskComponent` starts with the disabled adapter, so every
+GUI/HDC workflow step stays `BLOCKED` until a user explicitly taps the settings
+"测试 HDC 健康" button; a connected state is reported only after a live
+`GET /api/health` `ok` + control-ready reply, and the bridge-backed adapter
+performs only the safe protocol calls (never `/api/run_cmd`, shell/adb/hdc,
+`ProcessBuilder`, `Runtime.exec`, or AccessibilityService).

@@ -26,6 +26,10 @@ data class SettingsUiState(
     val versionName: String = "1.0.0",
     val versionCode: Long = 1L,
     val storageSummary: StorageSummary = StorageSummary(),
+    // Phase 8 — HDC bridge live health test (only ever runs on explicit click).
+    val hdcTesting: Boolean = false,
+    val hdcTestConnected: Boolean = false,
+    val hdcTestMessage: String? = null,
 )
 
 /** Simple storage/about facts, derived at load time. */

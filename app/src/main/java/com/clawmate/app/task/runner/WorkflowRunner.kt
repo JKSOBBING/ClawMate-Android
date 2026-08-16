@@ -8,6 +8,9 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -40,6 +43,15 @@ class WorkflowRunnerImpl(
     private val maxTotalSteps: Int = 200,
     private val maxLoopIterations: Int = 100,
     private val maxMillis: Long = 60_000L,
+    /**
+     * Optional device-control boundary. The default [DisabledWorkflowDeviceAdapter]
+     * keeps every GUI/HDC step UNSUPPORTED/BLOCKED. A caller may supply a
+     * configured bridge-backed adapter so `gui_action` steps return honest
+     * typed bridge errors/results; the runner never fabricates device control
+     * and only checks `isConfigured` at run time.
+     */
+    private val deviceAdapter: com.clawmate.app.task.hdc.WorkflowDeviceAdapter =
+        com.clawmate.app.task.hdc.DisabledWorkflowDeviceAdapter,
 ) : WorkflowRunner {
 
     /** Injectable time source so tests avoid real delays. */
@@ -99,8 +111,13 @@ class WorkflowRunnerImpl(
 
     private suspend fun execute(session: Session, step: WorkflowStep, deadlineNanos: Long): StepOutcome {
         return when (step.type) {
+            // A gui_task is a full screenshot+VLM "decider" workflow (the source
+            // drives screenshots + execute_decider_action iteratively). The safe
+            // adapter surface covers only discrete protocol calls, so the macro
+            // task stays honestly UNSUPPORTED; individual gui_action steps below
+            // CAN route through a configured bridge adapter.
             "gui_task" -> StepOutcome.Unsupported(
-                "GUI task automation (${step.taskDescription ?: step.name ?: ""}) requires a screenshot-driven decider and HDC/accessibility device control, which is unavailable on Android."
+                "GUI task automation (${step.taskDescription ?: step.name ?: ""}) requires a screenshot-driven VLM decider loop, which the safe device adapter does not orchestrate; only discrete gui_action protocol calls are exposed."
             )
             "gui_action" -> executeGuiAction(step, deadlineNanos)
             "tool" -> executeTool(step)
@@ -119,11 +136,82 @@ class WorkflowRunnerImpl(
                 awaitDeadlineSleep(millis, deadlineNanos)
                 StepOutcome.Success(JsonObject(emptyMap()))
             }
-            else -> StepOutcome.Unsupported(
-                "gui_action '$action' is a device-control step (screenshot/swipe/click/open-app) that requires HDC/accessibility control unavailable on Android."
-            )
+            else -> executeConfiguredGui(step, action)
         }
     }
+
+    /**
+     * Routes a device-control gui_action through [deviceAdapter] — but only when
+     * the adapter is actually configured (health-verified). With the default
+     * disabled adapter this remains UNSUPPORTED/BLOCKED; a configured
+     * bridge-backed adapter returns honest bridge errors/results. Never executes
+     * a command locally and never fabricates success.
+     */
+    private suspend fun executeConfiguredGui(step: WorkflowStep, action: String): StepOutcome {
+        if (!deviceAdapter.isConfigured) {
+            return StepOutcome.Unsupported(
+                "gui_action '$action' is a device-control step that requires a configured PC HDC bridge adapter; none is configured on Android."
+            )
+        }
+        val payload = step.raw.filterKeys { it != "id" && it != "type" && it != "action" }
+        val factor = ((step.raw["factor"] as? JsonPrimitive)?.floatOrNull)?.toDouble()
+            ?: step.raw["factor"]?.toString()?.toDoubleOrNull()
+        val result = try {
+            when (action) {
+                "screenshot" -> deviceAdapter.screenshot(factor ?: 0.5)
+                "app_start" -> deviceAdapter.startApp(
+                    appName = stringOf(step.raw["app_name"]),
+                    packageName = stringOf(step.raw["package_name"]),
+                    resetFirst = boolOf(step.raw["reset_first"]) ?: true,
+                )
+                else -> deviceAdapter.guiAction(payload)
+            }
+        } catch (t: kotlinx.coroutines.CancellationException) {
+            throw t
+        } catch (t: Throwable) {
+            return StepOutcome.Failure("gui_action '$action' failed locally: ${t.message}")
+        }
+        return when (result) {
+            is com.clawmate.app.task.hdc.HdcActionResult.Success -> {
+                StepOutcome.Success(bridgeOutput(result.response))
+            }
+            is com.clawmate.app.task.hdc.HdcActionResult.BridgeError -> {
+                val reason = result.response.message?.takeIf { it.isNotBlank() }
+                    ?: "bridge reported ${result.response.status}"
+                StepOutcome.Failure("gui_action '$action' bridge error: $reason")
+            }
+            is com.clawmate.app.task.hdc.HdcActionResult.TransportError -> {
+                StepOutcome.Failure("gui_action '$action' transport ${result.kind.name.lowercase()}: ${result.message}")
+            }
+            is com.clawmate.app.task.hdc.HdcActionResult.Unsupported -> StepOutcome.Unsupported(result.reason)
+        }
+    }
+
+    private fun stringOf(element: JsonElement?): String? = (element as? JsonPrimitive)?.contentOrNull
+
+    private fun boolOf(element: JsonElement?): Boolean? {
+        val prim = element as? JsonPrimitive ?: return null
+        val b = prim.booleanOrNull
+        if (b != null) return b
+        return when (prim.contentOrNull?.trim()?.lowercase()) {
+            "true", "1" -> true
+            "false", "0" -> false
+            else -> null
+        }
+    }
+
+    private fun bridgeOutput(response: com.clawmate.app.task.hdc.HdcBridgeResponse): JsonObject =
+        buildJsonObject {
+            put("status", response.status)
+            response.message?.let { put("message", it) }
+            response.result?.let { put("result", it) }
+            response.imageB64?.let { put("image_b64", it) }
+            response.action?.let { put("action", it) }
+            response.packageName?.let { put("package_name", it) }
+            response.currentPackageName?.let { put("current_package_name", it) }
+            response.width?.let { put("width", JsonPrimitive(it)) }
+            response.height?.let { put("height", JsonPrimitive(it)) }
+        }
 
     private suspend fun executeTool(step: WorkflowStep): StepOutcome {
         val toolName = step.toolName ?: return StepOutcome.Unsupported("tool step without tool_name.")

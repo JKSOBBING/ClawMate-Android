@@ -11,6 +11,12 @@ import com.clawmate.app.settings.domain.EmbeddingMode
 import com.clawmate.app.settings.domain.SensitiveValueUtils
 import com.clawmate.app.settings.domain.SettingsSectionId
 import com.clawmate.app.settings.domain.SettingsNormalizers
+import com.clawmate.app.task.TaskComponent
+import com.clawmate.app.task.hdc.BridgeBackedWorkflowDeviceAdapter
+import com.clawmate.app.task.hdc.HdcBridgeClient
+import com.clawmate.app.task.hdc.HdcBridgeResult
+import com.clawmate.app.task.hdc.HdcUrlNormalizer
+import com.clawmate.app.task.hdc.OkHttpHdcBridgeClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +37,11 @@ class SettingsViewModel(
     private val repository: SettingsRepository,
     private val versionName: String = "1.0.0",
     private val versionCode: Long = 1L,
+    /**
+     * Injected HDC bridge client factory so unit tests can stub the client
+     * without a network. Defaults to the production OkHttp implementation.
+     */
+    private val hdcClientFactory: (String) -> HdcBridgeClient = { url -> OkHttpHdcBridgeClient(url) },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -189,6 +200,74 @@ class SettingsViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Runs a live HDC bridge health check — **only by explicit user click**, and
+     * never on app launch. Requires a configured `hdcServerUrl`. On a successful
+     * `ok` + control-ready reply it marks the bridge connected and registers the
+     * health-verified adapter with [TaskComponent] so the workflow runner can
+     * surface honest bridge steps. Anything else keeps the bridge NOT_CONFIGURED
+     * and shows a truthful error/loading/disabled state. No secrets are logged.
+     */
+    fun testHdcHealth() {
+        if (_state.value.hdcTesting) return
+        val url = _state.value.draft.hdcServerUrl
+        if (HdcUrlNormalizer.normalizeBaseUrl(url).isEmpty()) {
+            _state.update { it.copy(hdcTesting = false, hdcTestConnected = false, hdcTestMessage = "未配置 HDC Server URL") }
+            return
+        }
+        _state.update { it.copy(hdcTesting = true, hdcTestConnected = false, hdcTestMessage = null) }
+        viewModelScope.launch {
+            val adapter = BridgeBackedWorkflowDeviceAdapter(hdcClientFactory(url))
+            val result = adapter.refreshHealth()
+            when (result) {
+                is com.clawmate.app.task.hdc.HdcActionResult.Success -> {
+                    TaskComponent.setDeviceAdapter(adapter)
+                    _state.update {
+                        it.copy(
+                            hdcTesting = false,
+                            hdcTestConnected = true,
+                            hdcTestMessage = result.response.message?.takeIf { msg -> msg.isNotBlank() }
+                                ?: "HDC bridge 健康检查通过",
+                        )
+                    }
+                }
+                is com.clawmate.app.task.hdc.HdcActionResult.BridgeError -> {
+                    TaskComponent.setDeviceAdapter(null)
+                    _state.update {
+                        it.copy(
+                            hdcTesting = false,
+                            hdcTestConnected = false,
+                            hdcTestMessage = result.response.message?.takeIf { msg -> msg.isNotBlank() }
+                                ?: "HDC bridge 报告未连接",
+                        )
+                    }
+                }
+                is com.clawmate.app.task.hdc.HdcActionResult.TransportError -> {
+                    TaskComponent.setDeviceAdapter(null)
+                    _state.update {
+                        it.copy(
+                            hdcTesting = false,
+                            hdcTestConnected = false,
+                            hdcTestMessage = "HDC 健康检查失败: ${result.message}",
+                        )
+                    }
+                }
+                is com.clawmate.app.task.hdc.HdcActionResult.Unsupported -> {
+                    TaskComponent.setDeviceAdapter(null)
+                    _state.update {
+                        it.copy(hdcTesting = false, hdcTestConnected = false, hdcTestMessage = result.reason)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Clears the HDC bridge test result and disconnects any registered adapter. */
+    fun clearHdcTestResult() {
+        TaskComponent.setDeviceAdapter(null)
+        _state.update { it.copy(hdcTestConnected = false, hdcTestMessage = null) }
     }
 
     fun resetToDefaults() {
