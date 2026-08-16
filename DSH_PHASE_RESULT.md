@@ -19,8 +19,10 @@
 
 First commit (feature slice):
 - Message: `Phase 9 gallery detail analysis`
+- Hash: **`522c967`** (`522c9675fc0fef46564e855f6bf51164ccb26beb`) on `master`,
+  created in this worktree.
 
-The result-file update (this file, with the feature commit hash filled in) is
+The result-file update (this file, with the feature hash filled in) is
 then committed as the final docs commit — both the feature commit and the
 result-file commit are present in the branch history.
 
