@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -349,8 +351,72 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
         }
         SettingsActionRow(actions = listOf(actionRow))
         Text(
-            "当前构建未包含任何跨应用动作执行器；AccessibilityGate 始终返回 NOT_CONFIGURED 或 BLOCKED，不会伪造成功。",
+            "Phase 19 坐标/手势类动作（TAP / TYPE_TEXT / SWIPE / OPEN_APP / CAPTURE_SCREEN）仍为受控禁用：AccessibilityGate 保持 NOT_CONFIGURED 或 BLOCKED，不会伪造成功。Phase 22 的安全语义动作见下方独立边界。",
             fontSize = 12.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 22 — safe *semantic* AccessibilityService action executor
+    // (typed allowlist + package allowlist; honest demo/test boundary).
+    // ------------------------------------------------------------------
+    val safeBoundary = vm.safeAccessibilityExecutorBoundary()
+    var demoResult by androidx.compose.runtime.mutableStateOf<String?>(null)
+    SettingsGroupCard(
+        title = "安全语义动作执行器 · 测试/演示边界",
+        subtitle = "最小显式白名单（Phase 22）：仅这些语义动作，且每次动作前校验前台包名；无坐标注入/无 Shell/无截图/无隐藏输入",
+    ) {
+        Text(
+            "允许的动作：" + safeBoundary.allowlist.joinToString(" / "),
+            fontSize = 12.sp,
+            color = SettingsThemeColors.SecondaryText,
+        )
+        Text(
+            "允许的前台包：" + safeBoundary.packageAllowlist.sorted().joinToString(" / "),
+            fontSize = 12.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        // Honest live readiness (never a fake claim).
+        val statusAction = when (safeBoundary.readinessLabel) {
+            "READY" -> SettingsAction("执行器就绪 READY（演示面板不自动触发真实动作）", SettingsActionKind.Warning, enabled = false, onClick = {})
+            "NOT_CONFIGURED" -> SettingsAction("未显式开启 — NOT_CONFIGURED", SettingsActionKind.Secondary, enabled = false, onClick = {})
+            "BLOCKED_SERVICE" -> SettingsAction("系统无障碍服务未连接 — BLOCKED_SERVICE", SettingsActionKind.Warning, enabled = false, onClick = {})
+            else -> SettingsAction("前台包不在白名单 — BLOCKED_PACKAGE", SettingsActionKind.Warning, enabled = false, onClick = {})
+        }
+        SettingsActionRow(actions = listOf(statusAction))
+
+        // Demo dispatch: run the *typed preflight path* with a no-perform seam,
+        // so the panel never triggers a real system/navigation action and never
+        // fabricates SUCCESS — the result is an honest preflight/rejection.
+        val demoName = "back"
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "触发预检（back）",
+                    kind = SettingsActionKind.Primary,
+                    enabled = true,
+                    onClick = {
+                        demoResult = demoDispatchMessage(
+                            vm.safeAccessibilityDemoDispatch(demoName, emptyMap()),
+                        )
+                    },
+                ),
+            ),
+        )
+        demoResult?.let { message ->
+            Text(
+                message,
+                fontSize = 12.sp,
+                color = SettingsThemeColors.SecondaryText,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Text(
+            "本面板仅做预检/诊断：真实系统动作只会由实时辅助功能会话通过类型化执行器执行，并始终在每次动作前校验前台包名。",
+            fontSize = 11.sp,
             color = SettingsThemeColors.SecondaryText,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -543,3 +609,27 @@ private fun human(bytes: Long): String {
 internal object SettingKeys {
     const val AutoConfirm = "autoconfirm"
 }
+
+/**
+ * Phase 22 — renders the honest result of a safe-executor demo dispatch as a
+ * one-line label. Never fabricates SUCCESS: non-success states surface their
+ * truthful category, and a READY-but-not-performed notice is explicitly NOT
+ * success (the demo seam never performs a real action).
+ */
+private fun demoDispatchMessage(result: com.clawmate.app.accessibility.AccessibilityExecutionOutcome): String =
+    when (result) {
+        is com.clawmate.app.accessibility.AccessibilityExecutionOutcome.NotConfigured ->
+            "预检结果：NOT_CONFIGURED — " + result.message
+        is com.clawmate.app.accessibility.AccessibilityExecutionOutcome.BlockedService ->
+            "预检结果：BLOCKED_SERVICE — " + result.reason
+        is com.clawmate.app.accessibility.AccessibilityExecutionOutcome.BlockedPackage ->
+            "预检结果：BLOCKED_PACKAGE — " + result.reason
+        is com.clawmate.app.accessibility.AccessibilityExecutionOutcome.Unsupported ->
+            "预检结果：UNSUPPORTED（未执行）— " + result.reason
+        is com.clawmate.app.accessibility.AccessibilityExecutionOutcome.Error ->
+            "预检结果：ERROR（未执行）— " + result.reason
+        is com.clawmate.app.accessibility.AccessibilityExecutionOutcome.Success ->
+            // Unreachable from the demo seam (it never performs); kept honest if
+            // it were ever wired to a real seam — SUCCESS only means performed.
+            "边界就绪 READY（演示面板不触发真实动作，故此处不会报告 SUCCESS）。"
+    }

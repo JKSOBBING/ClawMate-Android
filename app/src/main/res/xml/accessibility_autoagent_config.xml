@@ -1,26 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Phase 19 — AutoAgent controlled-accessibility boundary (row B1).
+  Phase 19 + Phase 22 — AutoAgent controlled-accessibility boundary (row B1).
 
-  Lifecycle-safe scaffold declaration. Deliberately does NOT enable any
-  dangerous capability:
-    - accessibilityEventTypes = windowStateChanged only: a minimal presence
-      beacon so the app can observe that the service is connected. It does not
-      receive window content, text, or per-node events.
-    - No canPerformGestures (no hidden input / gesture injection).
-    - No canRetrieveWindowContent (no screen / node-tree capture for
-      exfiltration).
-    - No canControlMagnification, no feedback/haptic action flags, no
-      accessibilityFlags that allow cross-app control or screenshots.
+  Phase 19 (unchanged guarantee): still does NOT enable any *dangerous* capability:
+    - No canPerformGestures (no hidden-input / gesture / arbitrary coordinate injection).
+    - No screenshot request, no control-magnification, no feedback/haptic flags,
+      no unrestricted event types (windowStateChanged only — presence beacon).
 
-  The service performs no on-device GUI control; availability is reported
-  through AccessibilityGate as BLOCKED / NOT_CONFIGURED.
+  Phase 22 (bounded addition): canRetrieveWindowContent="true" is enabled so the
+  safe *semantic* executor ([AndroidSafeAccessibilityExecutor]) can read the node
+  tree of the allowlisted foreground app to CLICK by text/content-description and
+  to SCROLL — the core request of the Phase 22 objective. This is additive and
+  scoped:
+    - Window content is read ONLY on the explicit typed-executor path
+      (AccessibilityAutoAgentService.executeSafeAction) and only for an
+      allowlisted foreground package, never auto-forwarded / never exfiltrated.
+    - It does NOT enable hidden input (ACTION_SET_TEXT / gestures are never
+      called; canPerformGestures stays false).
+    - It does NOT enable screenshots (no FLAG_REQUEST_SCREENSHOT flag, no
+      takeScreenshot call) and no cross-app data extraction beyond the single
+      allowlisted foreground app.
+  Global actions (BACK / HOME) use the framework-sanctioned performGlobalAction
+  only; no raw key events.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags=""
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:canPerformGestures="false"
     android:description="@string/accessibility_autoagent_description"
     android:notificationTimeout="500"

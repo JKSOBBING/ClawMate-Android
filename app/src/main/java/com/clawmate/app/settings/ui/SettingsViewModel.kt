@@ -398,6 +398,75 @@ class SettingsViewModel(
     }
 
     /**
+     * Phase 22 — the honest *demo/test boundary* model for the safe semantic
+     * executor ([com.clawmate.app.accessibility.SafeAccessibilityActionExecutor]).
+     * Derived from live observed facts (opt-in draft, observed system service
+     * grant via the injected detector, observed foreground package via the
+     * registry) and the closed safe allowlists. It is purely read-only and never
+     * claims any action ran.
+     */
+    fun safeAccessibilityExecutorBoundary():
+        com.clawmate.app.accessibility.SafeAccessibilityExecutorBoundary {
+        val d = _state.value.draft
+        val serviceEnabled = accessibilityDetector.isServiceEnabledBySystem()
+        val foreground =
+            com.clawmate.app.accessibility.AccessibilityStateRegistry.currentForegroundPackage()
+        val gate = com.clawmate.app.accessibility.SafeAccessibilityDefaults.gate(
+            optedIn = d.accessibilityOptIn,
+            serviceEnabled = serviceEnabled,
+            currentForegroundPackage = foreground,
+        )
+        val label = when (gate.readiness) {
+            com.clawmate.app.accessibility.SafeAccessibilityReadiness.NotConfigured -> "NOT_CONFIGURED"
+            com.clawmate.app.accessibility.SafeAccessibilityReadiness.BlockedService -> "BLOCKED_SERVICE"
+            com.clawmate.app.accessibility.SafeAccessibilityReadiness.BlockedPackage -> "BLOCKED_PACKAGE"
+            com.clawmate.app.accessibility.SafeAccessibilityReadiness.Ready -> "READY"
+        }
+        return com.clawmate.app.accessibility.SafeAccessibilityExecutorBoundary(
+            readinessLabel = label,
+            statusMessage = gate.statusMessage(),
+            allowlist = com.clawmate.app.accessibility.SafeAccessibilityExecutorBoundary.SAFE_ACTION_ALLOWLIST,
+            packageAllowlist = com.clawmate.app.accessibility.SafeAccessibilityDefaults.PACKAGE_ALLOWLIST,
+        )
+    }
+
+    /**
+     * Phase 22 — the demo boundary's *preflight dispatch*. Runs the same typed
+     * [com.clawmate.app.accessibility.ControlledSafeAccessibilityDispatcher]
+     * validation + gate as real execution, but with a **no-perform** seam so the
+     * panel can never trigger a real system/navigation action and can never
+     * report a fabricated SUCCESS. The result is always an honest
+     * preflight/rejection outcome (NOT_CONFIGURED / BLOCKED_* / UNSUPPORTED, or a
+     * clear READY-but-not-performed notice).
+     */
+    fun safeAccessibilityDemoDispatch(
+        name: String,
+        params: Map<String, Any?> = emptyMap(),
+    ): com.clawmate.app.accessibility.AccessibilityExecutionOutcome {
+        val d = _state.value.draft
+        val serviceEnabled = accessibilityDetector.isServiceEnabledBySystem()
+        val foreground =
+            com.clawmate.app.accessibility.AccessibilityStateRegistry.currentForegroundPackage()
+        val gate = com.clawmate.app.accessibility.SafeAccessibilityDefaults.gate(
+            optedIn = d.accessibilityOptIn,
+            serviceEnabled = serviceEnabled,
+            currentForegroundPackage = foreground,
+        )
+        val noPerformExecutor =
+            com.clawmate.app.accessibility.SafeAccessibilityActionExecutor { _ ->
+                // The demo panel never performs a real action; this seam is only
+                // reached when the gate is READY, and it truthfully declines.
+                com.clawmate.app.accessibility.SafeActionPerformResult.Unsupported(
+                    "演示边界只做预检，不会从设置面板触发真实系统动作；真实动作仅由实时辅助功能会话通过类型化执行器执行。",
+                )
+            }
+        return com.clawmate.app.accessibility.ControlledSafeAccessibilityDispatcher(
+            gate = gate,
+            executor = noPerformExecutor,
+        ).dispatch(name, params)
+    }
+
+    /**
      * Phase 20 — build the float/edge overlay boundary from live state. The
      * gate reflects the user's explicit [overlayOptIn] draft, the
      * *actually-observed* system `SYSTEM_ALERT_WINDOW` grant (via the injected

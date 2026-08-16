@@ -556,6 +556,55 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 
 ## 8. Changelog
 
+- **Phase 22 (this phase):** Real but tightly controlled AccessibilityService
+  action executor for the safe semantic allowlist (row B1). Android finally
+  performs a small, explicit set of on-device semantic actions; the coordinate/
+  gesture boundary (Phase 19) is preserved and higher-level arbitrary-app GUI
+  automation stays a PC-bridge gap.
+  - **`accessibility/SafeAccessibilityAction.kt`** — closed typed allowlist
+    (`click_text`, `click_content_description`, `back`, `scroll_forward`,
+    `scroll_backward`, `global_back`, `global_home`) with length-bounded inputs
+    (text 200, content_description 200, package 512). Everything else — including
+    the Phase-19 `tap`/`swipe`/`type_text`/`open_app`/`capture_screen` — is
+    rejected. Pure `SafeAccessibilityActionValidation` maps a raw wire name +
+    params to a validated action or an explicit rejection.
+  - **`accessibility/SafeAccessibilityExecutor.kt`** — the gated executor core:
+    `SafeAccessibilityExecutionGate` derives readiness from (opt-in, observed
+    system service grant, live foreground package, allowlist); the
+    `SafeAccessibilityActionExecutor` platform seam is the only place that may
+    touch `AccessibilityNodeInfo`/`performGlobalAction`; and
+    `ControlledSafeAccessibilityDispatcher` is the single entry point that
+    validates + preflights + (only when ready) performs, returning honest typed
+    outcomes `NOT_CONFIGURED` / `BLOCKED_SERVICE` / `BLOCKED_PACKAGE` /
+    `UNSUPPORTED` / `ERROR` / `SUCCESS` (SUCCESS only when the seam truly
+    performed; **no fake success**).
+  - **`accessibility/AccessibilityAutoAgentService.kt`** (mod) — exposes
+    `executeSafeAction(optedIn, name, params)`, the only path by which the
+    service acts: it re-derives the gate from the live foreground package and a
+    connected service and delegates to `AndroidSafeAccessibilityExecutor` (node
+    clicks by text/content-description, bounded scroll, `GLOBAL_ACTION_BACK` /
+    `GLOBAL_ACTION_HOME`). Records the observed foreground package in
+    `AccessibilityStateRegistry` so Settings can mirror it.
+  - **`res/xml/accessibility_autoagent_config.xml`** (mod) — keeps
+    `canPerformGestures="false"` and **no screenshot flag**; enables
+    `canRetrieveWindowContent="true"` so the safe executor can read the
+    allowlisted foreground window's node tree (read-only, never auto-forwarded,
+    never exfiltrated). Phase-19 `AccessibilityGate` coordinates stay BLOCKED.
+  - **Settings test/demo boundary** (任务与自动化) — `SafeAccessibilityExecutorBoundary`
+    + `SettingsViewModel.safeAccessibilityExecutorBoundary()` /
+    `safeAccessibilityDemoDispatch()`: a read-only panel shows the closed action /
+    foreground-package allowlists and live readiness, and a `触发预检` button runs
+    the same typed gate/validator through a **no-perform seam** so it reports an
+    honest preflight/rejection and can never trigger a real system action or
+    fabricate SUCCESS.
+  - **Device-free tests (21 new)**: `SafeAccessibilityExecutorTest` (16) +
+    `SettingsSafeAccessibilityExecutorTest` (5) — allowlist, bounded inputs,
+    package mismatch, disabled/not-configured, success/failure mapping with no
+    fake success; existing `AccessibilityGateTest` (14) still passes, proving
+    Phase-19 behavior is preserved. Build: `:app:assembleDebug` +
+    `:app:testDebugUnitTest` `--max-workers=1` → **BUILD SUCCESSFUL**, **623
+    tests, 0 failures, 0 errors**.
+
 - **Phase 21 (this phase):** Config-driven Gallery cloud adapter (rows D1/D2
   configurable part) — no new credentials, no silent upload.
   - **`gallery/cloud/GalleryCloudTypes.kt`** — typed config + bounds + honest
@@ -1106,7 +1155,7 @@ Legend — **Status**:
 | A2 | **Avatar generation (image)** | `SeedreamAvatarProvider.ets`, `AvatarService.ets`, `AvatarStorage.ets`, `AvatarForeground*.ets` | Boundary (NOT_CONFIGURED) | **Boundary** | Real generation needs a Seedream base URL + API key + wired provider. `AvatarGenerationGate` reports honest `NOT_CONFIGURED`/`CONFIGURED_BUT_NO_PROVIDER`; it never generates or fakes an image. Gaps: cloud provider adapter, foreground crop/thumbnail processing, avatar version history persistence. |
 | A3 | **Home avatar card** | `pages/home/HomePage.ets` | Real screen entry | **Done** | The Home avatar card now opens the 数字分身 screen (was a dead disabled button). Gap: displaying a real generated avatar image (awaiting A2). |
 | A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (Phase 17 portable part)** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. **Phase 17** adds the portable import/merge pipeline: pure `profile/share/ProfileShareImporter` (parse + validate malformed/oversized/unsupported-version/missing-field; deterministic local-first merge of the four persona-domain summaries into `LocalAvatarProfile`), a byte-capped content read, DataStore persist and an honest success/error result dialog. Gap (remainder of A4, non-portable / would be a fake): Harmony "knock" NFC approximation + the cloud "同频报告" affinity analysis — neither implemented (documented, deferred). |
-| B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Blocked** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). AutoAgentAbility itself is not portable; kept as a doc'd platform blocker. |
+| B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Partial (Phase 22 safe semantic executor)** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). **Phase 22** ships a real, tightly controlled on-device executor for a minimal **semantic** allowlist — `click_text`, `click_content_description`, `back`, `scroll_forward`, `scroll_backward`, `global_back`, `global_home` — reached only through the typed executor (`AccessibilityAutoAgentService.executeSafeAction` + `ControlledSafeAccessibilityDispatcher`), which validates opt-in + observed system grant + the live **foreground package allowlist before every action** and returns honest `NOT_CONFIGURED`/`BLOCKED_SERVICE`/`BLOCKED_PACKAGE`/`UNSUPPORTED`/`ERROR`/`SUCCESS` (no fake success). The coordinate/gesture actions (`tap`/`type_text`/`swipe`/`open_app`/`capture_screen`) remain **Blocked** (Phase 19 `AccessibilityGate` preserved); no gestures (`canPerformGestures=false`), no screenshots, no hidden input, no shell/adb/hdc, no cross-app data extraction. AutoAgentAbility's higher-level arbitrary-app GUI automation stays a doc'd platform blocker / PC-bridge gap. |
 | C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Overlay capability boundary (Phase 20) | **Boundary (controlled)** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay becomes a truthful Android overlay boundary in **Phase 20**: `SYSTEM_ALERT_WINDOW` is now *declared* (the manifest prerequisite so `Settings.canDrawOverlays` can honestly read true). Portable `overlay/` implements: a testable `OverlayPermissionDetector` (Android/Fake/Registry) over `Settings.canDrawOverlays`; an explicit user opt-in `overlayOptIn` setting (persisted via `SettingsCodec`); an `OverlayGate` with `NOT_CONFIGURED`/`BLOCKED`/`READY`; a `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` system-settings permission-request action (gated + surfaced in Settings 任务与自动化); and a lifecycle-safe `OverlayFloatService` that renders only a neutral status surface and never starts silently (no fake agent content, no screen capture, no GUI actions; no renderer in this build → gate stays BLOCKED, never READY-with-content). The `float_overlay_status` tool now reflects the live gate. Gap: a real safe overlay renderer/data source is still not configured (README §5 #2 stays honest; no fake overlay). |
 | C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
 | D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Config gate (Phase 21) | **Done (configurable)** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent → honest **UNSUPPORTED**. **Phase 21** adds a config-driven remote-embedding client (`gallery/cloud/GalleryEmbeddingClient.kt`, port of `CloudModelClient.createEmbedding`/`normalizeEmbeddingUrl`) using the existing OkHttp + kotlinx stack and the existing gallery embedding settings (mode/baseURL/key/model — no new credentials). It validates endpoint/model/key presence before use, bounds request text (512) and response (body bytes + vector dimension), redacts secrets, and reports NOT_CONFIGURED/UNSUPPORTED/ERROR/READY. No call fires when not configured / opt-in off; `huawei_local` stays UNSUPPORTED. |

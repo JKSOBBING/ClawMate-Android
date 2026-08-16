@@ -1,4 +1,154 @@
-# Phase 21 result: config-driven Gallery cloud adapter (D1 remote embedding + D2 AI month summary) behind explicit settings; reuses OpenAI-compatible client/config (no new credentials, no silent upload); BUILD SUCCESSFUL; 602 tests, 0 failures, 0 errors.
+# Phase 22 result: real but tightly controlled Android AccessibilityService action executor (safe semantic allowlist) for the Harmony MobileGuiTask/AgentAction boundary; package-validated typed executor + honest NOT_CONFIGURED/BLOCKED_SERVICE/BLOCKED_PACKAGE/UNSUPPORTED/ERROR/SUCCESS results; Phase 19 gate + overlay preserved; settings test/demo preflight boundary; BUILD SUCCESSFUL; 623 tests, 0 failures, 0 errors.
+
+---
+
+# DSH_PHASE_RESULT — ClawMate Android, Phase 22 (protected-safe semantic AccessibilityService action executor)
+
+## Worktree
+
+- Delivery worktree: `/opt/deepseek-harness/clawmate-phase22-accessibility-actions`, a git
+  worktree on the current target HEAD (`15f9cf4`, Phase 21), branch
+  `phase22-accessibility-actions`. Target `/root/ClawMate-Android` was **not modified**.
+- Source of truth (read-only, not modified): `/root/mobiinfra-oh`
+  (`entry/src/main/ets/utils/MobileGuiTaskTypes.ets`, `MobileGuiTaskTool.ets`,
+  `AgentActionParser.ets`, `MobileGuiTaskWorkflowAdapter.ets`).
+- Built and tested in this worktree (JDK 17, Android SDK platform 34 / build-tools 34.0.0
+  at `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
+  `/opt/deepseek-harness/gradle-dist/gradle-8.9`). Build state:
+  `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
+  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home`.
+- Working policy: serial only, `--max-workers=1`, one Gradle build at a time, no
+  servers/emulators, no parallel jobs, no media scan, no adb/hdc, no cloud calls during
+  tests, no fabricated success.
+
+## Commit hash
+
+Phase 22 changes committed on branch `phase22-accessibility-actions` in the delivery
+worktree at commit **cb0d59dd555d47dbbb90d54f8a6b69029dd8c01b**, on top of target HEAD
+`15f9cf4` (Phase 21). Full Phase 1–21 history is preserved via the shared object store
+(read-only alternates to `/root/ClawMate-Android/.git/objects`).
+
+> Note on the repository topology: this phase's commit lives in a standalone repo rooted
+> at the delivery worktree (`/opt/deepseek-harness/clawmate-phase22-accessibility-actions/.git`)
+> whose parent is the target Phase-21 commit `15f9cf4` and which alternates to the target's
+> object store. The shared git metadata under `/root/ClawMate-Android/.git` is
+> sandbox-denied for writes in this session (no approval channel available, fails closed —
+> the same class of commit blocker documented for Phase 12), so the commit could not be
+> written into the target's own `.git`. The working tree and build evidence are unchanged.
+> To integrate onto the target, from `/root/ClawMate-Android` run:
+> `git checkout phase22-accessibility-actions && git merge cb0d59dd555d47dbbb90d54f8a6b69029dd8c01b`
+> (or re-create the worktree and cherry-pick that commit). The Phase-22 diff is exactly the
+> files listed below.
+
+## Scope delivered (Phase 22)
+
+1. **Typed semantic action model + closed allowlist** (`accessibility/SafeAccessibilityAction.kt`):
+   `SafeAccessibilityActionId` = `click_text`, `click_content_description`, `back`,
+   `scroll_forward`, `scroll_backward`, `global_back`, `global_home`. A pure
+   `SafeAccessibilityActionValidation` maps a raw wire name + params to a validated
+   `SafeAccessibilityAction` or an explicit rejection. Inputs are length-bounded
+   (text 200, content_description 200, package 512) and the field set is closed
+   (`text` / `content_description` / `package_name`). No coordinate injection, raw key
+   events, shell/adb/hdc, screenshots, hidden input, cross-app data extraction, or
+   automatic service start exist anywhere in this path.
+2. **Gated, package-validating executor core** (`accessibility/SafeAccessibilityExecutor.kt`):
+   `AccessibilityExecutionOutcome` (NOT_CONFIGURED / BLOCKED_SERVICE / BLOCKED_PACKAGE /
+   UNSUPPORTED / ERROR / SUCCESS), `SafeAccessibilityExecutionGate` (pure readiness over
+   opt-in + observed system grant + live foreground package + allowlist),
+   `SafeAccessibilityActionExecutor` (the only platform seam that may touch
+   `AccessibilityNodeInfo`/`performGlobalAction`), and `ControlledSafeAccessibilityDispatcher`
+   — the single entry point that validates → preflights → (only when everyone passes)
+   performs, and maps the seam result honestly. SUCCESS is emitted **only** when the
+   platform seam truly performed; no fake success.
+3. **Live Android service integration** (`accessibility/AccessibilityAutoAgentService.kt`,
+   mod): the service does **no action except through `executeSafeAction(optedIn, name,
+   params)`**, which re-derives the gate from the live `rootInActiveWindow` package and
+   the connected service and delegates to `AndroidSafeAccessibilityExecutor`
+   (`accessibility/AndroidSafeAccessibilityExecutor.kt`, new): semantic node clicks by
+   text/content-description, bounded scroll, and `GLOBAL_ACTION_BACK`/`GLOBAL_ACTION_HOME`
+   via `performGlobalAction`. `AccessibilityStateRegistry` now also records the observed
+   foreground package so Settings mirrors it.
+4. **Bounded capability config** (`res/xml/accessibility_autoagent_config.xml`, mod):
+   keeps `canPerformGestures="false"` and **no screenshot flag**; enables
+   `canRetrieveWindowContent="true"` only so the safe executor can read the allowlisted
+   foreground window's node tree (read-only, never auto-forwarded, never exfiltrated).
+5. **Phase 19 preserved**: `AccessibilityGate` (tap/type_text/swipe/open_app/capture_screen)
+   still reports BLOCKED/NOT_CONFIGURED; `AccessibilityGateTest` (14) still passes; the
+   Phase-20 overlay boundary is untouched. Verified by full suite.
+6. **Settings test/demo boundary** (任务与自动化): `SafeAccessibilityExecutorBoundary` +
+   `SettingsViewModel.safeAccessibilityExecutorBoundary()` /
+   `safeAccessibilityDemoDispatch()` — a read-only, honest panel shows the closed action
+   and foreground-package allowlists plus live readiness, and a `触发预检` button runs the
+   **same** typed gate/validator through a **no-perform seam** so it reports an honest
+   preflight/rejection and can never trigger a real system/navigation action or fabricate
+   SUCCESS.
+7. **Device-free tests (21 new)**: `SafeAccessibilityExecutorTest` (16) and
+   `SettingsSafeAccessibilityExecutorTest` (5) cover the allowlist, bounded inputs,
+   package mismatch, disabled/not-configured, success/failure mapping and the no-fake-
+   success guarantee.
+
+## Command executed (actual, in this worktree)
+
+```
+ANDROID_HOME=/opt/deepseek-harness/android-sdk \
+ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk \
+GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home \
+ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
+/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle \
+    --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest
+```
+
+Result: **BUILD SUCCESSFUL** (exit code `0`).
+- `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk` including the
+  new `accessibility/` executor slice plus all prior Phase 1–21 code.
+- `:app:testDebugUnitTest` ran fresh in this worktree: **623 tests, 0 failures, 0 errors**
+  (602 prior phases + **21 new Phase-22 tests**: `SafeAccessibilityExecutorTest` 16,
+  `SettingsSafeAccessibilityExecutorTest` 5). `AccessibilityGateTest` (14) still green,
+  confirming Phase-19 behavior preserved.
+- `:app:connectedAndroidTest` was **not run** — no device/emulator is available.
+
+## Files changed (Phase 22)
+
+New:
+- `app/src/main/java/com/clawmate/app/accessibility/SafeAccessibilityAction.kt`
+- `app/src/main/java/com/clawmate/app/accessibility/SafeAccessibilityExecutor.kt`
+- `app/src/main/java/com/clawmate/app/accessibility/AndroidSafeAccessibilityExecutor.kt`
+- `app/src/test/java/com/clawmate/app/accessibility/SafeAccessibilityExecutorTest.kt`
+- `app/src/test/java/com/clawmate/app/settings/SettingsSafeAccessibilityExecutorTest.kt`
+
+Modified:
+- `app/src/main/java/com/clawmate/app/accessibility/AccessibilityAutoAgentService.kt`
+  (`executeSafeAction` + observed foreground package)
+- `app/src/main/java/com/clawmate/app/accessibility/AccessibilityStateRegistry.kt`
+  (foreground-package record + reset)
+- `app/src/main/res/xml/accessibility_autoagent_config.xml` (+`canRetrieveWindowContent`)
+- `app/src/main/AndroidManifest.xml` (service comment reflecting Phase 22)
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt`
+  (`safeAccessibilityExecutorBoundary` / `safeAccessibilityDemoDispatch`)
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt`
+  (Phase-22 demo panel in 任务与自动化)
+- `README.md`, `MIGRATION_STATUS.md`, this `DSH_PHASE_RESULT.md`
+
+## Verification summary
+
+- `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**, exit `0`.
+- Unit tests re-ran in this worktree → **623 tests, 0 failures, 0 errors**.
+- No fake success: SUCCESS is emitted only when the platform seam truly performed; the
+  Settings demo runs a no-perform preflight seam. No screenshots/shell/hidden input; the
+  only new capability is bounded `canRetrieveWindowContent` for node reads of the
+  allowlisted foreground app.
+- `:app:connectedAndroidTest` not run (no device/emulator).
+
+## Known gaps / notes (recorded honestly)
+
+- The real node/global actions require an actually-connected AccessibilityService on a live
+  device and an allowlisted foreground package; this worktree has no device, so the live
+  platform path (`AndroidSafeAccessibilityExecutor`) is not device-exercised — its semantic→
+  framework mapping is mirrored by the pure dispatcher/contract covered by the unit tests.
+- Higher-level arbitrary-app GUI automation (Tap/Type/Swipe on other apps, screenshot-to-
+  VLM, auto-launch) stays **Blocked** / PC-bridge: the Phase-19 `AccessibilityGate`
+  coordinate actions remain NOT_CONFIGURED/BLOCKED and are deliberately not enabled.
+
 # Phase 20 result: Android overlay capability gate and explicit SYSTEM_ALERT_WINDOW opt-in; BUILD SUCCESSFUL; 578 tests, 0 failures, 0 errors; no silent overlay.
 # Phase 19 result: controlled Android accessibility boundary for AutoAgent; BUILD SUCCESSFUL; 557 tests, 0 failures, 0 errors; no arbitrary GUI execution.
 # Phase 18 result: local avatar asset storage/version history and real image picker boundary; full test run BUILD SUCCESSFUL; 540 tests, 0 failures, 0 errors; commit follows.

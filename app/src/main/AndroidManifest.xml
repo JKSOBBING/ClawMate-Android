@@ -83,14 +83,18 @@
         </provider>
 
         <!--
-            Phase 19 — AutoAgent controlled-accessibility boundary (row B1).
-            A lifecycle-safe scaffold: it only records service availability into
-            AccessibilityStateRegistry; it performs no GUI control, no hidden
-            input, no screenshots and no cross-app actions (the service config
-            xml declares no such capabilities). Availability is surfaced through
-            AccessibilityGate as NOT_CONFIGURED / BLOCKED unless the user has
-            opted in AND the system has granted the service AND a real provider
-            is configured (none today).
+            Phase 19 + Phase 22 — AutoAgent controlled-accessibility boundary (row B1).
+            A lifecycle-safe service that (a) records availability into
+            AccessibilityStateRegistry (Phase 19) and (b) performs ONLY the safe
+            *semantic* actions of the Phase 22 typed allowlist
+            (CLICK_TEXT / CLICK_CONTENT_DESCRIPTION / BACK / SCROLL_FORWARD /
+            SCROLL_BACKWARD / GLOBAL_BACK / GLOBAL_HOME) — and only when invoked
+            through AccessibilityAutoAgentService.executeSafeAction, with the live
+            foreground package validated against the allowlist before every action.
+            It never performs gestures/hidden input (canPerformGestures=false), never
+            captures/exfiltrates screenshots, never starts silently, and the Phase 19
+            coordinate boundary stays BLOCKED/NOT_CONFIGURED. Availability is surfaced
+            through AccessibilityGate (Phase 19) and the new safe executor gate.
         -->
         <service
             android:name=".accessibility.AccessibilityAutoAgentService"

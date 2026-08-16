@@ -30,3 +30,6 @@ signing/
 # OS / editor
 .DS_Store
 *.swp
+
+# Phase-22 local backup of the delivery worktree gitdir pointer (target .git is untouched).
+.git-target-pointer

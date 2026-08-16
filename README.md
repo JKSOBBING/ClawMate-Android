@@ -269,6 +269,40 @@ client/config stack *where the contract genuinely matches*:
   redacted ERROR). The deterministic local insight path always remains and never
   uploads. Device-free tests cover config gating, bounds, parsing/redaction and
   no-call behaviour.
+**Phase 22** adds the **real but tightly controlled Android AccessibilityService
+action executor** corresponding to the HarmonyOS `MobileGuiTask` / `AgentAction`
+boundary, under a minimal explicit **semantic allowlist** (migration row B1):
+- **Typed action model + allowlist** (`accessibility/SafeAccessibilityAction.kt`):
+  only `click_text`, `click_content_description`, `back`, `scroll_forward`,
+  `scroll_backward`, `global_back`, `global_home`. Everything else is rejected.
+  Text / content-description / package inputs are length-bounded (200 / 200 / 512);
+  **no arbitrary coordinates, no raw key events, no shell/adb/hdc, no screenshots,
+  no hidden input, no cross-app data extraction, no automatic service start.**
+- **Gated executor** (`accessibility/SafeAccessibilityExecutor.kt` +
+  `AndroidSafeAccessibilityExecutor.kt` + service `executeSafeAction`): the
+  service performs an action **only** when invoked through the typed executor,
+  and re-validates the **foreground package against the allowlist before every
+  action** (opt-in + observed system service grant + live package). Results are
+  honest typed outcomes: `NOT_CONFIGURED` / `BLOCKED_SERVICE` /
+  `BLOCKED_PACKAGE` / `UNSUPPORTED` / `ERROR` / `SUCCESS` (SUCCESS only when the
+  platform seam truly performed the action — **no fake success**).
+- **Settings test/demo boundary** (任务与自动化): a read-only panel shows the
+  closed action allowlist, the closed foreground-package allowlist and the live
+  readiness, and a `触发预检` button runs the *same* typed gate/validator through a
+  **no-perform seam** so it reports an honest preflight/rejection and can never
+  trigger a real system/navigation action or fabricate SUCCESS.
+- **All of Phase 19 is preserved**: the coordinate/gesture boundary
+  (`AccessibilityGate`) still reports `BLOCKED`/`NOT_CONFIGURED` for
+  `tap`/`type_text`/`swipe`/`open_app`/`capture_screen`, the overlay boundary is
+  unaffected, gesture injection stays disabled, and no screenshot flag is added.
+  The accessibility config retains `canPerformGestures="false"` and no screenshot
+  flag; `canRetrieveWindowContent="true"` is added only so the safe executor can
+  read the allowlisted foreground window's node tree (read-only, never
+  auto-forwarded, never exfiltrated).
+- **Device-free tests** (21 new): `SafeAccessibilityExecutorTest` (16) +
+  `SettingsSafeAccessibilityExecutorTest` (5) cover allowlist, bounded inputs,
+  package mismatch, disabled/not-configured, and success/failure mapping with no
+  fake success. **623 unit tests, 0 failures, 0 errors.**
 
 ## Layout — features added in Phase 17
 
