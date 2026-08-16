@@ -23,6 +23,11 @@
 
 The Phase-15 changes are committed on branch `phase15-gallery-monthly-insights`.
 
+## Commit hash
+
+- `Phase 15 gallery monthly insights` →
+  **2c82f402e20e066fd650e786f6cd21e8e664d77a**.
+
 ## Scope delivered (Phase 15)
 
 1. **Pure port** of Harmony `GalleryMonthlyInsights.ets`
