@@ -65,6 +65,56 @@ object GalleryComponent {
     /** Real Android reverse geocoder (platform Geocoder), implicitly injected. */
     fun reverseGeocoder(context: Context): ReverseGeocoder = androidReverseGeocoder(context)
 
+    /**
+     * Phase 21 — build a config-driven [com.clawmate.app.gallery.cloud.GalleryCloudAdapter]
+     * from the current persisted settings + runtime planner endpoint. This is a
+     * `suspend` provider so the DataStore settings snapshot can be read; the
+     * returned adapter only reports gate states (no network) and short-circuits
+     * before any I/O when a feature is not configured. Returns `null` when the
+     * Settings store cannot be read (the caller then falls back to the honest
+     * NOT_CONFIGURED default).
+     */
+    fun cloudAdapterProvider(context: Context): suspend () -> com.clawmate.app.gallery.cloud.GalleryCloudAdapter? {
+        return {
+            val snapshot = runCatching {
+                com.clawmate.app.settings.SettingsComponent.repository(context).snapshot()
+            }.getOrNull()
+            // A failed / empty settings read means nothing is explicitly configured —
+            // return null so the caller falls back to the honest NOT_CONFIGURED gate.
+            if (snapshot == null) {
+                null
+            } else {
+                buildCloudAdapter(snapshot)
+            }
+        }
+    }
+
+    /** Build the adapter from an [AppSettings] snapshot, reusing the Planner chat
+     * backend and a shared OkHttp client. Never adds credentials. */
+    fun buildCloudAdapter(
+        settings: com.clawmate.app.settings.domain.AppSettings,
+    ): com.clawmate.app.gallery.cloud.GalleryCloudAdapter {
+        val planner = com.clawmate.app.config.EndpointConfig
+        val chat = com.clawmate.app.chat.cloud.ChatServerConfig(
+            baseUrl = planner.cloudPlannerBaseUrl,
+            apiKey = planner.cloudPlannerApiKey,
+            modelName = planner.cloudPlannerModel,
+        )
+        val chatClient: com.clawmate.app.chat.cloud.ChatClient =
+            com.clawmate.app.chat.cloud.ChatCompletionsClient(cloudHttpClient(), chat)
+        return com.clawmate.app.gallery.cloud.GalleryCloudAdapter.fromSettings(
+            settings = settings,
+            plannerBaseUrl = planner.cloudPlannerBaseUrl,
+            plannerApiKey = planner.cloudPlannerApiKey,
+            plannerModel = planner.cloudPlannerModel,
+            httpClient = cloudHttpClient(),
+            chatClient = chatClient,
+        )
+    }
+
+    /** Shared OkHttp client for the gallery cloud slice (embedding + summary chat). */
+    fun cloudHttpClient(): okhttp3.OkHttpClient = galleryCloudHttpClient
+
     /** Release caches (mostly for tests). */
     fun reset() {
         synchronized(this) {
@@ -72,4 +122,13 @@ object GalleryComponent {
             repository = null
         }
     }
+}
+
+/** Lazily-created shared OkHttp client for the gallery cloud slice. */
+private val galleryCloudHttpClient: okhttp3.OkHttpClient by lazy {
+    okhttp3.OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 }

@@ -70,6 +70,11 @@ object SettingsKeys {
     /** Embedding model name. */
     const val GALLERY_EMBEDDING_MODEL = "gallery_embedding_model"
 
+    /** Phase 21 — explicit opt-in to the optional cloud AI month summary.
+     * Off by default; on alone is not enough (the OpenAI-compatible Planner
+     * endpoint/model/key must also be configured). */
+    const val GALLERY_AI_SUMMARY_ENABLED = "gallery_ai_summary_enabled"
+
     /** Image analysis scale (double 0.0..1.0). */
     const val GALLERY_IMAGE_SCALE = "gallery_image_scale"
 
@@ -176,7 +181,7 @@ object SettingsKeys {
         GALLERY_SKIP_OCR, GALLERY_USE_OCR_KEYWORD_FILTER, GALLERY_PARALLEL_FIELD_REQUESTS,
         GALLERY_OCR_CONCURRENCY, GALLERY_MODEL_CONCURRENCY, GALLERY_EMBEDDING_CONCURRENCY,
         GALLERY_EMBEDDING_MODE, GALLERY_EMBEDDING_BASE_URL, GALLERY_EMBEDDING_API_KEY, GALLERY_EMBEDDING_MODEL,
-        GALLERY_IMAGE_SCALE, GALLERY_AMAP_WEB_KEY,
+        GALLERY_AI_SUMMARY_ENABLED, GALLERY_IMAGE_SCALE, GALLERY_AMAP_WEB_KEY,
         CLOUD_PLANNER_BASE_URL, CLOUD_PLANNER_MODEL, CLOUD_PLANNER_API_KEY,
         CLOUD_DECIDER_BASE_URL, CLOUD_DECIDER_API_KEY, CLOUD_DECIDER_MODEL,
         HDC_SERVER_URL, WIRELESS_HDC_TARGET, HDC_CONNECTED,

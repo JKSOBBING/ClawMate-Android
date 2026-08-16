@@ -32,6 +32,10 @@ data class AppSettings(
     val galleryEmbeddingBaseUrl: String = "",
     val galleryEmbeddingApiKey: String = "",
     val galleryEmbeddingModel: String = "",
+    // Phase 21 — explicit user opt-in to the optional cloud AI month summary
+    // (reuses the OpenAI-compatible Planner endpoint/model/key). Off by default;
+    // on alone is not sufficient: the planner endpoint must also be configured.
+    val galleryAiSummaryEnabled: Boolean = false,
     val galleryImageScale: Double = 0.9,
     val galleryAmapWebKey: String = "",
     // Model & agents — 模型与智能体

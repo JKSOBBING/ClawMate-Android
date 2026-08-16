@@ -175,6 +175,7 @@ class SettingsViewModel(
     fun setGalleryEmbeddingBaseUrl(value: String) = updateDraft { it.copy(galleryEmbeddingBaseUrl = value) }
     fun setGalleryEmbeddingApiKey(value: String) = updateDraft { it.copy(galleryEmbeddingApiKey = value) }
     fun setGalleryEmbeddingModel(value: String) = updateDraft { it.copy(galleryEmbeddingModel = value) }
+    fun setGalleryAiSummaryEnabled(value: Boolean) = updateDraft { it.copy(galleryAiSummaryEnabled = value) }
     fun setGalleryImageScale(value: String) {
         val n = SettingsNormalizers.normalizedDouble(value, _state.value.draft.galleryImageScale, 0.1, 1.0)
         updateDraft { it.copy(galleryImageScale = n) }

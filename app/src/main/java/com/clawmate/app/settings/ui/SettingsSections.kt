@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -141,6 +142,24 @@ fun DataCollectionSection(state: SettingsUiState, vm: SettingsViewModel) {
         )
         SettingInput("Embedding 模型", state.draft.galleryEmbeddingModel,
             placeholder = "Embedding 模型") { vm.setGalleryEmbeddingModel(it) }
+    }
+
+    SettingsGroupCard(
+        title = "月度 AI 总结",
+        subtitle = "可选的云端月度总结（复用 Planner 端点；关闭则不发起任何云端请求）",
+    ) {
+        SettingToggle(
+            "启用云端月度 AI 总结",
+            "需同时配置 Planner 端点/模型/密钥",
+            state.draft.galleryAiSummaryEnabled,
+            onValueChange = vm::setGalleryAiSummaryEnabled,
+        )
+        Text(
+            state.draft.galleryAiSummaryEnabled
+                .let { if (it) "已启用：仅在有明确触发时联网生成月度总结；本地洞察不受影响。" else "未启用：不会向云端发送任何图库数据。" },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
     SettingsGroupCard(

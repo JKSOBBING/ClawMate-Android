@@ -77,11 +77,15 @@ fun GalleryScreen() {
     val selectedId by vm.selectedItemId.collectAsState()
     val detail by vm.detail.collectAsState()
 
-    // Phase 15 — real monthly-insights panel derived from the same Room-backed
-    // repository (loading / empty / error states; cloud AI summary & embedding
-    // stay explicitly NOT_CONFIGURED).
+    // Phase 15 ++ Phase 21 — real monthly-insights panel derived from the same
+    // Room-backed repository. Cloud AI summary & embedding states come from the
+    // config-driven [GalleryCloudAdapter] behind explicit settings; the adapter
+    // only reports gate states and is never invoked for a silent upload.
     val insightsVm: GalleryInsightsViewModel = viewModel(
-        factory = GalleryInsightsViewModel.Factory(repository = repository),
+        factory = GalleryInsightsViewModel.Factory(
+            repository = repository,
+            cloudAdapterProvider = GalleryComponent.cloudAdapterProvider(context),
+        ),
     )
     val insightsState by insightsVm.state.collectAsState()
 
@@ -150,6 +154,8 @@ fun GalleryScreen() {
             MonthlyInsightsPanel(
                 state = insightsState,
                 onOpenItem = { id -> vm.selectItem(id) },
+                onGenerateSummary = { insight -> insightsVm.generateMonthlySummary(insight) },
+                onEmbed = { insight -> insightsVm.embedSelectedMonth(insight) },
             )
 
             Spacer(Modifier.height(8.dp))

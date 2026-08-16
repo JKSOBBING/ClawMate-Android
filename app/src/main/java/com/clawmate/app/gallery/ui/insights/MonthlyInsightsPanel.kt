@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,20 +38,25 @@ import com.clawmate.app.gallery.insights.GalleryMonthlyInsightCloudState
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 
 /**
- * Real Gallery monthly-insights panel (Phase 15), ported from the HarmonyOS
- * `pages/gallery/GalleryPage.ets` `MonthlyInsightsPanel`.
+ * Real Gallery monthly-insights panel (Phase 15 + Phase 21), ported from the
+ * HarmonyOS `pages/gallery/GalleryPage.ets` `MonthlyInsightsPanel`.
  *
  * Shows only what is really derivable from stored [com.clawmate.app.gallery.model
  * .GalleryPhotoItem]s: month chips, per-month total, deterministic category
  * counts (with a bar meter), the local deterministic summary, up to 6
- * representative items, and a truthful NOT_CONFIGURED notice for the cloud AI
- * summary / embedding. Loading / empty / error states are honest and never
- * fabricate an insight or a summary.
+ * representative items, and an honest cloud AI-summary / embedding gate.
+ *
+ * Phase 21: cloud states reflect the config-driven gate (NOT_CONFIGURED /
+ * UNSUPPORTED / READY / ERROR). The optional 云端总结 / 向量 buttons invoke the
+ * cloud adapter **only from an explicit user tap** — no silent upload, no
+ * fabricated text. The deterministic local insight path always remains.
  */
 @Composable
 fun MonthlyInsightsPanel(
     state: GalleryInsightsUiState,
     onOpenItem: (String) -> Unit,
+    onGenerateSummary: (GalleryMonthInsight) -> Unit = {},
+    onEmbed: (GalleryMonthInsight) -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
@@ -74,6 +80,8 @@ fun MonthlyInsightsPanel(
                 is GalleryInsightsUiState.Loaded -> InsightsLoaded(
                     state = state,
                     onOpenItem = onOpenItem,
+                    onGenerateSummary = onGenerateSummary,
+                    onEmbed = onEmbed,
                 )
             }
         }
@@ -117,6 +125,8 @@ private fun InsightsError(message: String) {
 private fun InsightsLoaded(
     state: GalleryInsightsUiState.Loaded,
     onOpenItem: (String) -> Unit,
+    onGenerateSummary: (GalleryMonthInsight) -> Unit,
+    onEmbed: (GalleryMonthInsight) -> Unit,
 ) {
     val insights = state.insights
     if (insights.isEmpty()) {
@@ -147,6 +157,8 @@ private fun InsightsLoaded(
         aiSummary = state.aiSummary,
         embedding = state.embedding,
         onOpenItem = onOpenItem,
+        onGenerateSummary = { onGenerateSummary(selected) },
+        onEmbed = { onEmbed(selected) },
     )
 }
 
@@ -182,6 +194,8 @@ private fun MonthInsightDetail(
     aiSummary: GalleryMonthlyInsightCloudState,
     embedding: GalleryMonthlyInsightCloudState,
     onOpenItem: (String) -> Unit,
+    onGenerateSummary: () -> Unit,
+    onEmbed: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(insight.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -221,11 +235,16 @@ private fun MonthInsightDetail(
         }
 
         Spacer(Modifier.height(12.dp))
-        CloudInsetsNotice(aiSummary = aiSummary, embedding = embedding)
+        CloudInsetsNotice(
+            aiSummary = aiSummary,
+            embedding = embedding,
+            onGenerateSummary = onGenerateSummary,
+            onEmbed = onEmbed,
+        )
 
         Spacer(Modifier.height(4.dp))
         Text(
-            "以上洞察由已存图库数据计算得出；云端 AI 总结与向量检索未配置，不会生成或伪装任何总结。",
+            "以上洞察由已存图库数据计算得出。云端 AI 总结与向量检索仅在你主动点击对应按钮、且已在设置中显式开启并配置时才发起请求；未配置时不会向云端发送任何图库数据。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -310,30 +329,107 @@ private fun RepresentativeCard(item: GalleryPhotoItem, onClick: () -> Unit) {
 private fun CloudInsetsNotice(
     aiSummary: GalleryMonthlyInsightCloudState,
     embedding: GalleryMonthlyInsightCloudState,
+    onGenerateSummary: () -> Unit,
+    onEmbed: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("云端 AI 总结：", style = MaterialTheme.typography.bodySmall)
-        Text(
-            stateText(aiSummary),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("向量检索：", style = MaterialTheme.typography.bodySmall)
-        Text(
-            stateText(embedding),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("云端 AI 总结：", style = MaterialTheme.typography.bodySmall)
+            Text(
+                cloudStateLabel(aiSummary),
+                style = MaterialTheme.typography.bodySmall,
+                color = cloudStateColor(aiSummary),
+            )
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(
+                enabled = aiSummary is GalleryMonthlyInsightCloudState.Ready ||
+                    aiSummary is GalleryMonthlyInsightCloudState.Error,
+                onClick = onGenerateSummary,
+                modifier = Modifier.padding(start = 4.dp),
+            ) {
+                Text("生成/刷新总结")
+            }
+        }
+        aiSummaryStateDetail(aiSummary)
+
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("向量检索：", style = MaterialTheme.typography.bodySmall)
+            Text(
+                cloudStateLabel(embedding),
+                style = MaterialTheme.typography.bodySmall,
+                color = cloudStateColor(embedding),
+            )
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(
+                enabled = embedding is GalleryMonthlyInsightCloudState.Ready ||
+                    embedding is GalleryMonthlyInsightCloudState.Error,
+                onClick = onEmbed,
+                modifier = Modifier.padding(start = 4.dp),
+            ) {
+                Text("生成向量")
+            }
+        }
+        embeddingStateDetail(embedding)
     }
 }
 
-private fun stateText(state: GalleryMonthlyInsightCloudState): String = when (state) {
+@Composable
+private fun aiSummaryStateDetail(state: GalleryMonthlyInsightCloudState) {
+    when (state) {
+        is GalleryMonthlyInsightCloudState.Ready -> {
+            Text(
+                state.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        is GalleryMonthlyInsightCloudState.Error -> {
+            Text(
+                "失败：${state.message}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        else -> Unit
+    }
+}
+
+@Composable
+private fun embeddingStateDetail(state: GalleryMonthlyInsightCloudState) {
+    when (state) {
+        is GalleryMonthlyInsightCloudState.Ready -> {
+            Text(
+                state.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        is GalleryMonthlyInsightCloudState.Error -> {
+            Text(
+                "失败：${state.message}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        else -> Unit
+    }
+}
+
+private fun cloudStateLabel(state: GalleryMonthlyInsightCloudState): String = when (state) {
     is GalleryMonthlyInsightCloudState.NotConfigured -> "未配置"
     is GalleryMonthlyInsightCloudState.Unsupported -> "不支持"
     is GalleryMonthlyInsightCloudState.Ready -> "可用"
+    is GalleryMonthlyInsightCloudState.Error -> "出错"
 }
+
+@Composable
+private fun cloudStateColor(state: GalleryMonthlyInsightCloudState): Color =
+    if (state is GalleryMonthlyInsightCloudState.Error) {
+        MaterialTheme.colorScheme.error
+    } else {
+        Color.Unspecified
+    }
 
 private fun tagsText(item: GalleryPhotoItem): String =
     item.tags.joinToString("、").ifBlank { item.category.ifBlank { "" } }

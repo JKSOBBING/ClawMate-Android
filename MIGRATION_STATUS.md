@@ -556,6 +556,56 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 
 ## 8. Changelog
 
+- **Phase 21 (this phase):** Config-driven Gallery cloud adapter (rows D1/D2
+  configurable part) — no new credentials, no silent upload.
+  - **`gallery/cloud/GalleryCloudTypes.kt`** — typed config + bounds + honest
+    error model. `GalleryEmbeddingConfig.fromSettings` (remote mode + URL + key
+    + model present → ready; else NOT_CONFIGURED), `GalleryMonthlySummaryConfig`
+    (explicit `galleryAiSummaryEnabled` opt-in + planner URL/key/model present →
+    ready), `normalizeEmbeddingUrl` (port of `CloudModelClient.normalizeEmbeddingUrl`),
+    `GalleryCloudBounds` (embedding input 512 chars, embedding dims 4096, response
+    body caps, summary char cap), and `GalleryCloudErrorRedactor` (scrubs
+    bearer / `sk-*` / `key=` secrets via the shared `SensitiveLogRedactor`).
+  - **`gallery/cloud/GalleryEmbeddingClient.kt`** — OpenAI-compatible
+    `/v1/embeddings` client (port of `CloudModelClient.createEmbedding` /
+    `GalleryEmbeddingService.embedTextRemote`) over the existing OkHttp +
+    kotlinx stack. Validates config up front, clips input to 512, bounds the
+    response body and vector dimension, returns `GalleryEmbeddingResult` or a
+    redacted `GalleryCloudException` (HTTP/IO/MALFORMED/OVER_BOUNDS/EMPTY).
+  - **`gallery/cloud/GalleryMonthlySummaryClient.kt`** — optional AI month
+    summary that **reuses the existing OpenAI-compatible `ChatCompletionsClient`**
+    (via the `ChatClient` contract) with the exact Harmony `summarizeGalleryMonth`
+    prompt, parsing `{title,summary,suggestion}` into `GalleryMonthSummaryResult`
+    (parse-failure falls back to raw text, as the source does). Bounded response,
+    redacted errors, EMPTY when no payload (never fabricated).
+  - **`gallery/cloud/GalleryCloudAdapter.kt`** — config-driven gate + executor with
+    honest NOT_CONFIGURED / UNSUPPORTED / READY gates and executors that
+    short-circuit to a redacted ERROR before any I/O when not configured. No
+    cloud call when not configured; no credentials inferred; `huawei_local`
+    embedding stays UNSUPPORTED.
+  - **Explicit opt-in setting** `gallery_ai_summary_enabled`
+    (`galleryAiSummaryEnabled`, persisted via `SettingsCodec`, rendered in the
+    Settings 数据采集 → 月度 AI 总结 group). Reuses the Planner endpoint/model/key
+    (no new credential fields). Remote embedding reuses the existing gallery
+    embedding settings.
+  - **Wiring into Gallery insights (behind settings):** `GalleryInsightsViewModel`
+    now takes an injectable suspend adapter provider; the `Loaded` cloud states
+    reflect the real gate. The 月度洞察 panel adds explicit `生成/刷新总结` and
+    `生成向量` buttons that invoke the cloud adapter **only from a user tap**,
+    mapping success → READY and failure → redacted ERROR. The deterministic
+    local insight path ([`GalleryMonthlyInsights`]) always remains and never
+    uploads.
+  - **Device-free tests** (`app/src/test/java/com/clawmate/app/gallery/cloud/` +
+    `ui/insights/GalleryInsightsCloudViewModelTest.kt` +
+    `settings/SettingsCodecTest.kt`): config gating (opt-in off / missing fields /
+    remote-only / huawei_local UNSUPPORTED), no-call behaviour (adapters never hit
+    the network when not configured), embedding input/response/dimension bounds,
+    vector JSON parsing + secret redaction, summary prompt/bounds/JSON-parsing +
+    error redaction, ViewModel gate states + redacted ERROR path, and the new
+    settings key round-trip.
+  - Build: `:app:assembleDebug` + `:app:testDebugUnitTest` `--max-workers=1` →
+    **BUILD SUCCESSFUL**; test counts recorded in `DSH_PHASE_RESULT.md`.
+
 - **Phase 15 (this phase):** Portable Gallery monthly insights (pure port).
   - **Pure monthly bucketing / tag-count / LLM-input port**
     (`gallery/insights/GalleryMonthlyInsights.kt`) of the HarmonyOS
@@ -1059,8 +1109,8 @@ Legend — **Status**:
 | B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Blocked** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). AutoAgentAbility itself is not portable; kept as a doc'd platform blocker. |
 | C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Overlay capability boundary (Phase 20) | **Boundary (controlled)** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay becomes a truthful Android overlay boundary in **Phase 20**: `SYSTEM_ALERT_WINDOW` is now *declared* (the manifest prerequisite so `Settings.canDrawOverlays` can honestly read true). Portable `overlay/` implements: a testable `OverlayPermissionDetector` (Android/Fake/Registry) over `Settings.canDrawOverlays`; an explicit user opt-in `overlayOptIn` setting (persisted via `SettingsCodec`); an `OverlayGate` with `NOT_CONFIGURED`/`BLOCKED`/`READY`; a `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` system-settings permission-request action (gated + surfaced in Settings 任务与自动化); and a lifecycle-safe `OverlayFloatService` that renders only a neutral status surface and never starts silently (no fake agent content, no screen capture, no GUI actions; no renderer in this build → gate stays BLOCKED, never READY-with-content). The `float_overlay_status` tool now reflects the live gate. Gap: a real safe overlay renderer/data source is still not configured (README §5 #2 stays honest; no fake overlay). |
 | C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
-| D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Boundary (NOT_CONFIGURED) | **Boundary** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent; remote embedding needs a base URL + API key. `galleryEmbeddingMode` key exists in settings; the service stays NOT_CONFIGURED. Gap: an optional remote-embedding client behind config. |
-| D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Done (Phase 15) | **Done** | `gallery/insights/GalleryMonthlyInsights.kt` ports the pure bucketing / tag-count / local-summary / LLM-input builder over the real room-backed `GalleryPhotoItem`s (Phases 3/9/11). `GalleryRepository.observeMonthlyInsights` derives insights on demand from stored items only (no media scan), and the existing Gallery screen gains a 月度洞察 panel with real Loading / Empty / Error / Loaded states plus an honest NOT_CONFIGURED boundary for the cloud AI summary / vector embedding. Gap: actually calling a configured cloud LLM for the AI month summary and remote embeddings (required config + client, rows D1/D12). |
+| D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Config gate (Phase 21) | **Done (configurable)** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent → honest **UNSUPPORTED**. **Phase 21** adds a config-driven remote-embedding client (`gallery/cloud/GalleryEmbeddingClient.kt`, port of `CloudModelClient.createEmbedding`/`normalizeEmbeddingUrl`) using the existing OkHttp + kotlinx stack and the existing gallery embedding settings (mode/baseURL/key/model — no new credentials). It validates endpoint/model/key presence before use, bounds request text (512) and response (body bytes + vector dimension), redacts secrets, and reports NOT_CONFIGURED/UNSUPPORTED/ERROR/READY. No call fires when not configured / opt-in off; `huawei_local` stays UNSUPPORTED. |
+| D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Done (Phase 15) + cloud adapter (Phase 21) | **Done** | `gallery/insights/GalleryMonthlyInsights.kt` ports the pure bucketing / tag-count / local-summary / LLM-input builder over the real room-backed `GalleryPhotoItem`s (Phases 3/9/11). **Phase 21** wires the config-driven cloud AI month summary (`gallery/cloud/GalleryMonthlySummaryClient.kt`, port of `summarizeGalleryMonth`) reusing the existing OpenAI-compatible `ChatCompletionsClient` + Planner config, behind an explicit `galleryAiSummaryEnabled` opt-in setting (no new credentials). The Gallery insights panel shows the real gate (NOT_CONFIGURED/UNSUPPORTED/ERROR/READY) and only invokes the cloud from an explicit button tap; the deterministic local insight path always remains (row D2 pure part = Done). |
 | D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Defer / boundary | **Defer** | Background scan + cloud memory sync need storage permission + configured vision key; both deliberately not backgrounded on Android. No silent scanning. |
 | E1 | **WeChat auto-summary settings + validation** | `utils/wechat/WechatAutoSummaryTypes.ets` (pure normalizers + validation) | Done (Phase 13) | **Done** | `wechat/domain/WechatAutoSummaryTypes.kt` ports the constants, bounded normalizers (`days` 1..90, `max_contacts` 1..50, `swipe_speed` 0..20000, ratio 0.1..0.95, `stable_swipes` 1..10, `max_history_swipes` 1..300, `wait` 0..10, mode) and the `validateWechatAutoSummaryRequest` validator. A real Settings center section (微信自动汇总) exposes the fields via DataStore (`SettingsKeys.WECHAT_*`, `SettingsCodec`) with normalization, masking affinity for any sensitive keys, and honest saved/error states. Gap: no actual collection (see E2). |
 | E2 | **WeChat auto-summary collection** | `utils/wechat/WechatAutoSummaryClient.ets`, `WechatAutoSummaryStorage.ets`, `entry/src/main/python/wechat_collect/*` | Boundary (BLOCKED) | **Boundary (BLOCKED)** | A typed `wechat/domain/WechatCollectionGate.kt` derives a truthful BLOCKED / NOT_CONFIGURED state from the Phase-8 verified bridge. It never drives WeChat, never sends arbitrary commands, and `collect()` never fabricates a summary: the Android `WorkflowDeviceAdapter` exposes no safe `wechat_collect` action, so a verified bridge still reports BLOCKED. The Settings section renders this status live. Real collection remains a PC-side Python/HDC service gap. |

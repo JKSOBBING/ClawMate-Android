@@ -1,3 +1,4 @@
+# Phase 21 result: config-driven Gallery cloud adapter (D1 remote embedding + D2 AI month summary) behind explicit settings; reuses OpenAI-compatible client/config (no new credentials, no silent upload); BUILD SUCCESSFUL; 602 tests, 0 failures, 0 errors.
 # Phase 20 result: Android overlay capability gate and explicit SYSTEM_ALERT_WINDOW opt-in; BUILD SUCCESSFUL; 578 tests, 0 failures, 0 errors; no silent overlay.
 # Phase 19 result: controlled Android accessibility boundary for AutoAgent; BUILD SUCCESSFUL; 557 tests, 0 failures, 0 errors; no arbitrary GUI execution.
 # Phase 18 result: local avatar asset storage/version history and real image picker boundary; full test run BUILD SUCCESSFUL; 540 tests, 0 failures, 0 errors; commit follows.
@@ -138,3 +139,127 @@ Modified:
 - The phase delivers the pure port, its unit tests, and the real
   Loading/Empty/Error/Loaded insights panel in the existing Gallery UI — nothing
   outside that scope was changed.
+
+---
+
+# DSH_PHASE_RESULT — ClawMate Android, Phase 21 (config-driven Gallery cloud adapter: D1 remote embedding + D2 AI month summary)
+
+## Worktree
+
+- Delivery worktree: `/opt/deepseek-harness/clawmate-phase21-gallery-cloud`, cloned from
+  `/root/ClawMate-Android` at `master` (bd3ed3a, Phase 20), branch `phase21-gallery-cloud`.
+  Source of truth (read-only, not modified): `/root/mobiinfra-oh`
+  (`entry/src/main/ets/utils/gallery/GalleryEmbeddingService.ets`,
+  `GalleryMonthlyInsights.ets`, `utils/CloudModelClient.ets`).
+- Built and tested in this worktree (JDK 17, Android SDK platform 34 / build-tools
+  34.0.0 at `/opt/deepseek-harness/android-sdk`, Gradle 8.9 at
+  `/opt/deepseek-harness/gradle-dist/gradle-8.9`). Build state:
+  `GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home`,
+  `ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home`.
+- Working policy: serial only, `--max-workers=1`, one Gradle build at a time, no
+  servers/emulators, no parallel jobs, no media scan, no adb/hdc, no cloud calls
+  during tests, no fabricated text/vectors.
+
+## Commit hash
+
+Phase 21 changes committed on branch `phase21-gallery-cloud` in the delivery
+worktree at commit **8631cd4**. (This commit also carries the updated DSH
+result.)
+
+## Scope delivered (Phase 21)
+
+1. **Config-driven adversarial adapter** (`gallery/cloud/GalleryCloudAdapter.kt` +
+   `GalleryCloudTypes.kt`) with honest NOT_CONFIGURED / UNSUPPORTED / READY gates.
+   A remote-embedding config is READY only when the existing gallery embedding
+   mode is `remote` **and** base URL + API key + model are present; otherwise
+   NOT_CONFIGURED (remote incomplete) or UNSUPPORTED (`huawei_local`, no Android
+   equivalent). The AI month summary is READY only behind the new explicit
+   `galleryAiSummaryEnabled` opt-in **and** a fully-configured Planner endpoint /
+   model / key — no new credentials are added.
+2. **Remote text embedding** (`gallery/cloud/GalleryEmbeddingClient.kt`): OpenAI-
+   compatible `/v1/embeddings` OkHttp client, port of `CloudModelClient.createEmbedding`
+   / `normalizeEmbeddingUrl` / `GalleryEmbeddingService.embedTextRemote`. Bounds the
+   request input to 512 chars, the response body (512 KiB) and the vector dimension
+   (4096), redacts secrets from every error, returns a `GalleryEmbeddingResult`, and
+   raises redacted `GalleryCloudException`s (HTTP / IO / MALFORMED / OVER_BOUNDS /
+   EMPTY / EMPTY_INPUT). Reuses the existing gallery embedding settings — no new
+   credentials.
+3. **AI month summary** (`gallery/cloud/GalleryMonthlySummaryClient.kt`): **reuses
+   the existing OpenAI-compatible `ChatCompletionsClient`** (via the `ChatClient`
+   contract) with the exact Harmony `summarizeGalleryMonth` prompt, bounded response,
+   redacted errors, JSON parsing into `GalleryMonthSummaryResult` (tolerant raw-text
+   fallback as the source does), EMPTY when a reply has no title/summary/suggestion.
+   Uses the Planner endpoint/model/key.
+4. **Explicit opt-in setting** `gallery_ai_summary_enabled` (`galleryAiSummaryEnabled`)
+   persisted via `SettingsCodec`, exposed in Settings 数据采集 → 月度 AI 总结, plus the
+   reusable embedding settings already present. No inferring credentials from
+   subscriptions.
+5. **Wiring into Gallery insights behind settings**: `GalleryInsightsViewModel` now
+   accepts an injectable suspend adapter provider (default `{ null }` → honest
+   NOT_CONFIGURED); the 月度洞察 `Loaded` states reflect the real gate; explicit
+   `生成/刷新总结` + `生成向量` buttons invoke the cloud **only from a user tap**
+   (success → READY, failure → redacted ERROR). The deterministic local insight path
+   (`GalleryMonthlyInsights`) always remains and never uploads.
+6. **Device-free tests** (24 new): `gallery/cloud/GalleryCloudAdapterTest` (8),
+   `GalleryEmbeddingClientTest` (6, MockWebServer), `GalleryMonthlySummaryClientTest`
+   (6), `ui/insights/GalleryInsightsCloudViewModelTest` (3),
+   `SettingsCodecTest` (1 new round-trip). Cover config gating, no-call behaviour,
+   prompt/input + response bounds, parsing, secret redaction and settings round-trip.
+
+## Command executed (actual, in this worktree)
+
+```
+ANDROID_HOME=/opt/deepseek-harness/android-sdk \
+ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk \
+GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home \
+ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
+/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle \
+    --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest
+```
+
+Result: **BUILD SUCCESSFUL** (exit code `0`).
+- `:app:assembleDebug` produced `app/build/outputs/apk/debug/app-debug.apk` including
+  the new `gallery/cloud` slice plus all prior Phase 1–20 code.
+- `:app:testDebugUnitTest` ran fresh → **602 tests, 0 failures, 0 errors**
+  (578 prior phases + **24 new Phase-21 tests**).
+- `:app:connectedAndroidTest` not run (no device/emulator).
+
+## Files changed (Phase 21)
+
+New:
+- `app/src/main/java/com/clawmate/app/gallery/cloud/GalleryCloudTypes.kt`
+- `app/src/main/java/com/clawmate/app/gallery/cloud/GalleryEmbeddingClient.kt`
+- `app/src/main/java/com/clawmate/app/gallery/cloud/GalleryMonthlySummaryClient.kt`
+- `app/src/main/java/com/clawmate/app/gallery/cloud/GalleryCloudAdapter.kt`
+- `app/src/test/java/com/clawmate/app/gallery/cloud/GalleryCloudAdapterTest.kt`
+- `app/src/test/java/com/clawmate/app/gallery/cloud/GalleryEmbeddingClientTest.kt`
+- `app/src/test/java/com/clawmate/app/gallery/cloud/GalleryMonthlySummaryClientTest.kt`
+- `app/src/test/java/com/clawmate/app/gallery/ui/insights/GalleryInsightsCloudViewModelTest.kt`
+
+Modified:
+- `gallery/insights/GalleryMonthlyInsightCloudState.kt` (add `Error(message)` state)
+- `gallery/ui/insights/GalleryInsightsViewModel.kt` (adapter provider + explicit actions)
+- `gallery/ui/insights/MonthlyInsightsPanel.kt` (gate states + explicit buttons)
+- `gallery/ui/GalleryScreen.kt` (wire provider + actions)
+- `settings/domain/SettingsKeys.kt`, `AppSettings.kt`, `SettingsCodec.kt`,
+  `settings/ui/SettingsViewModel.kt`, `SettingsSections.kt` (new opt-in key)
+- `gallery/GalleryComponent.kt` (cloudAdapterProvider / buildCloudAdapter / OkHttp)
+- `settings/SettingsCodecTest.kt` (round-trip for the new key)
+- `README.md`, `MIGRATION_STATUS.md`, this `DSH_PHASE_RESULT.md`
+
+## Verification summary
+
+- `:app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**, exit `0`.
+- 602 tests, 0 failures, 0 errors.
+- No silent upload: adapter gates are pure; summaries/embeddings fire only on an
+  explicit button tap with full config. No new credentials; `huawei_local` is
+  UNSUPPORTED. Secrets redacted from all errors.
+- `:app:connectedAndroidTest` not run (no device/emulator).
+
+## Known gaps / notes (recorded honestly)
+
+- The cloud summary/embedding executors are real network adapters but were not
+  exercised against a live provider in this worktree (no credentials / no network).
+  Their wire/parse/error/bound behaviour is covered by MockWebServer/fake-client
+  unit tests. READY means "configured and would call", not "live call succeeded".
+- No gallery auto-scan / memory-sync (row D3) is touched; those stay deferred.

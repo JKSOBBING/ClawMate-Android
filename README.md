@@ -1,4 +1,4 @@
-# ClawMate Android — Profile Share Import (Ph17) + Profile→Home (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android — Gallery Cloud Adapter (Ph21) + Profile Share Import (Ph17) + Profile→Home (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
 
 This is the Android migration target for the ClawMate HarmonyOS app (source of
 truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
@@ -245,6 +245,31 @@ marked Portable-pending in the Phase 12 inventory D2, based on Harmony
   "无" empty block, the ViewModel Loading→Loaded/Empty/Error state machine, and
   repository-item-driven derivation. 490 unit tests, 0 failures, 0 errors.
 
+**Phase 21** closes the **configurable part** of migration rows **D1** (remote
+gallery embedding) and **D2** (AI month summary) with an explicit, config-driven
+cloud adapter (`gallery/cloud/`) that uses the existing OpenAI-compatible HTTP
+client/config stack *where the contract genuinely matches*:
+- **Remote text embedding** (`GalleryEmbeddingClient`) ports Harmony
+  `CloudModelClient.createEmbedding` / `normalizeEmbeddingUrl` onto the existing
+  OkHttp + kotlinx stack, reusing the existing gallery embedding settings
+  (mode / base URL / key / model) — **no new credentials**.
+- **AI month summary** (`GalleryMonthlySummaryClient`) **reuses the existing
+  OpenAI-compatible `ChatCompletionsClient`** (via the `ChatClient` contract) with
+  the exact Harmony `summarizeGalleryMonth` prompt, behind a new explicit
+  `gallery_ai_summary_enabled` opt-in that reuses the Planner endpoint/model/key.
+- A single `GalleryCloudAdapter` gate + executor reports honest
+  **NOT_CONFIGURED / UNSUPPORTED / ERROR / READY** states, validates
+  endpoint/model/key presence, bounds request (512-character embedding input,
+  bounded LLM-input aggregate) and response (body bytes + vector dimension),
+  redacts secrets from errors, and **never fires a cloud call when not
+  configured**. `huawei_local` embedding stays **UNSUPPORTED** on Android.
+- Wiring into Gallery insights is **only behind explicit settings**: the
+  月度洞察 panel shows the real gate and the `生成/刷新总结` + `生成向量` buttons
+  invoke the cloud only from an explicit user tap (success → READY, failure →
+  redacted ERROR). The deterministic local insight path always remains and never
+  uploads. Device-free tests cover config gating, bounds, parsing/redaction and
+  no-call behaviour.
+
 ## Layout — features added in Phase 17
 
 ```
@@ -348,6 +373,48 @@ app/src/main/java/com/clawmate/app/gallery/ui/insights/
 (mod) app/src/main/java/com/clawmate/app/gallery/data/GalleryRepository.kt      # + observeMonthlyInsights()
 (mod) app/src/main/java/com/clawmate/app/gallery/data/DefaultGalleryRepository.kt # pure map over observeItems()
 (mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryScreen.kt              # wire the 月度洞察 panel
+```
+
+## Layout — features added in Phase 21
+
+```
+app/src/main/java/com/clawmate/app/gallery/cloud/
+├── GalleryCloudTypes.kt                    # Typed cloud config + bounds + honest error model
+│                                           #   * GalleryEmbeddingConfig.fromSettings (remote mode + URL/key/model)
+│                                           #   * GalleryMonthlySummaryConfig (explicit galleryAiSummaryEnabled opt-in
+│                                           #     + Planner URL/key/model — no new credentials)
+│                                           #   * normalizeEmbeddingUrl (port of CloudModelClient.normalizeEmbeddingUrl)
+│                                           #   * GalleryCloudBounds (embedding text 512 / dims 4096 / response + summary caps)
+│                                           #   * GalleryCloudErrorRedactor (scrub bearer / sk-* / key= secrets)
+├── GalleryEmbeddingClient.kt               # OpenAI-compatible /v1/embeddings client (OkHttp + kotlinx); bounds input &
+│                                           #   response, redacts errors, returns GalleryEmbeddingResult or GalleryCloudException
+├── GalleryMonthlySummaryClient.kt          # Reuses the existing OpenAI-compatible ChatCompletionsClient (ChatClient)
+│                                           #   + exact Harmony summarizeGalleryMonth prompt → GalleryMonthSummaryResult
+└── GalleryCloudAdapter.kt                  # Config-driven gate + executor: NOT_CONFIGURED / UNSUPPORTED / READY gates;
+                                            #   executors short-circuit to redacted ERROR before I/O when not configured.
+                                            #   Companion.fromSettings builds it from AppSettings + Planner + OkHttp/Chat.
+
+(mod) app/src/main/java/com/clawmate/app/gallery/insights/GalleryMonthlyInsightCloudState.kt   # + Error(message) state
+(mod) app/src/main/java/com/clawmate/app/gallery/ui/insights/GalleryInsightsViewModel.kt      # injectable suspend adapter
+                                            #   provider; gate states in Loaded; explicit generateSummary / embed actions
+(mod) app/src/main/java/com/clawmate/app/gallery/ui/insights/MonthlyInsightsPanel.kt          # 生成/刷新总结 + 生成向量 buttons
+(mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryScreen.kt                          # wire the adapter provider + actions
+(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt                      # GALLERY_AI_SUMMARY_ENABLED
+(mod) app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt                       # galleryAiSummaryEnabled
+(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsNormalizers.kt               # (embeddingMode reused)
+(mod) app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt                       # encode/decode the new key
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt                     # setGalleryAiSummaryEnabled
+(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt                      # 月度 AI 总结 group (opt-in)
+(mod) app/src/main/java/com/clawmate/app/gallery/GalleryComponent.kt                          # cloudAdapterProvider/buildCloudAdapter
+
+app/src/test/java/com/clawmate/app/gallery/cloud/
+├── GalleryCloudAdapterTest.kt              # config gating + no-call behaviour (NOT_CONFIGURED / UNSUPPORTED / READY;
+│                                           #   executors never hit a client when not configured)
+├── GalleryEmbeddingClientTest.kt           # MockWebServer: URL/auth, 512-char clip, JSON parse, HTTP secret redaction,
+│                                           #   empty-vector EMPTY, body + dimension OVER_BOUNDS
+└── GalleryMonthlySummaryClientTest.kt      # prompt shape/bounds, JSON parsing, raw-text fallback, redacted error, EMPTY
+(mod) app/src/test/java/com/clawmate/app/gallery/ui/insights/GalleryInsightsCloudViewModelTest.kt  # gate states + redacted ERROR path
+(mod) app/src/test/java/com/clawmate/app/settings/SettingsCodecTest.kt                            # galleryAiSummaryEnabled round-trip
 ```
 
 ## Layout — features added in Phase 14
@@ -742,3 +809,15 @@ arbitrary file/dir deletion). Because MNN-for-Android and the OHOS N-API/HiAI
 runtime are not vendored, the native stub returns typed
 NOT_CONFIGURED / UNSUPPORTED — the app never fabricates a loaded model or
 output.
+
+The **Phase-21 Gallery cloud adapter** performs **no network on launch and no
+silent upload**: `GalleryCloudAdapter` only reports gate states
+(NOT_CONFIGURED / UNSUPPORTED / READY) until the user (a) explicitly opts in to
+the AI month summary (`gallery_ai_summary_enabled`) with the Planner
+endpoint/model/key configured, and/or (b) selects remote embedding with the
+existing gallery embedding base URL/key/model configured. Even then the summary /
+embedding calls run **only on an explicit `生成/刷新总结` / `生成向量` button tap**.
+The adapter reuses the existing Planner chat endpoint and the existing gallery
+embedding settings — no new credentials, nothing derived from a subscription —
+and redacts secrets from every error. The deterministic local monthly-insight
+path never uploads and always runs.

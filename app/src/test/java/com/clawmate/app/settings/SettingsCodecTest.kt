@@ -87,6 +87,23 @@ class SettingsCodecTest {
     }
 
     @Test
+    fun `gallery AI summary opt-in round trips and defaults to false`() {
+        // Phase 21 — the cloud AI month-summary opt-in is persisted and decodes deterministically.
+        assertFalse(AppSettings.defaults().galleryAiSummaryEnabled)
+        val flat = SettingsCodec.encode(AppSettings.defaults().copy(galleryAiSummaryEnabled = true))
+        assertEquals("true", flat[SettingsKeys.GALLERY_AI_SUMMARY_ENABLED])
+        assertTrue(SettingsCodec.decode(emptyMap()).galleryAiSummaryEnabled ==
+            false && SettingsCodec.decode(flat).galleryAiSummaryEnabled)
+
+        // Corrupt value degrades to the safe off default.
+        assertFalse(
+            SettingsCodec.decode(
+                mapOf(SettingsKeys.GALLERY_AI_SUMMARY_ENABLED to "not-a-bool"),
+            ).galleryAiSummaryEnabled,
+        )
+    }
+
+    @Test
     fun `decode degrades corrupt values instead of throwing`() {
         val corrupt: Map<String, String> = SettingsKeys.ALL_KEYS.associateWith { "not-a-number-or-bool" } +
             mapOf(
