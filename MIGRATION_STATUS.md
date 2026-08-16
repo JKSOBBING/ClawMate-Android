@@ -155,7 +155,7 @@ a controlled disabled state), **Defer** (later phase).
 | 1 | **Onboarding** | `pages/onboarding/FirstLaunchOnboarding.ets`, `OnboardingTypes.ets`, spec `docs/superpowers/specs/2026-07-02-first-launch-onboarding-design.md` | Adapt | **Phase 6 shipped** an Android `first-launch` gate before the 5-tab shell: a real Compose `FirstLaunchOnboardingScreen` with the three capability preview slides + a usage-guide page (`home/domain/OnboardingTypes.kt` ports the pure contract; version key `firstLaunchOnboardingVersion` = `2026-07-core-preview-usage-guide`). Completion version persisted to an app-private DataStore `clawmate_home` preferences file via `home/data/DataStoreOnboardingRepository.kt`; works on a configuration-free fresh install with no network. |
 | 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt + **data source Defer** | **Phase 6 shipped** the Compose Home UI (`home/domain/HomeDomain.kt`, `home/ui/HomeScreen.kt`): four persona pillars (理解你/守护你/陪伴你/成就你 as 吃/穿/住/行), honest profile loading/empty/error states, recommendation list with completion toggles + 未完成/全部 filter + pagination + expand, and an **honest NOT_CONFIGURED avatar section** (avatar generation is DISABLED on Android — never fabricated). Recommendation *content* still requires the upstream data-manager pipeline (a later phase); completion flags persist via `home/data/DataStoreHomeRecRepository.kt`. |
 | 3 | **Chat & agent loop** | `pages/chat/*` (ChatPage, ChatPageTypes, ChatMessageDataSource, ChatSessionController); `chat/ChatSessionTypes.ets`; `utils/CloudModelClient.ets` (SSE at :725); `utils/AgentLoopRunner.ets`, `ChatReactAgent.ets`, `ChatToolRegistry.ets`, `AgentActionParser.ets`, `AgentExecutionController.ets`; spec `docs/superpowers/specs/2026-06-10-chat-session-management-design.md` | Adapt | Compose `LazyColumn` chat; Repository + ViewModel; OpenAI-compatible `/v1/chat/completions` via OkHttp SSE exposed as `Flow<String>`; ReAct tool loop; Markdown renderer; Room persistence (source uses JSON files in `filesDir/chat-sessions/`). |
-| 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), and Android reverse geocoding via the platform `Geocoder`. **Phase 11 shipped** a real on-device Chinese OCR adapter (`gallery/ocr/AndroidOcrEngine`) using ML Kit `com.google.mlkit:text-recognition-chinese` (bundled model) over the picked content URI (ContentResolver → bounded Bitmap → ML Kit), with typed success/empty/cancel/model-download/error/unavailable states, an explicit **Analyze OCR** action in the detail panel, and Room persistence of only real recognized text + `analyzed` status. Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. |
+| 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), and Android reverse geocoding via the platform `Geocoder`. **Phase 11 shipped** a real on-device Chinese OCR adapter (`gallery/ocr/AndroidOcrEngine`) using ML Kit `com.google.mlkit:text-recognition-chinese` (bundled model) over the picked content URI (ContentResolver → bounded Bitmap → ML Kit), with typed success/empty/cancel/model-download/error/unavailable states, an explicit **Analyze OCR** action in the detail panel, and Room persistence of only real recognized text + `analyzed` status. Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. **Phase 15 shipped** the portable monthly-insights pure port over stored Room items (`gallery/insights/GalleryMonthlyInsights.kt`), an `observeMonthlyInsights` repository derivation, and a 月度洞察 panel in the existing Gallery screen (real Loading / Empty / Error states + honest NOT_CONFIGURED cloud AI-summary/embedding boundary). The optional cloud AI month summary / remote embedding still require a configured client (rows D1/D12). |
 | 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
@@ -548,16 +548,48 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
   tree and verified by the build, but **no commit hash is claimed**. To commit,
   run `git add -A && git commit -m "Phase 12 coverage audit"` in
   `clawmate-phase12-coverage` from an environment that may write to that `.git`.
-- **Gallery monthly insights & WeChat summary validation are portable but not
-  ported yet:** both are documented as Portable-pending in §10 and are good
-  candidates for a later phase (they are pure logic safe to port and just need
-  a settings UI + data wiring).
+- **Gallery monthly insights are now ported (Phase 15).** WeChat summary
+  validation was shipped earlier (Phase 13). See §10 D2 and the Phase-15
+  changelog entry.
 
 ---
 
 ## 8. Changelog
 
-- **Phase 14 (this phase):** Portable in-app Log viewer (bounded ring buffer).
+- **Phase 15 (this phase):** Portable Gallery monthly insights (pure port).
+  - **Pure monthly bucketing / tag-count / LLM-input port**
+    (`gallery/insights/GalleryMonthlyInsights.kt`) of the HarmonyOS
+    `entry/src/main/ets/utils/gallery/GalleryMonthlyInsights.ets` (row D2,
+    previously **Portable-pending**). It maps directly over the real room-backed
+    `GalleryPhotoItem`s already stored (Phases 3/9/11) — it derives calendar-month
+    buckets from `date` (falling back to `createdAt`, then the honest 时间未知
+    bucket), per-month tag counts (sorted desc, Harmony-stable ties), a
+    deterministic local summary, up to 6 representative items, and a
+    `buildLlmInput` text block bounded to 80 samples — all from **stored Room
+    data only**. It never scans media, fabricates an insight, or makes a cloud
+    call: building LLM input only string-formats the items passed in.
+  - **Observable derivation** (`GalleryRepository.observeMonthlyInsights`) wired
+    through `DefaultGalleryRepository` as a pure `map` over `observeItems()`, so
+    the insights update automatically when stored items change.
+  - **Real empty / loading / error insights state in the existing Gallery UI**
+    (`GalleryScreen` + new `ui/insights/MonthlyInsightsPanel.kt` +
+    `GalleryInsightsViewModel`): a 月度洞察 card renders honest Loading while the
+    derivation is pending, an honest Empty state when there are no stored items,
+    month chips + per-month total, deterministic category-count bars/chips, the
+    local summary, up to 6 representative items (tap to open), and a truthful
+    NOT_CONFIGURED boundary for the cloud AI monthly summary / vector embedding
+    (`insights/GalleryMonthlyInsightCloudState.kt`) — no fabricated summary.
+  - **Deterministic unit tests**
+    (`app/src/test/java/com/clawmate/app/gallery/insights/` +
+    `app/src/test/java/com/clawmate/app/gallery/ui/insights/` + a repository
+    derivation test): bucketing (date / createdAt fallback / unknown),
+    newest-month-first ordering, within-month newest-first, tie-order stability,
+    tag cleaning/dedup + category fallback, 6-representative cap, 80-line
+    LLM-input cap + determinism + "无" empty block, ViewModel Loading→Loaded/
+    Empty/Error state machine, and repository-item-driven derivation. 490 unit
+    tests, 0 failures, 0 errors.
+
+- **Phase 14:** Portable in-app Log viewer (bounded ring buffer).
   - **Real bounded in-app log ring buffer** (`log/`) ported from the HarmonyOS
     `entry/src/main/ets/pages/LogView.ets` and `utils/CloudLogOutput.ets`
     (bounded, append-only + eviction). On Android we implement one honest,
@@ -1028,7 +1060,7 @@ Legend — **Status**:
 | C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Blocked → controlled state | **Blocked** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay needs Android `SYSTEM_ALERT_WINDOW` runtime permission. Not wired; documented controlled disabled state (§5 #2) — no fake overlay. |
 | C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
 | D1 | **Gallery embedding** | `utils/gallery/GalleryEmbeddingService.ets` (huawei_local via ArkData `intelligence` + remote), `CloudModelClient.createEmbedding` | Boundary (NOT_CONFIGURED) | **Boundary** | `huawei_local` embedding (Harmony `intelligence.getTextEmbeddingModel`) has no Android equivalent; remote embedding needs a base URL + API key. `galleryEmbeddingMode` key exists in settings; the service stays NOT_CONFIGURED. Gap: an optional remote-embedding client behind config. |
-| D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Portable-pending | **Portable-pending** | `GalleryMonthlyInsights.build` is pure logic over `GalleryAnalysisResult`; Android already stores the equivalent `GalleryPhotoItem` in Room (Phases 3/9/11). Gap: port the bucketing/tag-counts/LLM-input builder plus a visible insights panel. |
+| D2 | **Gallery monthly insights** | `utils/gallery/GalleryMonthlyInsights.ets` (pure) | Done (Phase 15) | **Done** | `gallery/insights/GalleryMonthlyInsights.kt` ports the pure bucketing / tag-count / local-summary / LLM-input builder over the real room-backed `GalleryPhotoItem`s (Phases 3/9/11). `GalleryRepository.observeMonthlyInsights` derives insights on demand from stored items only (no media scan), and the existing Gallery screen gains a 月度洞察 panel with real Loading / Empty / Error / Loaded states plus an honest NOT_CONFIGURED boundary for the cloud AI summary / vector embedding. Gap: actually calling a configured cloud LLM for the AI month summary and remote embeddings (required config + client, rows D1/D12). |
 | D3 | **Gallery memory sync / auto scanner** | `GalleryMemorySync.ets`, `GalleryAutoScanner.ets` | Defer / boundary | **Defer** | Background scan + cloud memory sync need storage permission + configured vision key; both deliberately not backgrounded on Android. No silent scanning. |
 | E1 | **WeChat auto-summary settings + validation** | `utils/wechat/WechatAutoSummaryTypes.ets` (pure normalizers + validation) | Done (Phase 13) | **Done** | `wechat/domain/WechatAutoSummaryTypes.kt` ports the constants, bounded normalizers (`days` 1..90, `max_contacts` 1..50, `swipe_speed` 0..20000, ratio 0.1..0.95, `stable_swipes` 1..10, `max_history_swipes` 1..300, `wait` 0..10, mode) and the `validateWechatAutoSummaryRequest` validator. A real Settings center section (微信自动汇总) exposes the fields via DataStore (`SettingsKeys.WECHAT_*`, `SettingsCodec`) with normalization, masking affinity for any sensitive keys, and honest saved/error states. Gap: no actual collection (see E2). |
 | E2 | **WeChat auto-summary collection** | `utils/wechat/WechatAutoSummaryClient.ets`, `WechatAutoSummaryStorage.ets`, `entry/src/main/python/wechat_collect/*` | Boundary (BLOCKED) | **Boundary (BLOCKED)** | A typed `wechat/domain/WechatCollectionGate.kt` derives a truthful BLOCKED / NOT_CONFIGURED state from the Phase-8 verified bridge. It never drives WeChat, never sends arbitrary commands, and `collect()` never fabricates a summary: the Android `WorkflowDeviceAdapter` exposes no safe `wechat_collect` action, so a verified bridge still reports BLOCKED. The Settings section renders this status live. Real collection remains a PC-side Python/HDC service gap. |
@@ -1039,9 +1071,9 @@ Legend — **Status**:
   implementable on Android with **no secrets and no fake capability**: the local
   profile state, typed avatar domain, honest generation boundary and a real
   Composable page are all device-safe and device-free-testable.
-- Monthly insights (D2) and WeChat settings/validation (E1) are also portable
-  pure logic and are documented as **Portable-pending** for a later phase — not
-  left silent.
+- Monthly insights (D2) and WeChat settings/validation (E1) were also portable
+  pure logic; WeChat validation shipped in Phase 13 and **Gallery monthly
+  insights shipped in Phase 15** — neither was left silent.
 - AutoAgent (B1), float/edge (C1) and WeChat *collection* (E2) remain honest
   **Blocked** states (platform/permission/server blockers), never faked.
 - No Harmony-only MNN/HiAI binaries were copied; the Phase-10 native stub is

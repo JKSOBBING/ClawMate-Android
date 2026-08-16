@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -178,6 +179,8 @@ private class FakeOcrRepo(initial: GalleryPhotoItem) : GalleryRepository {
     fun getItemSync(id: String): GalleryPhotoItem? = items.value.firstOrNull { it.id == id }
 
     override fun observeItems(): Flow<List<GalleryPhotoItem>> = items
+    override fun observeMonthlyInsights(): Flow<List<com.clawmate.app.gallery.insights.GalleryMonthInsight>> =
+        items.map { com.clawmate.app.gallery.insights.GalleryMonthlyInsights.build(it) }
     override suspend fun getItem(id: String): GalleryPhotoItem? = items.value.firstOrNull { it.id == id }
 
     override suspend fun upsert(item: GalleryPhotoItem): GalleryPhotoItem {

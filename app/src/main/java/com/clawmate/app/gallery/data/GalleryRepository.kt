@@ -1,5 +1,6 @@
 package com.clawmate.app.gallery.data
 
+import com.clawmate.app.gallery.insights.GalleryMonthInsight
 import com.clawmate.app.gallery.model.CollectionGroup
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.model.GallerySearchHit
@@ -17,6 +18,14 @@ interface GalleryRepository {
 
     /** Observe all imported photo items (newest first). */
     fun observeItems(): Flow<List<GalleryPhotoItem>>
+
+    /**
+     * Observe the deterministic monthly insights derived purely from stored
+     * [GalleryPhotoItem]s (Phase 15). Every insight is computed on demand from
+     * real Room data by [com.clawmate.app.gallery.insights.GalleryMonthlyInsights];
+     * nothing is fabricated and no media is silently scanned.
+     */
+    fun observeMonthlyInsights(): Flow<List<GalleryMonthInsight>>
 
     /** Get one item by id. */
     suspend fun getItem(id: String): GalleryPhotoItem?

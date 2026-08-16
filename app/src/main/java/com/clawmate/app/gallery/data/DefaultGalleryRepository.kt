@@ -1,6 +1,7 @@
 package com.clawmate.app.gallery.data
 
 import com.clawmate.app.gallery.collection.CollectionGroupingService
+import com.clawmate.app.gallery.insights.GalleryMonthlyInsights
 import com.clawmate.app.gallery.model.CollectionGroup
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.model.GallerySearchHit
@@ -32,6 +33,13 @@ class DefaultGalleryRepository(
 
     override fun observeItems(): Flow<List<GalleryPhotoItem>> =
         dao.observeItems().map { list -> list.map(GalleryMappers::fromEntity) }
+
+    override fun observeMonthlyInsights(): Flow<List<com.clawmate.app.gallery.insights.GalleryMonthInsight>> =
+        observeItems().map { items ->
+            // Pure derivation over stored items — never fabricates an insight and
+            // never scans any media (only Room rows contribute).
+            GalleryMonthlyInsights.build(items)
+        }
 
     override suspend fun getItem(id: String): GalleryPhotoItem? =
         dao.getItem(id)?.let(GalleryMappers::fromEntity)

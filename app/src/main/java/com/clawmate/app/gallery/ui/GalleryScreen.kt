@@ -38,6 +38,8 @@ import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.analysis.CapabilityState
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.photo.rememberPhotoPicker
+import com.clawmate.app.gallery.ui.insights.GalleryInsightsViewModel
+import com.clawmate.app.gallery.ui.insights.MonthlyInsightsPanel
 
 /**
  * Gallery / Collection screen wired into the 汇总 tab of the shell.
@@ -74,6 +76,14 @@ fun GalleryScreen() {
     val uiState by vm.state.collectAsState()
     val selectedId by vm.selectedItemId.collectAsState()
     val detail by vm.detail.collectAsState()
+
+    // Phase 15 — real monthly-insights panel derived from the same Room-backed
+    // repository (loading / empty / error states; cloud AI summary & embedding
+    // stay explicitly NOT_CONFIGURED).
+    val insightsVm: GalleryInsightsViewModel = viewModel(
+        factory = GalleryInsightsViewModel.Factory(repository = repository),
+    )
+    val insightsState by insightsVm.state.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
 
@@ -130,6 +140,16 @@ fun GalleryScreen() {
                 label = { Text("搜索图库") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Phase 15 — real monthly-insights panel (pure derivation over stored
+            // Room data). Independent loading / empty / error states; never
+            // fabricates an insight or a summary.
+            MonthlyInsightsPanel(
+                state = insightsState,
+                onOpenItem = { id -> vm.selectItem(id) },
             )
 
             Spacer(Modifier.height(8.dp))

@@ -164,8 +164,9 @@ reached from the Home avatar card:
   entry point into this page. Profile persistence and the honest boundary are
   covered by deterministic unit tests. AutoAgent, float/edge overlay, WeChat
   collection, and (partially) embedding remain honest controlled/blocked states,
-  and gallery monthly insights + WeChat settings normalization are documented
-  as portable-pending for a later phase.
+  and gallery monthly insights + WeChat settings normalization were documented
+  as portable-pending at Phase 12 time (both since shipped — see Phase 13 and
+  Phase 15 below).
 
 **Phase 13** delivers the portable WeChat auto-summary **settings +
 normalization + validation** slice (previously marked Portable-pending in the
@@ -212,6 +213,57 @@ Portable-pending in the Phase 12 inventory C2, based on Harmony
   extended `SettingsSectionTest`): `SensitiveLogRedactorTest`,
   `RingBufferInAppLogRepositoryTest`, `LogFilterTest`, and the seventh section /
   badge "L".
+
+**Phase 15** delivers the portable Gallery **monthly insights** (previously
+marked Portable-pending in the Phase 12 inventory D2, based on Harmony
+`utils/gallery/GalleryMonthlyInsights.ets`):
+- A **pure port** (`gallery/insights/GalleryMonthlyInsights.kt`) of the monthly
+  bucketing / tag-count / local-summary / LLM-input builder, mapping directly
+  over the real Room-backed `GalleryPhotoItem`s already stored (Phases 3/9/11).
+  It buckets items into calendar months from `date` (falling back to
+  `createdAt`, then an honest 时间未知 group), computes per-month tag counts
+  (sorted desc, Harmony-stable tie order), produces a deterministic local
+  summary, keeps up to 6 representative items, and builds an LLM-input text
+  block capped at 80 samples — all from **stored data only**. It never scans
+  media and never fabricates an insight; `buildLlmInput` only string-formats the
+  items already loaded.
+- **Observable derivation** (`GalleryRepository.observeMonthlyInsights`) and an
+  in-memory `DefaultGalleryRepository` `map` over `observeItems()`, so insights
+  refresh automatically when items change.
+- A **real 月度洞察 panel** in the existing Gallery screen
+  (`ui/insights/MonthlyInsightsPanel.kt` + `GalleryInsightsViewModel`) with
+  honest Loading / Empty / Error / Loaded states: month chips + per-month total,
+  deterministic category-count bars/chips, the local summary, up to 6
+  representative items (tap to open the detail), and a truthful NOT_CONFIGURED
+  boundary for the cloud AI monthly summary / vector embedding
+  (`insights/GalleryMonthlyInsightCloudState.kt`) — no fabricated summary.
+- **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/gallery/
+  insights/` + `ui/insights/` + a repository derivation test): bucketing
+  (date / createdAt fallback / unknown), newest-month-first and within-month
+  newest-first ordering, tie-order stability, tag cleaning/dedup + category
+  fallback, the 6-representative cap, the 80-line LLM-input cap + determinism +
+  "无" empty block, the ViewModel Loading→Loaded/Empty/Error state machine, and
+  repository-item-driven derivation. 490 unit tests, 0 failures, 0 errors.
+
+## Layout — features added in Phase 15
+
+```
+app/src/main/java/com/clawmate/app/gallery/insights/
+├── GalleryMonthlyInsights.kt            # Pure Harmony GalleryMonthlyInsights.ets port:
+│                                        #   build() bucketing / tag-counts / summary / representatives
+│                                        #   + buildLlmInput() (80-sample cap)
+├── GalleryMonthlyInsight.kt             # GalleryMonthInsight / GalleryMonthCategoryCount models
+└── GalleryMonthlyInsightCloudState.kt   # Honest NOT_CONFIGURED boundary for cloud AI summary / embedding
+
+app/src/main/java/com/clawmate/app/gallery/ui/insights/
+├── GalleryInsightsViewModel.kt          # Loading / Empty / Loaded / Error state machine over observeMonthlyInsights
+└── MonthlyInsightsPanel.kt              # 月度洞察 card: month chips, totals, category bars/chips,
+                                         #   local summary, representative items, cloud NOT_CONFIGURED notice
+
+(mod) app/src/main/java/com/clawmate/app/gallery/data/GalleryRepository.kt      # + observeMonthlyInsights()
+(mod) app/src/main/java/com/clawmate/app/gallery/data/DefaultGalleryRepository.kt # pure map over observeItems()
+(mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryScreen.kt              # wire the 月度洞察 panel
+```
 
 ## Layout — features added in Phase 14
 

@@ -3,6 +3,7 @@ package com.clawmate.app.gallery.data
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -135,6 +136,26 @@ class GalleryRepositoryEditDeleteTest {
         assertTrue(repo.itemGroupMembership("y").isEmpty())
         val after = repo.itemGroupMembership("x")
         assertTrue(after.all { it.eventIds == listOf("x") })
+    }
+
+    @Test
+    fun observeMonthlyInsightsDerivesFromStoredItems() = runBlocking {
+        val repo = repoWith(
+            GalleryPhotoItem(
+                id = "a", uri = "content://media/picker/a", date = "2026-06-01",
+                title = "", category = "餐饮", summary = "", createdAt = 0L,
+            ),
+            GalleryPhotoItem(
+                id = "b", uri = "content://media/picker/b", date = "2026-07-02",
+                title = "", category = "工作", summary = "", createdAt = 0L,
+            ),
+        )
+        val insights = repo.observeMonthlyInsights().first()
+        assertEquals(listOf("2026-07", "2026-06"), insights.map { it.key })
+        // Only item "b" (2026-07, no tags) lands in that month; it falls back to
+        // its whitelisted category "工作" alone.
+        assertEquals(listOf("工作"), insights[0].categoryCounts.map { it.label })
+        assertEquals(1, insights[0].totalCount)
     }
 }
 
