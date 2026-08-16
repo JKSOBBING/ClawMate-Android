@@ -1,8 +1,11 @@
 package com.clawmate.app.task.hdc
 
+import com.clawmate.app.wechat.domain.WechatAutoSummaryModes
+import com.clawmate.app.wechat.domain.WechatAutoSummaryRequest
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,6 +43,19 @@ class WorkflowDeviceAdapterTest {
         tunnelReady = true, fportReady = true, rportReady = true,
     )
 
+    private fun wechatRequest() = WechatAutoSummaryRequest(
+        mode = WechatAutoSummaryModes.RECENT,
+        days = 7,
+        maxContacts = 10,
+        targetContact = "",
+        maxListSwipes = 5,
+        swipeSpeed = 2000,
+        historySwipeRatio = 0.4,
+        stableSwipes = 3,
+        maxHistorySwipes = 80,
+        wait = 1.0,
+    )
+
     // -------------------------------------------------------------- disabled
 
     @Test
@@ -51,6 +67,7 @@ class WorkflowDeviceAdapterTest {
         assertTrue(a.screenshot(0.5) is HdcActionResult.Unsupported)
         assertTrue(a.guiAction(mapOf("action" to "click")) is HdcActionResult.Unsupported)
         assertTrue(a.executeDeciderAction("r", 100, 200) is HdcActionResult.Unsupported)
+        assertTrue(a.wechatCollect(wechatRequest()) is HdcActionResult.Unsupported)
     }
 
     // ------------------------------------------------------- bridge configured
@@ -149,6 +166,77 @@ class WorkflowDeviceAdapterTest {
         assertTrue(result is HdcActionResult.BridgeError)
     }
 
+    // ------------------------------------------------------ wechat_collect
+
+    @Test
+    fun `wechat_collect sends exactly the fixed action and snake_case payload`() = runBlocking {
+        var captured: Map<String, Any?>? = null
+        val fake = client(workflow = { action, payload ->
+            assertEquals("wechat_collect", action)
+            captured = payload
+            HdcBridgeResult.Response(HdcBridgeResponse(status = "ok"))
+        })
+        val result = BridgeBackedWorkflowDeviceAdapter(fake).wechatCollect(wechatRequest())
+        assertTrue(result is HdcActionResult.Success)
+        assertEquals(listOf("wechat_collect"), fake.workflowActions)
+        val p = requireNotNull(captured)
+        assertEquals("recent_contacts", p["mode"])
+        assertEquals(7, p["days"])
+        assertEquals(10, p["max_contacts"])
+        assertEquals("", p["target_contact"])
+        assertEquals(5, p["max_list_swipes"])
+        assertEquals(2000, p["swipe_speed"])
+        assertEquals(0.4, p["history_swipe_ratio"])
+        assertEquals(3, p["stable_swipes"])
+        assertEquals(80, p["max_history_swipes"])
+        assertEquals(1.0, p["wait"])
+    }
+
+    @Test
+    fun `wechat_collect omits optional max_list_swipes when null`() = runBlocking {
+        var captured: Map<String, Any?>? = null
+        val fake = client(workflow = { _, payload ->
+            captured = payload
+            HdcBridgeResult.Response(HdcBridgeResponse(status = "ok"))
+        })
+        BridgeBackedWorkflowDeviceAdapter(fake).wechatCollect(wechatRequest().copy(maxListSwipes = null))
+        val p = requireNotNull(captured)
+        assertNull(p["max_list_swipes"])
+    }
+
+    @Test
+    fun `wechat_collect wire fields are snake_case not camelCase`() = runBlocking {
+        var captured: Map<String, Any?>? = null
+        val fake = client(workflow = { _, payload ->
+            captured = payload
+            HdcBridgeResult.Response(HdcBridgeResponse(status = "ok"))
+        })
+        BridgeBackedWorkflowDeviceAdapter(fake).wechatCollect(wechatRequest())
+        assertFalse(requireNotNull(captured).containsKey("maxContacts"))
+        assertFalse(requireNotNull(captured).containsKey("targetContact"))
+        assertFalse(requireNotNull(captured).containsKey("swipeSpeed"))
+    }
+
+    @Test
+    fun `wechat_collect bridge error envelope surfaces honestly`() = runBlocking {
+        val fake = client(workflow = { _, _ ->
+            HdcBridgeResult.Response(HdcBridgeResponse(status = "error", message = "wechat_collect_failed"))
+        })
+        val result = BridgeBackedWorkflowDeviceAdapter(fake).wechatCollect(wechatRequest())
+        assertTrue(result is HdcActionResult.BridgeError)
+        assertEquals(listOf("wechat_collect"), fake.workflowActions)
+    }
+
+    @Test
+    fun `wechat_collect transport error maps to typed transport error`() = runBlocking {
+        val fake = client(workflow = { _, _ ->
+            HdcBridgeResult.Error(HdcBridgeErrorKind.TIMEOUT, "timed out")
+        })
+        val result = BridgeBackedWorkflowDeviceAdapter(fake).wechatCollect(wechatRequest())
+            as HdcActionResult.TransportError
+        assertEquals(HdcBridgeErrorKind.TIMEOUT, result.kind)
+    }
+
     @Test
     fun `adapter never sends run_cmd or arbitrary command strings`() = runBlocking {
         val fake = client(workflow = { action, _ ->
@@ -159,10 +247,11 @@ class WorkflowDeviceAdapterTest {
         adapter.screenshot(0.5)
         adapter.guiAction(mapOf("action" to "swipe"))
         adapter.executeDeciderAction("r", 1, 1)
+        adapter.wechatCollect(wechatRequest())
         assertFalse(fake.workflowActions.any { it == "run_cmd" })
         fake.workflowActions.forEach { assertTrue(it in ALLOWED_ACTIONS) }
     }
 
     private val ALLOWED_ACTIONS =
-        setOf("app_start", "screenshot", "gui_action", "execute_decider_action", "health")
+        setOf("app_start", "screenshot", "gui_action", "execute_decider_action", "wechat_collect", "health")
 }

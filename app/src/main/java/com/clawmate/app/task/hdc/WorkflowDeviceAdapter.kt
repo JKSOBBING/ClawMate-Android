@@ -1,5 +1,7 @@
 package com.clawmate.app.task.hdc
 
+import com.clawmate.app.wechat.domain.WechatAutoSummaryRequest
+
 /**
  * Result of a single device-control action through a [WorkflowDeviceAdapter].
  *
@@ -37,6 +39,7 @@ sealed class HdcActionResult {
  *  - [screenshot]                    -> `screenshot`
  *  - [guiAction]                     -> `gui_action`
  *  - [executeDeciderAction]          -> `execute_decider_action`
+ *  - [wechatCollect]                 -> `wechat_collect`
  *
  * It must **never** send `/api/run_cmd` or arbitrary command strings, and
  * must **never** itself execute shell/adb/hdc/accessibility or spawn processes.
@@ -58,6 +61,9 @@ interface WorkflowDeviceAdapter {
     suspend fun guiAction(payload: Map<String, Any?>): HdcActionResult
 
     suspend fun executeDeciderAction(responseText: String, width: Int, height: Int): HdcActionResult
+
+    /** Sends a fixed `wechat_collect` action with the WeChat auto-summary request payload. */
+    suspend fun wechatCollect(request: WechatAutoSummaryRequest): HdcActionResult
 }
 
 /**
@@ -78,5 +84,7 @@ object DisabledWorkflowDeviceAdapter : WorkflowDeviceAdapter {
     override suspend fun screenshot(factor: Double) = HdcActionResult.Unsupported(REASON)
     override suspend fun guiAction(payload: Map<String, Any?>) = HdcActionResult.Unsupported(REASON)
     override suspend fun executeDeciderAction(responseText: String, width: Int, height: Int) =
+        HdcActionResult.Unsupported(REASON)
+    override suspend fun wechatCollect(request: WechatAutoSummaryRequest) =
         HdcActionResult.Unsupported(REASON)
 }

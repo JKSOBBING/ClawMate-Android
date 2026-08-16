@@ -1,10 +1,12 @@
 package com.clawmate.app.task.hdc
 
+import com.clawmate.app.wechat.domain.WechatAutoSummaryRequest
+
 /**
  * [WorkflowDeviceAdapter] backed by a [HdcBridgeClient]. It performs the safe
  * protocol actions only:
  *  - [health]                        -> live `GET /api/health`
- *  - [startApp] / [screenshot] / [guiAction] / [executeDeciderAction]
+ *  - [startApp] / [screenshot] / [guiAction] / [executeDeciderAction] / [wechatCollect]
  *                                     -> `POST /api/workflow` protocol calls
  *
  * It never sends `/api/run_cmd` and never builds or runs a command string. It
@@ -96,6 +98,30 @@ class BridgeBackedWorkflowDeviceAdapter(
     override suspend fun executeDeciderAction(responseText: String, width: Int, height: Int): HdcActionResult {
         val payload = mapOf("response" to responseText, "width" to width, "height" to height)
         return requestAction("execute_decider_action", payload)
+    }
+
+    /**
+     * Sends the fixed `wechat_collect` action with the WeChat auto-summary
+     * request mapped to the PC-side service's snake_case JSON payload fields
+     * (matching the Harmony `WechatAutoSummaryRequest` wire contract). No other
+     * action is ever sent for collection, and no arbitrary command/direct process
+     * execution is performed.
+     */
+    override suspend fun wechatCollect(request: WechatAutoSummaryRequest): HdcActionResult =
+        requestAction("wechat_collect", wechatCollectPayload(request))
+
+    /** Maps a [WechatAutoSummaryRequest] onto the snake_case `wechat_collect` payload. */
+    private fun wechatCollectPayload(request: WechatAutoSummaryRequest): Map<String, Any?> = buildMap {
+        put("mode", request.mode)
+        put("days", request.days)
+        put("max_contacts", request.maxContacts)
+        put("target_contact", request.targetContact)
+        request.maxListSwipes?.let { put("max_list_swipes", it) }
+        put("swipe_speed", request.swipeSpeed)
+        put("history_swipe_ratio", request.historySwipeRatio)
+        put("stable_swipes", request.stableSwipes)
+        put("max_history_swipes", request.maxHistorySwipes)
+        put("wait", request.wait)
     }
 
     private suspend fun requestAction(action: String, payload: Map<String, Any?>): HdcActionResult =
