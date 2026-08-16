@@ -136,6 +136,13 @@ fun ProfileAvatarScreen(
                 state = state.generationState,
                 guidance = state.generationGuidance,
                 completeness = state.completeness,
+                runState = state.runState,
+                runStateLabel = state.runStateLabel,
+                generationError = state.generationError,
+                isGenerating = state.runState == com.clawmate.app.profile.avatar.domain.AvatarRunState.RUNNING,
+                canGenerate = state.generationState == AvatarGenerationState.READY &&
+                    state.runState != com.clawmate.app.profile.avatar.domain.AvatarRunState.RUNNING,
+                onGenerate = viewModel::generateAvatar,
             )
 
             // Local avatar asset card (display + import + history + clear)
@@ -270,6 +277,12 @@ private fun GenerationStatusCard(
     state: AvatarGenerationState,
     guidance: String,
     completeness: Int,
+    runState: com.clawmate.app.profile.avatar.domain.AvatarRunState,
+    runStateLabel: String,
+    generationError: String?,
+    isGenerating: Boolean,
+    canGenerate: Boolean,
+    onGenerate: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -278,10 +291,16 @@ private fun GenerationStatusCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val dotColor = when {
+                    state == AvatarGenerationState.NOT_CONFIGURED -> Color(0xFFB1B7C6)
+                    state == AvatarGenerationState.PARTIALLY_CONFIGURED -> Color(0xFFF59E0B)
+                    isGenerating -> Color(0xFF7669FF)
+                    else -> Color(0xFF3FA72F)
+                }
                 Box(
                     modifier = Modifier
                         .size(10.dp)
-                        .background(if (state == AvatarGenerationState.NOT_CONFIGURED) Color(0xFFB1B7C6) else Color(0xFF7669FF), RoundedCornerShape(5.dp)),
+                        .background(dotColor, RoundedCornerShape(5.dp)),
                 )
                 Text(
                     "分身生成服务",
@@ -301,6 +320,33 @@ private fun GenerationStatusCard(
                 color = Color(0xFF6F7684),
                 modifier = Modifier.padding(top = 6.dp),
             )
+
+            // Real run-state / error surface (never a faked success).
+            if (isGenerating) {
+                Text(
+                    runStateLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF7669FF),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            generationError?.let { error ->
+                Text(
+                    error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            if (runState == com.clawmate.app.profile.avatar.domain.AvatarRunState.SUCCESS) {
+                Text(
+                    runStateLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF3FA72F),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -313,6 +359,19 @@ private fun GenerationStatusCard(
                     trackColor = Color(0xFFE5E7EF),
                 )
                 Text("$completeness%", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7669FF))
+            }
+
+            Button(
+                onClick = onGenerate,
+                enabled = canGenerate,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7669FF)),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            ) {
+                Text(
+                    if (isGenerating) "生成中…" else "生成数字分身",
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }

@@ -57,11 +57,12 @@ class ProfileAvatarViewModelTest {
     }
 
     @Test
-    fun `configured avatar settings yield configured-but-no-provider honest state`() {
+    fun `configured avatar settings yield ready honest state`() {
         val settings = AppSettings.defaults().copy(
             avatarImageBaseUrl = "https://img.example.com",
             avatarImageApiKey = "sk-abc",
             avatarTextToImageModel = "seedream-3",
+            avatarImageSize = "2K",
         )
         val gate = AvatarGenerationGate.state(
             AvatarProviderSettings(
@@ -71,9 +72,8 @@ class ProfileAvatarViewModelTest {
                 imageSize = settings.avatarImageSize,
             ),
         )
-        // Never an invented "generating/ready" — with no wired provider the
-        // honest state is CONFIGURED_BUT_NO_PROVIDER.
-        assertEquals(AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER, gate)
+        // With a real provider wired, fully-configured settings are READY.
+        assertEquals(AvatarGenerationState.READY, gate)
     }
 
     @Test

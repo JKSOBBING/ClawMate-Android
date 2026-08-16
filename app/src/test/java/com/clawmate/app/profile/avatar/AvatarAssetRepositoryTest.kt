@@ -139,7 +139,8 @@ class AvatarAssetRepositoryTest {
         assertEquals(AvatarGenerationState.NOT_CONFIGURED, gate)
         // A record that claims local-import exists does not make that a lie.
         assertEquals("local-import", repo.currentVersion()!!.provider)
-        assertFalse(AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER == gate)
+        // With no provider settings, the gate must not become READY (no fabrication).
+        assertFalse(AvatarGenerationState.READY == gate)
     }
 
     @Test

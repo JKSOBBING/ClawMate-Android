@@ -1,5 +1,6 @@
 package com.clawmate.app.profile.avatar.data.asset
 
+import com.clawmate.app.profile.avatar.domain.AvatarGenerationMode
 import com.clawmate.app.profile.avatar.domain.AvatarStatusToken
 import java.util.Locale
 
@@ -158,6 +159,33 @@ object AvatarAssetStorageLogic {
         updatedAt = version.createdAt,
         referencePhotoPath = referencePhotoPath,
     )
+
+    /**
+     * Build the [AvatarVersionRecord] that persists a real provider-generated
+     * avatar (migration row A2 local asset result path). The version id
+     * (`seedream-<seq>`) distinguishes a generated image from a `local-import`,
+     * and `provider` is `"seedream"` exactly as the Harmony `AvatarService` does.
+     * The record stays defensive-oversized-checked by the repository before write.
+     */
+    fun generatedVersionRecord(
+        versionId: String,
+        createdAt: String,
+        relativeImagePath: String,
+        mode: AvatarGenerationMode,
+        model: String,
+        prompt: String,
+        profileHash: String,
+    ): AvatarVersionRecord = AvatarVersionRecord(
+        versionId = versionId,
+        createdAt = createdAt,
+        imageRelativePath = relativeImagePath,
+        mode = mode,
+        provider = "seedream",
+        model = model.takeIf { it.isNotBlank() } ?: "seedream",
+        promptSnapshot = prompt.take(4096),
+        profileSnapshotHash = profileHash,
+    )
+
 
     /**
      * Simple structural size guard for a single asset record payload before

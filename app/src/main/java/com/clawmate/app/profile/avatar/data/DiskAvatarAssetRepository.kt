@@ -146,6 +146,52 @@ class DiskAvatarAssetRepository(
         return AvatarImportResult(newState, record)
     }
 
+    override suspend fun persistGeneratedImage(
+        bytes: ByteArray,
+        outputFormat: String,
+        mode: com.clawmate.app.profile.avatar.domain.AvatarGenerationMode,
+        model: String,
+        prompt: String,
+        profileHash: String,
+    ): AvatarImportResult {
+        // Bounded + validated local asset result path: empty/oversized bytes are
+        // rejected before any write; the bytes come from a real provider.
+        if (bytes.isEmpty()) {
+            return AvatarImportResult(loadState(), errorMessage = "生成结果为空")
+        }
+        if (bytes.size > maxImportBytes) {
+            return AvatarImportResult(
+                loadState(),
+                errorMessage = "生成图片过大（超过 ${maxImportBytes / 1024} KB 限制）",
+            )
+        }
+        val extension = AvatarAssetStorageLogic.assetExtension(outputFormat)
+        val versionId = "seedream-${saveSequence.incrementAndGet()}"
+        val now = nowIsoLocal()
+        val relativeImagePath = AvatarAssetStorageLogic.relativeAssetPath(versionId, extension)
+        val state = loadState()
+        val record = AvatarAssetStorageLogic.generatedVersionRecord(
+            versionId = versionId,
+            createdAt = now,
+            relativeImagePath = relativeImagePath,
+            mode = mode,
+            model = model,
+            prompt = prompt,
+            profileHash = profileHash,
+        )
+        if (AvatarAssetStorageLogic.isRecordOversized(record)) {
+            return AvatarImportResult(state, errorMessage = "版本元数据超出安全上限")
+        }
+        if (!writeBytesAtomic(resolveAssetRelative(relativeImagePath), bytes)) {
+            return AvatarImportResult(state, errorMessage = "保存失败：无法写入本地存储")
+        }
+        writeVersion(record)
+        writeVersionIndex(record.versionId)
+        val newState = AvatarAssetStorageLogic.stateAfterImport(state, record)
+        writeJson(stateFile, newState)
+        return AvatarImportResult(newState, record)
+    }
+
     override suspend fun deleteVersion(versionId: String): Boolean {
         if (versionId.isBlank()) return false
         val ids = readVersionIndexIds().filter { it != versionId }

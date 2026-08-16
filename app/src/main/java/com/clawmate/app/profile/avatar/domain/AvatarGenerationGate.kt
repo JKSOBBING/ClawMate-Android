@@ -1,22 +1,38 @@
 package com.clawmate.app.profile.avatar.domain
 
+import com.clawmate.app.profile.avatar.data.generation.AvatarProviderLimits
+import com.clawmate.app.profile.avatar.data.generation.AvatarUrlValidator
+
 /**
  * Truthful capability boundary for digital-avatar image generation.
  *
- * The HarmonyOS avatar generation is a cloud call to a Seedream provider
- * (`datamanager/avatar/SeedreamAvatarProvider.ets`) that requires a configured
- * image base URL + API key + model, and returns real bytes. On Android we do
- * **not** vendor that cloud path and we never fabricate a generated avatar.
- * This gate derives an honest, actionable state purely from the locally
- * configured settings (`AvatarProviderSettings`), and records that a real
- * generation requires a configured, network-reachable provider.
+ * Rooted in the HarmonyOS `datamanager/avatar/SeedreamAvatarProvider.ets` +
+ * `datamanager/avatar/AvatarService.ets` flow, but on Android the generation is
+ * **actually wired** through a configured Seedream-compatible provider (migration
+ * row A2). The gate derives an honest readiness state purely from the locally
+ * configured settings:
+ *  - [NOT_CONFIGURED] — no base URL / no api key: the 生成 action stays disabled
+ *    and the provider is never called;
+ *  - [PARTIALLY_CONFIGURED] — base URL + key present but model or image size is
+ *    missing (or the base URL is not a well-formed http/https endpoint): the
+ *    action is disabled because the provider would lack required inputs;
+ *  - [READY] — base URL (http/https + host), api key, model and size all
+ *    present: a real `AvatarProvider` generation may proceed on explicit user
+ *    action.
+ *
+ * This gate is a pure total function: it never performs network I/O, never
+ * generates an image, and its readiness result is what a caller checks *before*
+ * it is allowed to build/send any request.
  */
 enum class AvatarGenerationState {
     /** No provider config present — the "生成数字分身" action must stay disabled. */
     NOT_CONFIGURED,
 
-    /** Provider credentials/model are present, but no verified provider adapter is wired. */
-    CONFIGURED_BUT_NO_PROVIDER,
+    /** Base URL + api key present, but model/size missing or the URL invalid. */
+    PARTIALLY_CONFIGURED,
+
+    /** A fully configured, reachable-in-principle provider is ready for a user action. */
+    READY,
 }
 
 /**
@@ -33,43 +49,53 @@ data class AvatarProviderSettings(
 ) {
     val hasBaseUrl: Boolean get() = imageBaseUrl.isNotBlank()
     val hasApiKey: Boolean get() = apiKey.isNotBlank()
+    val hasModel: Boolean get() = textToImageModel.isNotBlank()
+    val hasImageSize: Boolean get() = imageSize.isNotBlank()
 }
 
 object AvatarGenerationGate {
     /**
-     * Deterministically derive the honest generation state from configured
-     * settings. Returns [AvatarGenerationState.NOT_CONFIGURED] whenever the
-     * provider cannot be reached with real credentials; otherwise
-     * [AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER].
-     *
-     * This is a pure, total function: it never performs network I/O, never
-     * generates an image, and never claims a result it did not produce.
+     * Deterministically derive the honest readiness from configured settings.
+     * Returns [AvatarGenerationState.READY] only when every required provider
+     * input is present and the base URL is a valid absolute http/https endpoint.
      */
-    fun state(settings: AvatarProviderSettings): AvatarGenerationState =
-        if (settings.hasBaseUrl && settings.hasApiKey) {
-            AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER
-        } else {
-            AvatarGenerationState.NOT_CONFIGURED
+    fun state(settings: AvatarProviderSettings): AvatarGenerationState {
+        if (!settings.hasBaseUrl || !settings.hasApiKey) return AvatarGenerationState.NOT_CONFIGURED
+        val baseValid = AvatarUrlValidator.validateBaseUrl(settings.imageBaseUrl).valid
+        if (!baseValid || !settings.hasModel || !settings.hasImageSize) {
+            return AvatarGenerationState.PARTIALLY_CONFIGURED
         }
+        return AvatarGenerationState.READY
+    }
 
     /** Short, honest human copy for a given state. */
     fun label(state: AvatarGenerationState): String = when (state) {
         AvatarGenerationState.NOT_CONFIGURED -> "未配置数字分身生成服务"
-        AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER -> "已配置，但尚未接入生成服务"
+        AvatarGenerationState.PARTIALLY_CONFIGURED -> "数字分身服务配置不完整"
+        AvatarGenerationState.READY -> "数字分身服务已就绪"
+    }
+
+    /** Actionable guidance — never implies a fake success and never leaks the key. */
+    fun guidance(state: AvatarGenerationState, hasCurrentProfile: Boolean): String = when (state) {
+        AvatarGenerationState.NOT_CONFIGURED ->
+            "需要先配置图片服务 URL 与密钥（设置中心 → 数字分身图片服务）。当前不生成任何图片。"
+        AvatarGenerationState.PARTIALLY_CONFIGURED ->
+            "图片服务 URL 与密钥已配置，但还缺少文生图模型或图片尺寸（或 URL 格式不正确）。补齐后可点击“生成数字分身”。"
+        AvatarGenerationState.READY ->
+            if (hasCurrentProfile) {
+                "服务已就绪。点击“生成数字分身”将按你的本地画像生成一张图片并保存在本机（不会凭空编造）。"
+            } else {
+                "服务已就绪，但本地仓库还没有一个已保存的画像完整度。请先完善本地画像再生成。"
+            }
     }
 
     /**
-     * Actionable guidance shown under the honest state — never implies a fake
-     * success and never leaks the configured API key.
+     * Whether a generation action may proceed given the gate state. The caller
+     * backs out (and reports an honest message) *before* any network call when
+     * this is false.
      */
-    fun guidance(state: AvatarGenerationState, hasCurrentProfile: Boolean): String = when (state) {
-        AvatarGenerationState.NOT_CONFIGURED ->
-            "需要先配置图片服务 URL 与密钥（设置中心 → 模型与智能体 → 数字分身）。当前不生成任何图片。"
-        AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER ->
-            if (hasCurrentProfile) {
-                "已具备本地画像，但 Android 尚未接入云端生成服务，且此设备不会凭空产出分身图片。"
-            } else {
-                "已配置服务参数，但本地尚无完整画像，且 Android 尚未接入云端生成服务。"
-            }
-    }
+    fun canGenerate(state: AvatarGenerationState): Boolean = state == AvatarGenerationState.READY
+
+    /** Minimum profile completeness required for a meaningful generation. */
+    val minProfileCompleteness: Int get() = AvatarProviderLimits.MIN_PROFILE_COMPLETENESS
 }

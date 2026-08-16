@@ -6,16 +6,26 @@ import androidx.lifecycle.viewModelScope
 import com.clawmate.app.profile.avatar.data.AvatarAssetRepository
 import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
 import com.clawmate.app.profile.avatar.data.asset.AvatarVersionRecord
+import com.clawmate.app.profile.avatar.data.generation.AvatarErrorCause
+import com.clawmate.app.profile.avatar.data.generation.AvatarGenerationParams
+import com.clawmate.app.profile.avatar.data.generation.AvatarProvider
+import com.clawmate.app.profile.avatar.data.generation.AvatarProviderConfig
+import com.clawmate.app.profile.avatar.data.generation.AvatarProviderRequest
 import com.clawmate.app.profile.avatar.domain.AvatarGenerationGate
+import com.clawmate.app.profile.avatar.domain.AvatarGenerationMode
 import com.clawmate.app.profile.avatar.domain.AvatarGenerationState
 import com.clawmate.app.profile.avatar.domain.AvatarProviderSettings
+import com.clawmate.app.profile.avatar.domain.AvatarRunState
 import com.clawmate.app.profile.avatar.domain.LocalAvatarProfile
+import com.clawmate.app.profile.avatar.domain.avatarRunStateLabel
+import com.clawmate.app.profile.avatar.domain.buildAvatarGenerationPrompt
 import com.clawmate.app.profile.avatar.domain.localProfileCompleteness
 import com.clawmate.app.settings.data.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -34,6 +44,10 @@ data class ProfileAvatarUiState(
     val versionHistory: List<AvatarVersionRecord> = emptyList(),
     val isImporting: Boolean = false,
     val assetMessage: AssetMessage? = null,
+    // --- Phase 24: generation run lifecycle (row A2) ---
+    val runState: AvatarRunState = AvatarRunState.IDLE,
+    val runStateLabel: String = "",
+    val generationError: String? = null, // redacted; never contains a secret
 )
 
 /** One-shot honest snackbar message for the local asset repository. */
@@ -49,8 +63,9 @@ data class AssetMessage(val text: String, val isError: Boolean = false)
  */
 class ProfileAvatarViewModel(
     private val profileRepository: ProfileAvatarRepository,
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
     private val assetRepository: AvatarAssetRepository,
+    private val provider: AvatarProvider? = null,
 ) : ViewModel() {
 
     private val saveError = MutableStateFlow<String?>(null)
@@ -60,6 +75,8 @@ class ProfileAvatarViewModel(
     private val versionHistory = MutableStateFlow<List<AvatarVersionRecord>>(emptyList())
     private val isImporting = MutableStateFlow(false)
     private val assetMessage = MutableStateFlow<AssetMessage?>(null)
+    private val runState = MutableStateFlow(AvatarRunState.IDLE)
+    private val generationError = MutableStateFlow<String?>(null)
 
     // Working draft (unsaved edits) separate from the persisted snapshot so
     // field edits never touch storage until the user taps save.
@@ -74,7 +91,8 @@ class ProfileAvatarViewModel(
             Triple(current, imagePath, history)
         },
         combine(isImporting, assetMessage) { importing, message -> importing to message },
-    ) { (profile, settings), (draft, error, ok), (current, imagePath, history), (importing, message) ->
+        combine(runState, generationError) { run, error -> run to error },
+    ) { (profile, settings), (draft, error, ok), (current, imagePath, history), (importing, message), (run, genError) ->
         ProfileAvatarUiState(
             profile = profile,
             draft = draft,
@@ -88,6 +106,9 @@ class ProfileAvatarViewModel(
             versionHistory = history,
             isImporting = importing,
             assetMessage = message,
+            runState = run,
+            runStateLabel = avatarRunStateLabel(run),
+            generationError = genError,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ProfileAvatarUiState())
 
@@ -217,6 +238,147 @@ class ProfileAvatarViewModel(
         assetMessage.value = AssetMessage(text, isError)
     }
 
+    // --- Phase 24: user-initiated avatar generation (migration row A2) -------
+
+    /**
+     * Generate a real digital avatar from the locally curated profile using the
+     * configured Seedream provider. Explicit user action (tapping 生成数字分身)
+     * is the recorded consent for text-to-image generation (no photo is used).
+     *
+     * Honest state machine: the gate must be READY **and** a provider must be
+     * wired and the profile completeness must reach the minimum threshold —
+     * otherwise the action backs out with [AvatarRunState.ERROR] and **no network
+     * call is made**. On success the provider's real image bytes are persisted
+     * through the app-private [AvatarAssetRepository.persistGeneratedImage] and
+     * the run resolves to [AvatarRunState.SUCCESS]. Provider errors are surfaced
+     * redacted (never the api key).
+     */
+    fun generateAvatar() {
+        val provider = provider ?: run {
+            generationError.value = "尚未接入云端生成服务"
+            runState.value = AvatarRunState.ERROR
+            return
+        }
+        viewModelScope.launch {
+            val settingsSnapshot = settingsRepositorySnapshot()
+            val gate = generationState(settingsSnapshot)
+            if (!AvatarGenerationGate.canGenerate(gate)) {
+                generationError.value = AvatarGenerationGate.guidance(gate, hasCurrentProfile = true)
+                runState.value = AvatarRunState.ERROR
+                return@launch
+            }
+            val profile = profileRepository.snapshot()
+            if (localProfileCompleteness(profile) < AvatarGenerationGate.minProfileCompleteness) {
+                generationError.value = "本地画像完整度不足，无法生成。请先完善本地画像。"
+                runState.value = AvatarRunState.ERROR
+                return@launch
+            }
+
+            val prompt = buildAvatarGenerationPrompt(profile)
+            val config = buildConfig(settingsSnapshot)
+            val request = AvatarProviderRequest(
+                prompt = prompt.text,
+                model = config.textToImageModel,
+                params = AvatarGenerationParams(
+                    size = config.size,
+                    responseFormat = config.responseFormat,
+                    outputFormat = config.outputFormat,
+                    watermark = config.watermark,
+                    stream = false,
+                    sequentialImageGeneration = "disabled",
+                ),
+            )
+            generationError.value = null
+            runState.value = AvatarRunState.RUNNING
+            try {
+                val result = provider.generateTextToImage(config, request)
+                if (result.imageBytesBase64.isBlank()) {
+                    throw com.clawmate.app.profile.avatar.data.generation.AvatarProviderException(
+                        com.clawmate.app.profile.avatar.data.generation.AvatarErrorCause.PARSE,
+                        "生成服务未返回图片数据",
+                    )
+                }
+                val bytes = com.clawmate.app.profile.avatar.data.generation.SeedreamResponseParser
+                    .decodeBoundedBase64(result.imageBytesBase64)
+                    ?: throw com.clawmate.app.profile.avatar.data.generation.AvatarProviderException(
+                        com.clawmate.app.profile.avatar.data.generation.AvatarErrorCause.UNSUPPORTED_IMAGE,
+                        "生成的图片数据无效或超出大小上限",
+                    )
+                val persisted = assetRepository.persistGeneratedImage(
+                    bytes = bytes,
+                    outputFormat = config.outputFormat,
+                    mode = AvatarGenerationMode.TEXT_TO_IMAGE,
+                    model = config.textToImageModel,
+                    prompt = prompt.text,
+                    profileHash = profileSnapshotHash(profile),
+                )
+                if (!persisted.success) {
+                    throw com.clawmate.app.profile.avatar.data.generation.AvatarProviderException(
+                        com.clawmate.app.profile.avatar.data.generation.AvatarErrorCause.INTERNAL,
+                        persisted.errorMessage ?: "保存生成的图片失败",
+                    )
+                }
+                runState.value = AvatarRunState.SUCCESS
+                assetMessage.value = AssetMessage("已生成数字分身并保存在本机")
+                refreshAssetState()
+            } catch (e: com.clawmate.app.profile.avatar.data.generation.AvatarProviderException) {
+                generationError.value = redactError(e, config)
+                runState.value = AvatarRunState.ERROR
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                runState.value = AvatarRunState.ERROR
+                generationError.value = "生成已取消"
+                throw e
+            } catch (e: Exception) {
+                // Never leak provider internals or the api key into the UI.
+                generationError.value = redactError(e, config)
+                runState.value = AvatarRunState.ERROR
+            }
+        }
+    }
+
+    /**
+     * Redact any raw exception into a one-line, secret-free message. Defence in
+     * depth on top of the provider: the configured api key (and any sk-*-shaped
+     * token) is scrubbed from anything surfaced to the UI.
+     */
+    private fun redactError(e: Throwable, config: AvatarProviderConfig): String {
+        val key = config.apiKey.trim()
+        val raw = e.message ?: "生成失败"
+        var text = raw.lines().first().trim().take(200).ifBlank { "生成失败" }
+        if (key.isNotEmpty()) text = text.replace(key, "•••")
+        // Guard against sk-*/Bearer fragments leaking regardless of exact match.
+        text = text.replace(Regex("(?i)(sk-[A-Za-z0-9_-]{4,})"), "•••")
+        text = text.replace("Bearer ???", "")
+        return text
+    }
+
+    private suspend fun settingsRepositorySnapshot(): com.clawmate.app.settings.domain.AppSettings =
+        settingsRepository.settings.first()
+
+    private fun buildConfig(settings: com.clawmate.app.settings.domain.AppSettings): AvatarProviderConfig =
+        AvatarProviderConfig(
+            imageBaseUrl = settings.avatarImageBaseUrl.trim().trimEnd('/'),
+            apiKey = settings.avatarImageApiKey.trim(),
+            textToImageModel = settings.avatarTextToImageModel.trim(),
+            size = settings.avatarImageSize.trim(),
+            responseFormat = "url",
+            outputFormat = "jpeg",
+            watermark = true,
+            timeoutMs = 60_000L,
+        )
+
+    private fun profileSnapshotHash(profile: LocalAvatarProfile): String {
+        val text = buildString {
+            append(profile.displayName)
+            append(profile.gender)
+            append(profile.age)
+            profile.domains.forEach { append(it.domain).append(':').append(it.shortSummary) }
+        }
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(text.toByteArray(Charsets.UTF_8))
+            .joinToString("") { String.format("%02x", it) }
+    }
+
     private fun resolveLocalAssetPath(relativePath: String): String? =
         assetRepository.absoluteAssetPath(relativePath)?.let { "file://$it" }
 
@@ -242,10 +404,11 @@ class ProfileAvatarViewModel(
         private val profileRepository: ProfileAvatarRepository,
         private val settingsRepository: SettingsRepository,
         private val assetRepository: AvatarAssetRepository,
+        private val provider: AvatarProvider? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            ProfileAvatarViewModel(profileRepository, settingsRepository, assetRepository) as T
+            ProfileAvatarViewModel(profileRepository, settingsRepository, assetRepository, provider) as T
     }
 }
 

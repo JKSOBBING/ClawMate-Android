@@ -53,6 +53,35 @@ interface AvatarAssetRepository {
     suspend fun clearAvatar(): AvatarClearResult
 
     /**
+     * Persist a **real provider-generated** avatar image (migration row A2).
+     *
+     * This is the local asset result path: [bytes] are the validated bytes a
+     * configured provider actually returned (never fabricated, never a
+     * placeholder). They are written under app-private `avatar/assets/` with the
+     * version id, a `seedream` provider version record is appended to history,
+     * and the current state advances to that version. Bounded + validated:
+     * empty/oversized/undecodable bytes are rejected with an honest error and
+     * never persisted.
+     *
+     * @param bytes real generated image bytes (already content-type/size gated
+     *   by the provider client).
+     * @param outputFormat e.g. `"jpeg"`/`"png"`/`"webp"` — used only to pick the
+     *   stored extension.
+     * @param mode the generation mode.
+     * @param model the model that produced the image.
+     * @param prompt the (bounded) prompt that produced it.
+     * @param profileHash the profile-snapshot hash the image was generated from.
+     */
+    suspend fun persistGeneratedImage(
+        bytes: ByteArray,
+        outputFormat: String,
+        mode: com.clawmate.app.profile.avatar.domain.AvatarGenerationMode,
+        model: String,
+        prompt: String,
+        profileHash: String,
+    ): AvatarImportResult
+
+    /**
      * Resolve a persisted relative asset path (e.g. `assets/local-1.jpg`) to an
      * **absolute** on-device path the image loader (Coil) can display, or null
      * for a blank relative path. Only reads the path mapping; never decodes or

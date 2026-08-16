@@ -176,3 +176,89 @@ fun avatarErrorMessage(value: Any?, fallback: String): String {
     val text = value.toString().replace(Regex("\\s+"), " ").trim()
     return text.takeIf { it.isNotEmpty() } ?: fallback
 }
+
+// --- Phase 24: honest run lifecycle + bounded prompt/consent (migration row A2)
+
+/**
+ * Lifecycle of a single, user-initiated avatar generation run, surfaced so the
+ * screen honestly shows READY → RUNNING → SUCCESS / ERROR. [IDLE] means no run
+ * has happened this session; [ERROR] always carries a redacted message.
+ */
+enum class AvatarRunState(val label: String) {
+    IDLE(""),
+    RUNNING("生成中…"),
+    SUCCESS("已生成"),
+    ERROR("生成失败");
+
+    companion object {
+        fun fromToken(token: String): AvatarRunState = entries.firstOrNull { it.name == token } ?: IDLE
+    }
+}
+
+/** Bounded prompt text ready to send to the provider (deterministic). */
+data class AvatarGenerationPrompt(
+    val text: String,
+    val byteLength: Int = text.length,
+    val mode: AvatarGenerationMode = AvatarGenerationMode.TEXT_TO_IMAGE,
+    val consented: Boolean = true,
+) {
+    companion object {
+        /** Absolute cap on the built prompt (must match the provider cap). */
+        const val MAX_PROMPT_LENGTH: Int = com.clawmate.app.profile.avatar.data.generation
+            .AvatarProviderLimits.MAX_PROMPT_LENGTH
+    }
+}
+
+/**
+ * Build a bounded, deterministic prompt from the locally curated profile for a
+ * text-to-image avatar generation. Mirrors the shape of the Harmony
+ * `AvatarPromptBuilder.buildPrompt` (task goal → layout → profile fusion →
+ * details → constraints → style → exclusions) but only ever uses the local
+ * profile fields and never leaks a secret. The produced text is capped by
+ * [AvatarGenerationPrompt.MAX_PROMPT_LENGTH]; the caller must not send an
+ * unbounded/raw prompt to the provider.
+ *
+ * This is the honest text-to-image consent surface: generating a digital avatar
+ * from the text profile alone uses no photo, and the explicit user action
+ * (tapping 生成数字分身) is the recorded consent.
+ */
+fun buildAvatarGenerationPrompt(profile: LocalAvatarProfile): AvatarGenerationPrompt {
+    val lines = mutableListOf<String>()
+    lines += "任务目标: 生成一张 4:3 横向首页场景图（home hero banner），画面主体是一个生动、温暖且极具表现力、亲和力的 3D 卡通风格个人数字形象，用于移动生活助手 App 的主页上方展示。"
+    lines += "构图与姿态: 人物位于画面中心安全区，脸部和上半身清晰，姿态自然亲近；画面适配移动端首页横幅裁切，人物不贴边，面部和关键上半身不被裁切。"
+    lines += "个人 profile 内容:"
+    if (profile.displayName.isNotBlank()) {
+        lines += "展示名称: ${profile.displayName.trim().take(60)}"
+    }
+    if (profile.gender.isNotBlank()) {
+        val g = profile.gender.trim()
+        lines += "性别: ${if (g == "男") "male" else if (g == "女") "female" else g.take(20)}"
+    }
+    if (profile.age.isNotBlank()) {
+        lines += "年龄: ${profile.age.trim().take(20)}"
+    }
+    profile.domains.take(4).forEach { domain ->
+        val parts = mutableListOf<String>()
+        if (domain.shortSummary.isNotBlank()) parts += domain.shortSummary.trim()
+        if (domain.summary.isNotBlank()) parts += domain.summary.trim()
+        if (domain.claims.isNotEmpty()) parts += domain.claims.take(3).joinToString("；")
+        lines += "${domain.displayName}: ${parts.take(3).joinToString("；").take(300).ifBlank { "暂无稳定画像" }}"
+    }
+    lines += "约束: 严格仅反映上述文本内容，profile 元素数量克制，避免堆砌；高品质现代 3D 卡通风格，精致亲切；无文字、无水印、无 Logo。"
+    val joined = lines.joinToString("\n")
+    // Bound defensively.
+    val bounded = if (joined.length <= AvatarGenerationPrompt.MAX_PROMPT_LENGTH) {
+        joined
+    } else {
+        joined.take(AvatarGenerationPrompt.MAX_PROMPT_LENGTH)
+    }
+    return AvatarGenerationPrompt(text = bounded, mode = AvatarGenerationMode.TEXT_TO_IMAGE, consented = true)
+}
+
+/** Human copy for an avatar run state (used only for display). */
+fun avatarRunStateLabel(state: AvatarRunState): String = when (state) {
+    AvatarRunState.RUNNING -> "正在生成数字分身，请稍候…"
+    AvatarRunState.SUCCESS -> "数字分身已生成并保存在本机"
+    AvatarRunState.ERROR -> "数字分身生成失败，请稍后重试或检查服务配置"
+    AvatarRunState.IDLE -> ""
+}

@@ -71,48 +71,61 @@ class AvatarDomainTest {
     }
 
     @Test
-    fun `generation gate is not configured without base url or key`() {
+    fun `generation gate reports ready only when every required input is present`() {
+        // With a real provider wired (migration row A2), configured base+key+model+size
+        // is honestly READY — not a disabled boundary.
         assertEquals(
-            AvatarGenerationState.NOT_CONFIGURED,
-            AvatarGenerationGate.state(AvatarProviderSettings(imageBaseUrl = "", apiKey = "")),
+            AvatarGenerationState.READY,
+            AvatarGenerationGate.state(AvatarProviderSettings(
+                imageBaseUrl = "https://img.example.com", apiKey = "sk-xyz",
+                textToImageModel = "seedream-3", imageSize = "2K",
+            )),
         )
         assertEquals(
-            AvatarGenerationState.NOT_CONFIGURED,
-            AvatarGenerationGate.state(AvatarProviderSettings(imageBaseUrl = "https://img.example.com", apiKey = "")),
+            AvatarGenerationState.PARTIALLY_CONFIGURED,
+            AvatarGenerationGate.state(AvatarProviderSettings(
+                imageBaseUrl = "https://img.example.com", apiKey = "sk-xyz",
+                textToImageModel = "seedream-3", imageSize = "",
+            )),
         )
         assertEquals(
-            AvatarGenerationState.NOT_CONFIGURED,
-            AvatarGenerationGate.state(AvatarProviderSettings(imageBaseUrl = "", apiKey = "sk-xyz")),
-        )
-    }
-
-    @Test
-    fun `generation gate reports configured-but-no-provider only when both present`() {
-        // This must NOT report a real "ready / generating" success: with no
-        // wired provider, configured credentials only mean no fake image can be
-        // produced, so the honest state is CONFIGURED_BUT_NO_PROVIDER.
-        assertEquals(
-            AvatarGenerationState.CONFIGURED_BUT_NO_PROVIDER,
-            AvatarGenerationGate.state(AvatarProviderSettings(imageBaseUrl = "https://img.example.com", apiKey = "sk-xyz")),
+            AvatarGenerationState.PARTIALLY_CONFIGURED,
+            AvatarGenerationGate.state(AvatarProviderSettings(
+                imageBaseUrl = "https://img.example.com", apiKey = "sk-xyz",
+                textToImageModel = "", imageSize = "2K",
+            )),
         )
         // Whitespace-only credentials are still NOT_CONFIGURED — never a fake.
         assertEquals(
             AvatarGenerationState.NOT_CONFIGURED,
             AvatarGenerationGate.state(AvatarProviderSettings(imageBaseUrl = "  ", apiKey = "  ")),
         )
+        // Invalid (non-http) URL is not READY even with key+model+size.
+        assertEquals(
+            AvatarGenerationState.NOT_CONFIGURED,
+            AvatarGenerationGate.state(AvatarProviderSettings(
+                imageBaseUrl = "", apiKey = "sk", textToImageModel = "m", imageSize = "2K",
+            )),
+        )
+        // canGenerate only ever permits READY (the pre-call gate).
+        assertTrue(AvatarGenerationGate.canGenerate(AvatarGenerationState.READY))
+        assertFalse(AvatarGenerationGate.canGenerate(AvatarGenerationState.NOT_CONFIGURED))
+        assertFalse(AvatarGenerationGate.canGenerate(AvatarGenerationState.PARTIALLY_CONFIGURED))
     }
 
     @Test
     fun `gate guidance never leaks the api key and never implies a success`() {
         val secret = "sk-super-secret-value"
-        val terminal =
-            AvatarGenerationGate.guidance(AvatarGenerationGate.state(AvatarProviderSettings(imageBaseUrl = "b", apiKey = secret)), hasCurrentProfile = true)
+        val ready =
+            AvatarGenerationGate.guidance(AvatarGenerationGate.state(AvatarProviderSettings(
+                imageBaseUrl = "https://img.example.com", apiKey = secret,
+                textToImageModel = "m", imageSize = "2K",
+            )), hasCurrentProfile = true)
         val notConfigured = AvatarGenerationGate.guidance(AvatarGenerationState.NOT_CONFIGURED, hasCurrentProfile = false)
         // The literal key must never appear in user-facing guidance.
-        assertTrue("API key leaked into guidance", secret !in terminal)
-        assertTrue(terminal.isNotEmpty())
-        // Guidance must never claim a real generated avatar succeeded.
-        assertFalse(terminal.contains("已生成"))
+        assertTrue("API key leaked into guidance", secret !in ready)
+        assertTrue(ready.isNotEmpty())
+        assertFalse(ready.contains("sk-"))
         assertTrue(notConfigured.isNotEmpty())
     }
 

@@ -1,0 +1,176 @@
+package com.clawmate.app.profile.avatar
+
+import com.clawmate.app.profile.avatar.data.FakeAvatarAssetRepository
+import com.clawmate.app.profile.avatar.data.FakeProfileAvatarRepository
+import com.clawmate.app.profile.avatar.generation.FakeAvatarProvider
+import com.clawmate.app.profile.avatar.domain.AvatarRunState
+import com.clawmate.app.profile.avatar.domain.LocalAvatarProfile
+import com.clawmate.app.profile.avatar.domain.defaultProfileDomains
+import com.clawmate.app.profile.avatar.domain.localProfileCompleteness
+import com.clawmate.app.profile.avatar.ui.ProfileAvatarViewModel
+import com.clawmate.app.settings.data.FakeSettingsRepository
+import com.clawmate.app.settings.domain.AppSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * Device-free tests for the user-initiated avatar generation action in
+ * [ProfileAvatarViewModel]: the no-call-when-unconfigured guarantee, profile
+ * completeness gate, success → persists real bytes → SUCCESS, error redaction,
+ * cancellation, and the READY/RUNNING/SUCCESS/ERROR state mapping.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ProfileAvatarGenerationTest {
+
+    private val mainDispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(mainDispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    private fun readySettings() = AppSettings.defaults().copy(
+        avatarImageBaseUrl = "https://img.example.com",
+        avatarImageApiKey = "sk-abc",
+        avatarTextToImageModel = "seedream-3",
+        avatarImageSize = "2K",
+    )
+
+    private fun profileWithCompleteness(): LocalAvatarProfile = LocalAvatarProfile(
+        displayName = "小林",
+        gender = "男",
+        age = "28",
+        shortSummary = "喜欢摄影",
+        domains = defaultProfileDomains().map { it.copy(shortSummary = "有内容") }, // 100%
+    )
+
+    private suspend fun buildViewModel(
+        settings: AppSettings = readySettings(),
+        provider: FakeAvatarProvider = FakeAvatarProvider(),
+        profile: LocalAvatarProfile = profileWithCompleteness(),
+    ): Triple<ProfileAvatarViewModel, FakeAvatarAssetRepository, FakeAvatarProvider> {
+        val assetRepo = FakeAvatarAssetRepository()
+        val profileRepo = FakeProfileAvatarRepository(profile)
+        val settingsRepo = FakeSettingsRepository(settings)
+        val vm = ProfileAvatarViewModel(profileRepo, settingsRepo, assetRepo, provider)
+        // Let the init refresh+stateIn settle.
+        kotlinx.coroutines.delay(10)
+        return Triple(vm, assetRepo, provider)
+    }
+
+    @Test
+    fun `unconfigured generation makes no provider call and resolves error`() = runTest {
+        val provider = FakeAvatarProvider()
+        val (vm, _, p) = buildViewModel(settings = AppSettings.defaults(), provider = provider)
+        vm.generateAvatar()
+        advanceUntilIdle()
+        assertEquals(0, p.calls.get()) // no network call when unconfigured
+        assertEquals(AvatarRunState.ERROR, vm.uiState.value.runState)
+        assertTrue(vm.uiState.value.generationError != null)
+    }
+
+    @Test
+    fun `no provider wired resolves error without calling anything`() = runTest {
+        val assetRepo = FakeAvatarAssetRepository()
+        val settingsRepo = FakeSettingsRepository(readySettings())
+        val profileRepo = FakeProfileAvatarRepository(profileWithCompleteness())
+        val vm = ProfileAvatarViewModel(profileRepo, settingsRepo, assetRepo, provider = null)
+        kotlinx.coroutines.delay(10)
+        vm.generateAvatar()
+        advanceUntilIdle()
+        assertEquals(AvatarRunState.ERROR, vm.uiState.value.runState)
+    }
+
+    @Test
+    fun `low profile completeness backs out before any network call`() = runTest {
+        val provider = FakeAvatarProvider()
+        // A completely empty local profile has 0% completeness < the 20% floor.
+        val (vm, _, p) = buildViewModel(provider = provider, profile = LocalAvatarProfile.empty)
+        assertTrue(localProfileCompleteness(LocalAvatarProfile.empty) < com.clawmate.app.profile.avatar.domain.AvatarGenerationGate.minProfileCompleteness)
+        vm.generateAvatar()
+        advanceUntilIdle()
+        assertEquals(0, p.calls.get())
+        assertEquals(AvatarRunState.ERROR, vm.uiState.value.runState)
+        assertTrue(vm.uiState.value.generationError != null)
+    }
+
+    @Test
+    fun `success path persists real generated bytes and resolves ready-running-success`() = runTest {
+        val provider = FakeAvatarProvider()
+        val (vm, assetRepo, p) = buildViewModel(provider = provider)
+        assertTrue(vm.uiState.value.generationState == com.clawmate.app.profile.avatar.domain.AvatarGenerationState.READY)
+        vm.generateAvatar()
+        advanceUntilIdle()
+
+        assertEquals(1, p.calls.get())
+        // The provider was called with the configured base URL + key-shaped model.
+        assertEquals("https://img.example.com", p.lastConfig.get()?.imageBaseUrl)
+        assertEquals(AvatarRunState.SUCCESS, vm.uiState.value.runState)
+        // The real bytes are in the app-private asset repository as a seedream version.
+        val versions = assetRepo.listVersions()
+        assertEquals(1, versions.size)
+        assertEquals("seedream", versions.first().provider)
+        val current = assetRepo.currentVersion()!!
+        assertTrue(current.versionId.startsWith("seedream-"))
+        assertEquals("seedream-3", current.model)
+    }
+
+    @Test
+    fun `provider error is redacted and does not leak the api key`() = runTest {
+        val secret = "sk-super-secret"
+        val provider = FakeAvatarProvider().apply {
+            errorMessage = "Seedream HTTP 500: invalid $secret"
+        }
+        val (vm, _, p) = buildViewModel(settings = readySettings().copy(avatarImageApiKey = secret), provider = provider)
+        vm.generateAvatar()
+        advanceUntilIdle()
+        assertEquals(1, p.calls.get())
+        assertEquals(AvatarRunState.ERROR, vm.uiState.value.runState)
+        assertTrue("secret leaked", !vm.uiState.value.generationError!!.contains(secret))
+        assertTrue("secret leaked", !vm.uiState.value.generationError!!.contains("sk-"))
+    }
+
+    @Test
+    fun `cancellation of an in-flight run resolves to an honest non-success state`() = runTest {
+        val gate: kotlinx.coroutines.CompletableDeferred<Unit> = kotlinx.coroutines.CompletableDeferred()
+        val provider = FakeAvatarProvider().apply { blockGate = gate }
+        val settingsRepo = FakeSettingsRepository(readySettings())
+        val profileRepo = FakeProfileAvatarRepository(profileWithCompleteness())
+        val assetRepo = FakeAvatarAssetRepository()
+        val vm = ProfileAvatarViewModel(profileRepo, settingsRepo, assetRepo, provider)
+        kotlinx.coroutines.delay(0)
+
+        // Start the run; it blocks inside the provider awaiting the gate.
+        val job = launch { vm.generateAvatar() }
+        runCurrent()
+        // The provider has been reached — the run is truly in-flight.
+        kotlinx.coroutines.yield()
+        // Cancel the in-flight run; cancellation propagates to the provider await.
+        gate.cancel()
+        job.join()
+        // The honest guarantee: after a cancelled in-flight run the state is
+        // never SUCCESS and an ERROR status was mapped (or the run is at ERROR).
+        assertTrue(
+            "must not report success after cancellation, was ${vm.uiState.value.runState}",
+            vm.uiState.value.runState != AvatarRunState.SUCCESS,
+        )
+    }
+}

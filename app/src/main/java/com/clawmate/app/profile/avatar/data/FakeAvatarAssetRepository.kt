@@ -81,6 +81,36 @@ class FakeAvatarAssetRepository(
         return AvatarImportResult(stateCopy.copy(), record.copy())
     }
 
+    override suspend fun persistGeneratedImage(
+        bytes: ByteArray,
+        outputFormat: String,
+        mode: com.clawmate.app.profile.avatar.domain.AvatarGenerationMode,
+        model: String,
+        prompt: String,
+        profileHash: String,
+    ): AvatarImportResult {
+        if (bytes.isEmpty()) return AvatarImportResult(stateCopy.copy(), errorMessage = "生成结果为空")
+        if (bytes.size > maxImportBytes) {
+            return AvatarImportResult(stateCopy.copy(), errorMessage = "生成图片过大")
+        }
+        val extension = AvatarAssetStorageLogic.assetExtension(outputFormat)
+        val versionId = "seedream-${sequence.incrementAndGet()}"
+        createdAtCounter += 1
+        val createdAt = "2025-03-%02d".format(createdAtCounter)
+        val record = AvatarAssetStorageLogic.generatedVersionRecord(
+            versionId = versionId,
+            createdAt = createdAt,
+            relativeImagePath = AvatarAssetStorageLogic.relativeAssetPath(versionId, extension),
+            mode = mode,
+            model = model,
+            prompt = prompt,
+            profileHash = profileHash,
+        )
+        items[versionId] = Item(record, bytes.copyOf(), referencePhoto = false)
+        stateCopy = AvatarAssetStorageLogic.stateAfterImport(stateCopy, record)
+        return AvatarImportResult(stateCopy.copy(), record.copy())
+    }
+
     override suspend fun deleteVersion(versionId: String): Boolean {
         if (versionId.isBlank()) return false
         val removed = items.remove(versionId) != null
