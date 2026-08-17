@@ -1,146 +1,223 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 35 (periodic local-consolidation scheduler seam + explicit model entity-enrichment seam)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 36 (schedule wiring + explicit enrich UI + generic batch event enrichment)
 
 ## Commit
 
-- Working on `0e46581` (**Phase 35**) in `/root/ClawMate-Android` at HEAD.
-  The Phase-35 source changes are in `/root/phase35.patch`; this document records
-  the verification and migration status in the target working tree.
+- Working tree: `/root/phase36-worktree`, a git worktree of `/root/ClawMate-Android`
+  based on commit `fd4a44c` (**Phase 35**). Phase-36 source changes are delivered
+  as `/root/phase36.patch`; this document records the verification and migration
+  status of the change. No `git commit` was made.
 - Base repo `/root/ClawMate-Android` and Harmony reference `/root/mobiinfra-oh`
-  are read-only-referenced: **neither was modified** by this documentation patch.
+  are read-only-referenced: **neither was modified** by this phase.
 
 ## Context / provenance
 
-Phase 35 adds two **explicit seams** on top of the Phase-33 entity index / Phase-34
-model consolidation, on the Android target. It delivers no WorkManager dependency
-and no UI wiring: both seams are disabled-by-default, in-process, JVM-testable
-entry points that a future UI / Application host and an actual WorkManager worker
-can wire independently. It:
+Phase 36 continues the migration audit by closing three **real, previously
+un-wired** gaps that Phase 35 explicitly left open, **without repeating**
+Phase 34/35:
 
-1. adds the **periodic local-consolidation scheduler seam** — a disabled-by-default,
-   in-process controller (`PeriodicConsolidationScheduler` + pure
-   `SchedulingPolicy`) with **no WorkManager dependency**, explicit `LOCAL_ONLY` +
-   `NOT_REQUIRED` opt-in, and serial / idempotent / cancellable execution of
-   deterministic local consolidation/index/profile rebuilds. It never references
-   the model-backed `CloudConsolidationRepository`;
-2. adds the **explicit model entity-enrichment seam** — `EntityEnrichmentRunner`
-   + strict-validating `EntityEnrichmentModelClient` + `EntityEnrichmentClientFactory`
-   that reuse the shared `ChatClient` / `ConsolidationModelConfig`. It subjects a
-   bounded candidate set (from the real local entity scope) to bounded strict JSON
-   with a **real candidate-id / source-ref whitelist** (unknown / duplicate /
-   out-of-bounds / over-long values dropped), is **zero network by default**
-   (local-only unless configured + explicit action + real candidates), and **does
-   not auto-persist** — it returns a new enriched document to the caller.
-
-The Harmony code is read-only reference (/root/mobiinfra-oh was **not** modified).
+1. **Schedule wiring —** a **minimal replaceable Android periodic-trigger
+   adapter** (`PeriodicTriggerAdapter` + `InProcessPeriodicTriggerAdapter` +
+   `PeriodicSchedulingHost`). **WorkManager was not in the offline Gradle cache**
+   (verified at phase start) and downloading it would violate the offline/no-
+   network rule, so no `androidx.work` dependency was introduced — instead the
+   Phase-35 `PeriodicConsolidationScheduler` is now driven through a small
+   replaceable adapter. The **only** registration entry is an explicit Settings
+   action; the schedule is **disabled by default** and is never registered from
+   `Application.onCreate`, Home load, recomposition, or a repository/Application
+   constructor. The scheduled job is strictly `LocalOnlyPeriodicJob` (deterministic
+   local consolidation / index / profile rebuild) and never calls
+   `CloudConsolidationRepository`.
+2. **Entity enrichment explicit UI/host wiring —** the Phase-35
+   `EntityEnrichmentRunner` is wired to an explicit Settings action in
+   `TaskAutomationSection`, with a typed result + honest state and a **caller-only
+   persistence** seam (`EntityEnrichmentPersistence`) that writes the model-enriched
+   document **only on an explicit MODEL success**. LOCAL_ONLY / FALLBACK / EMPTY
+   never write and the old artifact is preserved. The zero-network/default gate is
+   unchanged.
+3. **Generic model capability —** a **new bounded typed seam** for the Harmony
+   `DataPipelineModelClient.enrichEvents` generic batch event-enrich path
+   (keyword / domain / entity / todo extraction) was ported onto the existing
+   `ChatClient` / `ConsolidationModelConfig`: `BatchEventEnrichTypes` +
+   `BatchEventEnricher` + `BatchEventEnrichModelClient` +
+   `BatchEventEnrichClientFactory` + deterministic `EnrichRules` helpers. It is
+   strictly-JSON, real `event_id`-scoped, explicit-action-only, serial / cancellable,
+   falls back to a deterministic local enrich, and carries no URI/token/secret.
+   The profile **model-claim** path was already ported in Phase 32
+   (`ProfileModelClient` / `ProfileModelValidator`); this phase leaves it as the
+   authoritative profile-claims implementation and documents it (no duplication).
 
 ## Files changed
 
 New production files (`app/src/main/java/com/clawmate/app/datamanager/`):
 
-- `SchedulingPolicy.kt` — pure policy surface: `SchedulerMode.DISABLED` (the only
-  production default) / `LOCAL_ONLY`, `NetworkConstraint.NOT_REQUIRED`, task-name +
-  conflict policy, bounded/clamped interval. No secrets, no network, no WorkManager.
-- `PeriodicConsolidationScheduler.kt` — the single explicit registration seam:
-  `register` / `cancel` / `isScheduled` / `runScheduledOnce` / `runAllScheduledOnce`,
-  all serial through one `Mutex`, idempotent local jobs, cooperative cancellation
-  (`isCancelled`), and a `DISABLED` policy schedules nothing.
-- `EntityEnrichment.kt` — `EntityEnrichmentTypes`: bounded candidates (`EntityCandidate`),
-  strict whitelisting caps, strict `person|place|merchant` types (model `unknown` is
-  dropped), `RichEntity`, honest `EnrichmentStatus` (`EMPTY`/`LOCAL_ONLY`/`MODEL`/
-  `FALLBACK`), and a never-persisted `EnrichmentResult`.
-- `EntityEnrichmentModelClient.kt` — serial/bounded/cancellable model call with
-  **strict JSON + real candidate-id/source-ref whitelist validation**; hostile,
-  malformed, unknown/mismatched or over-long replies are dropped, never written.
-- `EntityEnrichmentRunner.kt` — the single explicit enrichment seam: loads the real
-  local scope, computes the deterministic local entity document, and only for an
-  explicit + fully-configured action with real candidates invites the model; the
-  merged enriched document is **returned, not persisted**; failure/EMPTY/LOCAL_ONLY
-  preserve the existing artifact byte-for-byte.
-- `EntityEnrichmentClientFactory.kt` — production composition helper (wraps the
-  shared `ChatClient`/`ChatCompletionsClient` behind an `EntityEnrichmentModelClient`
-  for a fully-validated `ConsolidationModelConfig`).
+- `PeriodicTriggerAdapter.kt` — replaceable periodic-trigger contract + typed
+  `PeriodicScheduleResult`; `InProcessPeriodicTriggerAdapter` wraps the Phase-35
+  `PeriodicConsolidationScheduler` under the single canonical local task name.
+- `PeriodicSchedulingHost.kt` — the explicit-only scheduling controller: binds a
+  persisted `periodicLocalConsolidationEnabled` opt-in to the adapter; `false`
+  cancels/schedules nothing, `true` registers one local-only task. Only invoked
+  from an explicit Settings action.
+- `BatchEventEnrich.kt` — bounded types for the generic batch event-enrich seam.
+- `EnrichRules.kt` — deterministic rule fallback/merge helpers (`deriveRuleKeywords`,
+  `deriveRuleDomains`, `normalizeDomains`, `workflowSceneLabels`,
+  `weekdayLabelFromDate`, six-domain `DOMAIN_RULES`).
+- `BatchEventEnrichModelClient.kt` — strict sanitising model client reusing
+  `ChatClient`/`ConsolidationModelConfig`; real-event-id whitelist; strict-JSON
+  decode; merges model terms with rule baseline.
+- `BatchEventEnricher.kt` — the single explicit seam (EMPTY / LOCAL_ONLY / MODEL /
+  FALLBACK); never auto-persists.
+- `BatchEventEnrichClientFactory.kt` — production composition helper.
 
 New test files:
 
-- `app/src/test/java/com/clawmate/app/datamanager/PeriodicConsolidationSchedulerTest.kt`.
-- `app/src/test/java/com/clawmate/app/datamanager/EntityEnrichmentTest.kt`.
+- `app/src/test/java/com/clawmate/app/datamanager/PeriodicSchedulingHostTest.kt`
+- `app/src/test/java/com/clawmate/app/datamanager/BatchEventEnrichTest.kt`
+- `app/src/test/java/com/clawmate/app/datamanager/EntityEnrichmentPersistenceTest.kt`
+- `app/src/test/java/com/clawmate/app/settings/SettingsSchedulingEnrichTest.kt`
+
+Modified production files:
+
+- `app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt` — new
+  `periodicLocalConsolidationEnabled` (default `false`).
+- `app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt` — new key +
+  `ALL_KEYS` (not sensitive).
+- `app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt` — encode +
+  decode round-trip for the new key.
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt` — injectable
+  scheduling host / enrich runners (defaults = no-op, device-free), plus explicit
+  `schedulePeriodicLocalConsolidation`, `runPeriodicLocalConsolidationNow`,
+  `runEntityEnrichment`, `runBatchEventEnrichment` actions.
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModelFactory.kt` —
+  injects the filesDir-backed host/enrichers in `forContext`.
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsUiState.kt` — scheduling /
+  enrich state fields.
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt` — three
+  explicit action groups in `TaskAutomationSection` (periodic scheduling + entity
+  enrich + batch enrich). **No new Settings section** was added (keeps the
+  `SettingsSectionTest` 7-section contract unchanged).
 
 ## New test coverage
 
-`PeriodicConsolidationSchedulerTest` (device-free, over temp dirs): disabled-by-default
-policy schedules nothing; explicit `LOCAL_ONLY` + `NOT_REQUIRED` registration;
-task-name uniqueness (REPLACE/KEEP conflict policy); serial single-run and run-all
-(same mutex, never parallel); idempotent repeat runs reproduce identical artifacts;
-cooperative cancellation aborts before start / between stages via `CancellationException`;
-cancelled/failed runs leave no half-registration or half-artifact; the seam never
-touches the model-backed repository.
+`PeriodicSchedulingHostTest` (device-free, temp dirs): constructing the host
+schedules nothing even with the opt-in assumed `true` (explicit-only); explicit
+`false` disables and cancels any prior schedule; explicit `true` registers exactly
+one canonical local-only task (REPLACE, unique name); the adapter holds no
+secret/path; the scheduled local run rebuilds deterministic local artifacts,
+stays local (never the model-backed repository) and is idempotent; `runNow` is a
+harmless no-op when not scheduled / not enabled; cancel removes the task;
+cancellation aborts a run before start.
 
-`EntityEnrichmentTest` (device-free): EMPTY (no real candidates → zero network);
-LOCAL_ONLY (not configured / not explicit → old artifact unchanged, zero network);
-zero network by default; bounded prompt packing with no URI/token/secret leakage;
-strict JSON malformed / unknown type / unknown or duplicate or out-of-bounds
-record id / source ref / over-long values all dropped; real ids/source refs admitted;
-`workflow_scene_ids`/`entity_mentions`/`source_ref`/`date` preserved from the real
-local scope; FALLBACK keeps the deterministic local document on model failure; a
-MODEL success returns a new enriched document without writing the persisted index;
-honest never-secret model notes; cooperative cancellation.
+`BatchEventEnrichTest` (device-free, scripted `ChatClient`): no events -> EMPTY
+with zero network; non-explicit / incomplete-config action -> LOCAL_ONLY with zero
+network (deterministic local enrich returned); MODEL — a strict-JSON reply over a
+real event id is admitted (keywords/domains merged with rule baseline, `other`
+dropped when a specific domain present, strict entity types, bounded todo); unknown
+model event id is dropped and never creates an event (FALLBACK keeps the local
+enrich); malformed JSON -> FALLBACK with deterministic local enrich; model failure
+-> FALLBACK; wrong entity type / over-bounds domain / invalid deadline are dropped
+not coerced; cancellation propagates.
+
+`EntityEnrichmentPersistenceTest`: only a MODEL result with an enriched document is
+persist-eligible; `writeEnriched` persists the model-enriched document on explicit
+MODEL success; LOCAL_ONLY / FALLBACK / EMPTY are never persisted (old artifact
+preserved byte-for-byte); write returns false when there is nothing to persist.
+
+`SettingsSchedulingEnrichTest`: a device-free ViewModel (no host injected) reports
+disabled and schedules nothing; default opt-in is false; explicit opt-in true +
+schedule action registers one local task; explicit opt-in false cancels / leaves
+disabled; `run now` does nothing unless scheduled and opted-in; enrich actions are
+zero-network guarded by default; scheduling opt-in round-trips through the codec.
 
 ## Verification (serial, `--offline --no-daemon --max-workers=1`)
 
-Toolchain: JDK 17.0.19, Android SDK platform 34 at `/opt/deepseek-harness/android-sdk`
-(via `local.properties` `sdk.dir`), Gradle 8.9.
-
-1. Focused new tests: `:app:testDebugUnitTest --tests PeriodicConsolidationSchedulerTest`
-   and `--tests EntityEnrichmentTest` — `BUILD SUCCESSFUL`, **0 failures, 0 errors**.
-2. Existing datamanager suites (`CloudConsolidationTest`, `LocalConsolidationTest`,
-   `ProfileIndexTest`, `EntitySceneIndexTest`, `FileDailyLogEventSourceTest`, etc.)
-   re-run green.
-3. Full unit suite: `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`, **117 test
-   classes / 922 tests, 0 failures, 0 errors, 0 skipped** (aggregated from the
-   `app/build/test-results/testDebugUnitTest/TEST-*.xml` reports; the Phase-34
-   baseline was 115 classes / 896 tests, this phase adds 2 classes / 26 tests).
-4. Build: `:app:assembleDebug` — `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/app-debug.apk`
-   produced. Target APK independent SHA256:
-   `dd9672c979a6a7b1c1cba6ff5bc1331828d3eab4bf20cf9c8b59f465edbdf425`.
-5. `git diff --check` — clean (no whitespace errors).
-
-This patch only updates migration documentation (`MIGRATION_STATUS.md`,
-`DSH_PHASE_RESULT.md`); **no source, no tests, and no build outputs were changed**
-and nothing new is generated.
+1. Focused new classes (`PeriodicSchedulingHostTest`, `BatchEventEnrichTest`,
+   `EntityEnrichmentPersistenceTest`, `SettingsSchedulingEnrichTest`) — all green.
+2. Full unit suite: `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`, **121 test
+   classes / 951 tests, 0 failures, 0 errors, 0 skipped** (aggregated from
+   `app/build/test-results/testDebugUnitTest/TEST-*.xml`; the Phase-35 baseline was
+   117 classes / 922 tests, +4 classes / +29 tests).
+3. Build: `:app:assembleDebug` — `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/
+   app-debug.apk` produced. Target APK independent SHA256:
+   `90393ea0775e4f404c84cbad58d7e4ccff8f2ce5bb18b7c5cb418fd8b1ada78c`.
+4. `git diff --check` — clean (no whitespace errors).
 
 ## Safety
 
-- **Disabled by default.** The scheduler's production default is
-  `SchedulerMode.DISABLED` — no task is ever registered or run unless an explicit
-  caller builds a `LOCAL_ONLY` + `NOT_REQUIRED` policy. Nothing runs on launch,
-  Home load, recomposition, or a repository/Application constructor.
-- **No WorkManager dependency / no network from the seam.** There is no
-  WorkManager worker and no network in either seam; the enrichment model path is
-  **zero network unless** configured + explicit action + real candidates, and it
-  **does not auto-persist** — the enriched document is returned to the caller.
-- **Real-id / real-source whitelist.** Both seams admit only real in-scope ids and
-  source refs; unknown / duplicate / out-of-bounds / over-long values and any
-  URI/image/token/secret are dropped. The model can never invent a fact, record,
-  or unrelated overwrite; a failed/EMPTY/LOCAL_ONLY run preserves the prior valid
-  artifact.
-- **Serial / idempotent / cancellable / error-redacted.** One task at a time,
-  deterministic local rebuilds are idempotent, cancellation is cooperative and
-  propagates, and config carries no secret.
+- **Disabled by default.** The scheduler opt-in default is `false`; even a
+  persisted `true` schedules nothing until the explicit Settings "应用调度" action
+  is clicked. No registration from `Application.onCreate` / Home load /
+  recomposition / a repository / Application constructor / a plain VM construction.
+- **Local-only periodic work.** The scheduled job is `LocalOnlyPeriodicJob`
+  (Phase-30/33/32 deterministic local rebuild); it never references
+  `CloudConsolidationRepository` and opens no network. Unique canonical task name,
+  serial, idempotent, cancellable, failure/cancel-safe, carries no secret.
+- **Explicit entity enrichment, explicit-only persistence.** Enrichment never runs
+  on its own; the returned enriched document is persisted **only** on an explicit
+  MODEL success via the caller write seam; LOCAL_ONLY / FALLBACK / EMPTY never
+  write and preserve the old artifact. zero-network/default gate retained.
+- **Bounded generic batch enrich.** Strict-JSON, real `event_id` whitelist, strict
+  domain/entity/todo vocabularies, deterministic rule fallback, serial/cancellable,
+  no URI / image / token / secret / invented event or id; result is returned (never
+  auto-written).
+- **No WorkManager dependency / no network downloaded.** Only in-process adapter +
+  existing shared `ChatClient`; all Gradle runs `--offline`.
 
 ## Remaining (honestly not ported / not wired)
 
-- **Real WorkManager worker wiring** — the scheduler is an in-process JVM-testable
-  seam; no Android `WorkManager` dependency and no `PeriodicWorkRequest` worker
-  exists yet.
-- **Explicit UI / Application wiring** — neither seam is invoked from a UI entry
-  point, `Application.onCreate`, or any screen; there is still no user-facing
-  schedule/enrich action.
-- **`DataPipelineModelClient` generic batch event-enrich / profile-model claims** —
-  the model entity-enrichment seam covers the Phase-33 entity-index scope only; the
-  separate generic batch event-enrichment and profile model-claim paths are not
-  ported; `workflow_scene_id` enrichment is not yet surfaced into
-  query/recommendation surfaces.
+- **A real Android `WorkManager` worker / `PeriodicWorkRequest`** — intentionally
+  not added because `androidx.work` is absent from the offline Gradle cache and
+  pulling it needs a network download (forbidden). The `PeriodicTriggerAdapter`
+  contract is the replaceable seam a future WorkManager `Worker` can implement
+  without changing the host or the app.
+- **Automated background triggering** — the schedule is still explicit-action-driven
+  (no system-triggered background cadence); `runPeriodicLocalConsolidationNow` is an
+  explicit "run now" only.
+- **Applying generic batch enrich into query/recommendation surfaces** — the
+  Phase-36 batch event-enrichment seam returns a new typed surface keyed by real
+  event id; wiring it into `IndexService`/Home recommendation/collection grouping
+  as persisted derived fields is not yet done (remains a future phase, like
+  `workflow_scene_id` surfacing).
+- **Profile model-claim path** — already ported in Phase 32 (`ProfileModelClient` /
+  `ProfileModelValidator`); Phase 36 documents it as the authoritative profile-claims
+  implementation rather than re-porting it.
 
-The two seams are deliberate extension points for the real WorkManager worker
-line, the UI/Application host line, and the generic `DataPipelineModelClient`
-enrich/profile lines — all of which remain un-wired.
+## Port-fidelity notes (honest deltas vs Harmony `enrichEvents`)
+
+The Phase-36 batch event-enrich seam is a faithful adaptation but has two deliberate,
+documented differences from the Harmony `DataPipelineModelClient.enrichEvents` path:
+
+- **It is distinct from (not a re-port of) the Phase-35 `EntityEnrichmentRunner`.**
+  The Phase-35 seam clarifies the Phase-33 **entity index candidates**
+  (`indexes/entity/index.json`, record/source-ref scope). The Phase-36 seam performs
+  Harmony's generic **`enrichEvents`** path directly over the raw indexed events —
+  per-event keyword/domain/entity/todo extraction that feeds a different downstream
+  surface and is keyed by real `event_id`, not by entity candidate. Both seams share
+  the same strict-JSON + real-id-whitelist + zero-network-by-default philosophy and
+  reuse the same `ChatClient` / `ConsolidationModelConfig`, but they operate on
+  different inputs and outputs; Phase 36 does not duplicate the entity-index
+  enrichment.
+
+- **`profile_domains` is not emitted.** Harmony writes
+  `profile_domains = normalizeDomains(domains)` into each event. The Android
+  `IndexedEvent` shape carries no `profile_domains` field, and the Android profile
+  pipeline derives profile domains independently in Phase 32
+  (`ProfileDomainUtils.deriveProfileDomains`); so this seam's `EnrichedEventFields`
+  omits it rather than fabricating a field the downstream Android profile stack
+  does not consume.
+- **Batching by "union of scene guide" instead of "group-by-todo-guide-key".**
+  Harmony groups events by `todoGuideKey` (pure-chat → `chat`, else first scene
+  label) before chunking at size 8, so one batch shares a single scene-typed todo
+  guide. The Android seam chunks sequentially at size 8 and builds the per-chunk
+  todo guide from the **union of the scene labels present in that chunk** (each
+  scene's rule + the shared "不要输出规则外的 type" tail), which keeps the prompt
+  correct and bounded for any events present. This is a bounded, safe approximation
+  (the multi-scene guidance rule is preserved) rather than a re-typing of the model
+  output; it does not change any whitelist/dedup/fallback invariant.
+
+All domain/entity/todo normalization, the real `event_id` whitelist, the `other`
+coercion, and the `type=buy`+pure-chat `agent_task` gate are implemented exactly per
+the Harmony spec (see the audit detail appended to the Phase-36 notes).
+
+The three seams now have real Android explicit entry points (Settings actions) and
+a clean replaceable adapter / persistence boundary, while keeping every
+model/background path disabled-by-default and no WorkManager dependency.

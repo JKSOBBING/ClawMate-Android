@@ -567,6 +567,126 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
         }
         SettingsActionRow(actions = listOf(pcStatus))
     }
+
+    // ------------------------------------------------------------------
+    // Phase 36 — periodic local-only consolidation (explicit opt-in +
+    // explicit schedule + explicit run; never auto-scheduled).
+    // ------------------------------------------------------------------
+    SettingsGroupCard(
+        title = "本地周期整合调度",
+        subtitle = "显式开启的本地周期重构（Phase 36）：默认关闭；开启后仍需点「应用调度」才注册一个本地任务，且任何时刻都不会从启动/Home/重组合自动注册",
+    ) {
+        SettingToggle(
+            label = "启用本地周期整合",
+            desc = "显式开启受控本地重构开关（默认关闭；开启本身不会自动注册任务）",
+            selected = state.draft.periodicLocalConsolidationEnabled,
+            onValueChange = vm::setPeriodicLocalConsolidationEnabled,
+        )
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = if (state.draft.periodicLocalConsolidationEnabled) "应用调度（注册本地任务）" else "关闭/取消调度",
+                    kind = SettingsActionKind.Primary,
+                    enabled = !state.periodicSchedulingBusy,
+                    onClick = { vm.schedulePeriodicLocalConsolidation() },
+                ),
+            ),
+        )
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "立即运行一次本地重构",
+                    kind = SettingsActionKind.Secondary,
+                    enabled = !state.periodicSchedulingBusy && state.draft.periodicLocalConsolidationEnabled &&
+                        state.periodicScheduled,
+                    onClick = { vm.runPeriodicLocalConsolidationNow() },
+                ),
+            ),
+        )
+        val scheduleStatus = if (state.periodicSchedulingBusy) {
+            SettingsAction("处理中…", SettingsActionKind.Warning, enabled = false, onClick = {})
+        } else if (state.periodicScheduled) {
+            SettingsAction("本地任务已注册 — 仅本地重构", SettingsActionKind.Success, enabled = false, onClick = {})
+        } else {
+            SettingsAction("未注册 — 本地周期任务禁用", SettingsActionKind.Secondary, enabled = false, onClick = {})
+        }
+        SettingsActionRow(actions = listOf(scheduleStatus))
+        state.periodicScheduleMessage?.let { m ->
+            Text(m, fontSize = 12.sp, color = SettingsThemeColors.SecondaryText, modifier = Modifier.padding(top = 6.dp))
+        }
+        Text(
+            "本调度只运行确定性本地整合/索引/画像重建（Phase 30/33/32），串行、幂等、可取消，绝不调用云端整合存储，也不从启动、Home 加载或普通 repository 构造自动注册。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 36 — explicit model entity enrichment (Stream 2). Only persisted on
+    // an explicit MODEL success; never auto-run / auto-written.
+    // ------------------------------------------------------------------
+    SettingsGroupCard(
+        title = "实体增强（模型）",
+        subtitle = "对本地实体索引做显式模型澄清（Phase 36）：零网络除非显式触发 + 完整配置 + 真实候选；未配置/未启用时保持本地文档不变",
+    ) {
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "运行实体增强",
+                    kind = SettingsActionKind.Primary,
+                    enabled = !state.enrichBusy,
+                    onClick = { vm.runEntityEnrichment() },
+                ),
+            ),
+        )
+        val enrichStatus = if (state.enrichBusy) {
+            SettingsAction("增强中…", SettingsActionKind.Warning, enabled = false, onClick = {})
+        } else if (state.enrichResultMessage != null) {
+            SettingsAction("最近一次增强已完成", SettingsActionKind.Secondary, enabled = false, onClick = {})
+        } else {
+            SettingsAction("未执行 — DISABLED（默认）", SettingsActionKind.Secondary, enabled = false, onClick = {})
+        }
+        SettingsActionRow(actions = listOf(enrichStatus))
+        state.enrichResultMessage?.let { m ->
+            Text(m, fontSize = 12.sp, color = SettingsThemeColors.SecondaryText, modifier = Modifier.padding(top = 6.dp))
+        }
+        Text(
+            "仅在显式点击时运行：模型输出经严格 JSON + 真实 record/source 白名单校验后，只有明确成功的 MODEL 结果才会由调用方写入增强索引；LOCAL_ONLY/FALLBACK/EMPTY 都不会写入，旧索引保持不变。启动/Home/重组合不会自动执行。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 36 — explicit generic batch event enrichment (Stream 3). Returned as
+    // a typed surface keyed by real event id; never auto-persisted.
+    // ------------------------------------------------------------------
+    SettingsGroupCard(
+        title = "事件批量增强（模型）",
+        subtitle = "对真实已索引事件批量抽取关键词/领域/实体/待办（Phase 36）：零网络除非显式触发 + 完整配置 + 真实事件",
+    ) {
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "运行批量事件增强",
+                    kind = SettingsActionKind.Primary,
+                    enabled = !state.enrichBusy,
+                    onClick = { vm.runBatchEventEnrichment() },
+                ),
+            ),
+        )
+        state.batchEnrichResultMessage?.let { m ->
+            Text(m, fontSize = 12.sp, color = SettingsThemeColors.SecondaryText, modifier = Modifier.padding(top = 6.dp))
+        }
+        Text(
+            "仅在显式点击时运行：模型对真实事件 id 做白名单匹配，返回新的类型化增强结果（按真实 event_id 键控），不会自动写入任何索引；失败/畸形/未知 id 回退到确定性本地规则增强。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
 }
 
 @Composable

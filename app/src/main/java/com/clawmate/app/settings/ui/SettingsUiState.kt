@@ -30,8 +30,16 @@ data class SettingsUiState(
     val hdcTesting: Boolean = false,
     val hdcTestConnected: Boolean = false,
     val hdcTestMessage: String? = null,
+    // Phase 36 — periodic local-consolidation scheduling state (explicit action only).
+    val periodicSchedulingBusy: Boolean = false,
+    val periodicScheduled: Boolean = false,
+    val periodicScheduleMessage: String? = null,
+    // Phase 36 — explicit model enrich results (per enrich seam; none persists
+    // on its own; a distinct persist step runs only for an explicit success).
+    val enrichBusy: Boolean = false,
+    val enrichResultMessage: String? = null,
+    val batchEnrichResultMessage: String? = null,
 )
-
 /** Simple storage/about facts, derived at load time. */
 data class StorageSummary(
     val cacheBytes: Long = 0L,

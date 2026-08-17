@@ -76,6 +76,7 @@ object SettingsCodec {
 
         out[SettingsKeys.WORKFLOW_AUTOMATION_ENABLED] = s.workflowAutomationEnabled.toString()
         out[SettingsKeys.WORKFLOW_HARDWARE_STEPS_ENABLED] = s.workflowHardwareStepsEnabled.toString()
+        out[SettingsKeys.PERIODIC_LOCAL_CONSOLIDATION_ENABLED] = s.periodicLocalConsolidationEnabled.toString()
         out[SettingsKeys.ACCESSIBILITY_OPT_IN] = s.accessibilityOptIn.toString()
         out[SettingsKeys.OVERLAY_OPT_IN] = s.overlayOptIn.toString()
         out[SettingsKeys.PC_SERVER_URL] = SettingsNormalizers.normalizeUrl(s.pcServerUrl)
@@ -158,6 +159,8 @@ object SettingsCodec {
             workflowAutomationEnabled = SettingsNormalizers.boolean(s(SettingsKeys.WORKFLOW_AUTOMATION_ENABLED), true),
             workflowHardwareStepsEnabled =
                 SettingsNormalizers.boolean(s(SettingsKeys.WORKFLOW_HARDWARE_STEPS_ENABLED), false),
+            periodicLocalConsolidationEnabled =
+                SettingsNormalizers.boolean(s(SettingsKeys.PERIODIC_LOCAL_CONSOLIDATION_ENABLED), false),
             accessibilityOptIn = SettingsNormalizers.boolean(s(SettingsKeys.ACCESSIBILITY_OPT_IN), false),
             overlayOptIn = SettingsNormalizers.boolean(s(SettingsKeys.OVERLAY_OPT_IN), false),
             pcServerUrl = SettingsNormalizers.normalizeUrl(s(SettingsKeys.PC_SERVER_URL)),

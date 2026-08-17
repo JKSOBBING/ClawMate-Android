@@ -60,6 +60,11 @@ data class AppSettings(
     // Task & automation — 任务与自动化
     val workflowAutomationEnabled: Boolean = true,
     val workflowHardwareStepsEnabled: Boolean = false,
+    // Phase 36 — explicit opt-in to periodic *local-only* consolidation scheduling.
+    // Off by default (safe). On alone is not sufficient: nothing is scheduled from
+    // app launch, Home load or recomposition — the user must also trigger the
+    // explicit schedule action in Settings, which registers one local-only task.
+    val periodicLocalConsolidationEnabled: Boolean = false,
     // Phase 19 — explicit user opt-in to the AutoAgent controlled-accessibility
     // boundary. Off by default (safe, explicit opt-in). On alone is not
     // sufficient: the Android system accessibility grant + a real provider are

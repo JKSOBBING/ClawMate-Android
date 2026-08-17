@@ -211,6 +211,24 @@ explicit model entity-enrichment path (reuses the shared `ChatClient`/
 `ConsolidationModelConfig`, bounded strict JSON with a real candidate-id /
 source-ref whitelist, zero network by default, does not auto-persist).**
 
+**Phase 36 (schedule wiring + explicit entity-enrichment UI + generic batch event
+enrichment) was executed in this worktree with the same toolchain: the focused new
+classes `PeriodicSchedulingHostTest` / `BatchEventEnrichTest` /
+`EntityEnrichmentPersistenceTest` / `SettingsSchedulingEnrichTest` run green, and
+the full `:app:testDebugUnitTest` = **121 test classes / 951 tests, 0 failures, 0
+errors, 0 skipped**, plus `:app:assembleDebug` `BUILD SUCCESSFUL` with target APK
+independent SHA256
+`90393ea0775e4f404c84cbad58d7e4ccff8f2ce5bb18b7c5cb418fd8b1ada78c` (see §22 and
+`DSH_PHASE_RESULT.md`). It wires the Phase-35 seams to real **explicit Android
+Settings actions** behind `periodicLocalConsolidationEnabled` (default `false`, no
+auto-scheduling), a **minimal replaceable `PeriodicTriggerAdapter`** (+ in-process
+impl, since no WorkManager is in the offline cache), a **caller-only**
+`EntityEnrichmentPersistence` that writes only on explicit MODEL success, and a
+new bounded typed **generic batch event-enrichment** seam
+(`BatchEventEnricher` / `BatchEventEnrichModelClient` / `EnrichRules`) porting the
+Harmony `DataPipelineModelClient.enrichEvents` path (strict JSON, real event-id
+whitelist, deterministic rule fallback, serial/cancellable, explicit-action only).**
+
 This phase advances the data-manager row from local consolidation/index to a
 real four-domain **profile index / claims** layer: it reads the persisted
 event partitions, projects the four persona domains (eat/wear/live/travel) by
@@ -343,7 +361,7 @@ a controlled disabled state), **Defer** (later phase).
 | 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt + **data source Defer** | **Phase 6 shipped** the Compose Home UI (`home/domain/HomeDomain.kt`, `home/ui/HomeScreen.kt`): four persona pillars (理解你/守护你/陪伴你/成就你 as 吃/穿/住/行), honest profile loading/empty/error states, recommendation list with completion toggles + 未完成/全部 filter + pagination + expand, and an **honest NOT_CONFIGURED avatar section** (avatar generation is DISABLED on Android — never fabricated). Recommendation *content* still requires the upstream data-manager pipeline (a later phase); completion flags persist via `home/data/DataStoreHomeRecRepository.kt`. |
 | 3 | **Chat & agent loop** | `pages/chat/*` (ChatPage, ChatPageTypes, ChatMessageDataSource, ChatSessionController); `chat/ChatSessionTypes.ets`; `utils/CloudModelClient.ets` (SSE at :725); `utils/AgentLoopRunner.ets`, `ChatReactAgent.ets`, `ChatToolRegistry.ets`, `AgentActionParser.ets`, `AgentExecutionController.ets`; spec `docs/superpowers/specs/2026-06-10-chat-session-management-design.md` | Adapt | Compose `LazyColumn` chat; Repository + ViewModel; OpenAI-compatible `/v1/chat/completions` via OkHttp SSE exposed as `Flow<String>`; ReAct tool loop; Markdown renderer; Room persistence (source uses JSON files in `filesDir/chat-sessions/`). |
 | 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), and Android reverse geocoding via the platform `Geocoder`. **Phase 11 shipped** a real on-device Chinese OCR adapter (`gallery/ocr/AndroidOcrEngine`) using ML Kit `com.google.mlkit:text-recognition-chinese` (bundled model) over the picked content URI (ContentResolver → bounded Bitmap → ML Kit), with typed success/empty/cancel/model-download/error/unavailable states, an explicit **Analyze OCR** action in the detail panel, and Room persistence of only real recognized text + `analyzed` status. Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. **Phase 15 shipped** the portable monthly-insights pure port over stored Room items (`gallery/insights/GalleryMonthlyInsights.kt`), an `observeMonthlyInsights` repository derivation, and a 月度洞察 panel in the existing Gallery screen (real Loading / Empty / Error states + honest NOT_CONFIGURED cloud AI-summary/embedding boundary). The optional cloud AI month summary / remote embedding still require a configured client (rows D1/D12). |
-| 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). **Phase 29** ships the **first daily-log input + local event-index foundation** (`datamanager/`): pure `DailyLogParser` (Harmony metadata header + numbered `1. …` entries, strict date/file/count/char/metadata bounds, countable honest errors, never thrown), `DailyLogPlannerEventMapper` + read-only app-private `DailyLogEventSource` over `filesDir/workflows/daily-log/YYYY-MM-DD/*.md` (no external storage/URI/image/network, stable source-ref ids, `imagePaths` empty), and `DailyLogWorkspace` as the documented external-import write API. The Phase-28 Home "生成推荐" flow now blends stored gallery + daily-log events. **Phase 30** adds the **local consolidation + index foundation** (`datamanager/`): a deterministic, no-cloud-model `ConsolidationEngine` (faithful port of `ConsolidationService.consolidateGroup` + `DataManagerUtils.ets` helpers, exact + normalized dedup against a recent scope, stable monotonic `record_id`s), `ConsolidationRepository` (scan existing daily-log → consolidate each month/file group → persist per-group `outputs/<month>/<file>.state.json` + markdown, rebuild `state-index.json`), `IndexService` + `DailyLogLocalIndex` (rebuild bounded month event partitions, partition-index, event manifest, temporal docs; stable event ids `${relativeState}#${recordId}`; read-only bounded query by date/month/source/keyword), `AtomicJsonStore` (atomic temp+rename, bounded size), and `LocalConsolidationIndexRunner` as the single explicit, zero-network entry point. **Remaining data-manager items stay Partial/Deferred (honestly not ported):** Harmony **cloud/periodic** consolidation + model-based dedup, profile/claim derivation, `workflow_scene_id` enrichment, and any background scheduling — Phase 30 is strictly deterministic-local and user-triggered. **Phase 32** adds the **profile index / claims foundation** (`datamanager/` + Home): reads the Phase-30 event partitions, aggregates the four persona domains (eat/wear/live/travel) by literal evidence, and materialises `indexes/profile/state.json` + bounded `profile.md`; model claims (when configured) are strictly validated against real event ids via the shared OpenAI-compatible Planner backend, with a typed PARTIAL/ERROR that always preserves the deterministic local projection; a local-only run has empty claims (`NOT_CONFIGURED`/`LOCAL_ONLY`) and is never passed off as model claims. A new Home "生成画像" button is the only entry (explicit tap only; zero network when unconfigured or no events), and `ProfileIndexHomeProfileSource`/`ProfileIndexBlender` fill only un-populated Home pillars with bounded summary/claims + real evidence ids (local-first, never overwriting user curation). **Phase 33** adds the **workflow-scene + entity index/resolver foundation** (`datamanager/`): real `workflow_scene_ids` now flow from the daily-log `task_scene_id` metadata through the Phase-30 consolidation into indexed events (backward compatible with old artifacts), and a deterministic **local-only** resolver materialises `indexes/workflow-scene/index.json` (`postings: sceneId -> eventIds`) and `indexes/entity/index.json` (canonical entities + alias postings + mention assignments) from real event mentions + **conservative bounded** labelled-name extraction — unknown types/empty/over-long dropped, no URI/image/token, same-type names/aliases merge stably, different types never merge, and a model gate keeps Android zero-network/local-only unless an explicit fully-configured action invites it. **Phase 34** adds the **cloud/model consolidation + model-based dedup** path (`cloud` row): a `ConsolidationModelConfig` gate + strict-validating `ConsolidationModelClient` (bounded real-text facts/dedup prompts) and an explicit `CloudConsolidationRepository`/`ModelConsolidationApplier` that splits bounded entries into bounded facts and applies strict `new|duplicate|merge_with_existing|skip_ambiguous` decisions with real matched-id membership, falling back to the deterministic local engine on any no-config / no-entry / bad-JSON / failure / unverifiable-match (typed `LOCAL`/`PARTIAL`), preserving prior valid state and Phase-33 scene ids + stable monotonic ids + processed-hash skips (see §20). **Phase 35** adds two **explicit seams** (see §21): a **disabled-by-default, in-process periodic local-consolidation scheduler seam** (`PeriodicConsolidationScheduler` + pure `SchedulingPolicy`; **no WorkManager dependency**, explicit `LOCAL_ONLY` + `NOT_REQUIRED` opt-in, serial/idempotent/cancellable, local-only, never touches the model-backed repository) and an **explicit model entity-enrichment seam** (`EntityEnrichmentRunner` + strict-validating `EntityEnrichmentModelClient` + `EntityEnrichmentClientFactory`, reusing the shared `ChatClient`/`ConsolidationModelConfig`; bounded strict JSON with a real candidate-id/source-ref whitelist, **zero network by default**, and does **not** auto-persist — it returns a new enriched document to the caller). **Still not wired (honestly not ported):** a real WorkManager worker and explicit UI/Application wiring for both seams, and the separate generic `DataPipelineModelClient` batch event-enrich / profile model-claims path (the deterministic local resolver is authoritative; see §19/§20/§21). |
+| 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). **Phase 29** ships the **first daily-log input + local event-index foundation** (`datamanager/`): pure `DailyLogParser` (Harmony metadata header + numbered `1. …` entries, strict date/file/count/char/metadata bounds, countable honest errors, never thrown), `DailyLogPlannerEventMapper` + read-only app-private `DailyLogEventSource` over `filesDir/workflows/daily-log/YYYY-MM-DD/*.md` (no external storage/URI/image/network, stable source-ref ids, `imagePaths` empty), and `DailyLogWorkspace` as the documented external-import write API. The Phase-28 Home "生成推荐" flow now blends stored gallery + daily-log events. **Phase 30** adds the **local consolidation + index foundation** (`datamanager/`): a deterministic, no-cloud-model `ConsolidationEngine` (faithful port of `ConsolidationService.consolidateGroup` + `DataManagerUtils.ets` helpers, exact + normalized dedup against a recent scope, stable monotonic `record_id`s), `ConsolidationRepository` (scan existing daily-log → consolidate each month/file group → persist per-group `outputs/<month>/<file>.state.json` + markdown, rebuild `state-index.json`), `IndexService` + `DailyLogLocalIndex` (rebuild bounded month event partitions, partition-index, event manifest, temporal docs; stable event ids `${relativeState}#${recordId}`; read-only bounded query by date/month/source/keyword), `AtomicJsonStore` (atomic temp+rename, bounded size), and `LocalConsolidationIndexRunner` as the single explicit, zero-network entry point. **Remaining data-manager items stay Partial/Deferred (honestly not ported):** Harmony **cloud/periodic** consolidation + model-based dedup, profile/claim derivation, `workflow_scene_id` enrichment, and any background scheduling — Phase 30 is strictly deterministic-local and user-triggered. **Phase 32** adds the **profile index / claims foundation** (`datamanager/` + Home): reads the Phase-30 event partitions, aggregates the four persona domains (eat/wear/live/travel) by literal evidence, and materialises `indexes/profile/state.json` + bounded `profile.md`; model claims (when configured) are strictly validated against real event ids via the shared OpenAI-compatible Planner backend, with a typed PARTIAL/ERROR that always preserves the deterministic local projection; a local-only run has empty claims (`NOT_CONFIGURED`/`LOCAL_ONLY`) and is never passed off as model claims. A new Home "生成画像" button is the only entry (explicit tap only; zero network when unconfigured or no events), and `ProfileIndexHomeProfileSource`/`ProfileIndexBlender` fill only un-populated Home pillars with bounded summary/claims + real evidence ids (local-first, never overwriting user curation). **Phase 33** adds the **workflow-scene + entity index/resolver foundation** (`datamanager/`): real `workflow_scene_ids` now flow from the daily-log `task_scene_id` metadata through the Phase-30 consolidation into indexed events (backward compatible with old artifacts), and a deterministic **local-only** resolver materialises `indexes/workflow-scene/index.json` (`postings: sceneId -> eventIds`) and `indexes/entity/index.json` (canonical entities + alias postings + mention assignments) from real event mentions + **conservative bounded** labelled-name extraction — unknown types/empty/over-long dropped, no URI/image/token, same-type names/aliases merge stably, different types never merge, and a model gate keeps Android zero-network/local-only unless an explicit fully-configured action invites it. **Phase 34** adds the **cloud/model consolidation + model-based dedup** path (`cloud` row): a `ConsolidationModelConfig` gate + strict-validating `ConsolidationModelClient` (bounded real-text facts/dedup prompts) and an explicit `CloudConsolidationRepository`/`ModelConsolidationApplier` that splits bounded entries into bounded facts and applies strict `new|duplicate|merge_with_existing|skip_ambiguous` decisions with real matched-id membership, falling back to the deterministic local engine on any no-config / no-entry / bad-JSON / failure / unverifiable-match (typed `LOCAL`/`PARTIAL`), preserving prior valid state and Phase-33 scene ids + stable monotonic ids + processed-hash skips (see §20). **Phase 35** adds two **explicit seams** (see §21): a **disabled-by-default, in-process periodic local-consolidation scheduler seam** (`PeriodicConsolidationScheduler` + pure `SchedulingPolicy`; **no WorkManager dependency**, explicit `LOCAL_ONLY` + `NOT_REQUIRED` opt-in, serial/idempotent/cancellable, local-only, never touches the model-backed repository) and an **explicit model entity-enrichment seam** (`EntityEnrichmentRunner` + strict-validating `EntityEnrichmentModelClient` + `EntityEnrichmentClientFactory`, reusing the shared `ChatClient`/`ConsolidationModelConfig`; bounded strict JSON with a real candidate-id/source-ref whitelist, **zero network by default**, and does **not** auto-persist — it returns a new enriched document to the caller). **Phase 36** wires these seams to real **explicit Android Settings actions** and adds the **generic batch event-enrichment** model seam: a **minimal replaceable `PeriodicTriggerAdapter`** (+ in-process impl + `PeriodicSchedulingHost`) drives the scheduler from an explicit "应用调度" action behind a new opt-in `periodicLocalConsolidationEnabled` (default `false`; nothing schedules on its own), a **caller-only persistence** seam (`EntityEnrichmentPersistence`) writes the entity-enrichment output only on an explicit MODEL success, and a new bounded typed seam (`BatchEventEnricher` / `BatchEventEnrichModelClient` / `EnrichRules`) ports the generic `DataPipelineModelClient.enrichEvents` keyword/domain/entity/todo extraction over real indexed events (strict JSON, real `event_id` whitelist, deterministic rule fallback, serial/cancellable, explicit-action only, not auto-persisted). No `WorkManager` dependency was added (absent from the offline cache); the adapter is the replaceable seam for a future `Worker`. The profile model-claim path remains the Phase-32 `ProfileModelClient` (see §22). |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
 | 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | **Phase 7 shipped** the chat voice-interaction vertical slice (`chat/voice/`): typed domain models + deterministic normalization (`VoiceInteractionTypes.kt`), ASR transcript merge + duplicate-final suppression (`VoiceTranscriptLogic.kt`), PCM16→WAV builder (`PcmWav.kt`), voice presets (`VoiceTtsPresets.kt`), voice-input start/stop guards (`VoiceOrchestratorLogic.kt`). ASR = Android `android.speech.SpeechRecognizer` adapter with explicit permission/unavailable/error/cancel states and **no hidden mic access** (RECORD_AUDIO surfaced in the UI, requested only on the mic tap). Output = Android `TextToSpeech` adapter (lifecycle-safe init, speak/pause/stop/replay, typed unavailable/error states). Cloud MiMO streaming/TTS stays behind an explicit **NOT_CONFIGURED** interface (`CloudMimoVoiceClient`) — never claimed configured or faked. Chat UI gained mic/listening/transcript + speak/stop/replay controls; a real final ASR transcript becomes ordinary editable chat input. Digital avatar remains DISABLED (not part of this slice). |
@@ -743,7 +761,31 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 
 ## 8. Changelog
 
-- **Phase 35 (this phase):** Two explicit, **disabled-by-default** seams (see §21).
+- **Phase 36 (this phase):** Wires the Phase-35 seams into real **explicit Android
+  Settings actions** and adds the **generic batch event-enrichment** model seam
+  (see §22).
+  1. **Periodic local-consolidation scheduling — wired, explicit-only, default
+     disabled.** No `WorkManager` dependency exists in the offline Gradle cache, so
+     this phase adds a **minimal replaceable `PeriodicTriggerAdapter`** (+
+     in-process impl) and an explicit `PeriodicSchedulingHost` bound to a new
+     opt-in setting `periodicLocalConsolidationEnabled` (default `false`). The only
+     registration path is the explicit Settings "应用调度" action; even a persisted
+     `true` schedules nothing on its own. The scheduled job is `LocalOnlyPeriodicJob`
+     (deterministic local rebuild) and never calls `CloudConsolidationRepository`.
+  2. **Explicit model entity-enrichment wiring** — the Phase-35 `EntityEnrichmentRunner`
+     is now reachable from an explicit Settings action with honest state, and a
+     **caller-only persistence** seam (`EntityEnrichmentPersistence`) writes the
+     model-enriched document **only on an explicit MODEL success**; LOCAL_ONLY /
+     FALLBACK / EMPTY never write and preserve the old artifact.
+  3. **Generic batch event enrichment** — a new bounded typed seam
+     (`BatchEventEnricher` / `BatchEventEnrichModelClient` / `EnrichRules`) ports the
+     Harmony `DataPipelineModelClient.enrichEvents` keyword / domain / entity / todo
+     extraction over real indexed events, reusing the shared `ChatClient` /
+     `ConsolidationModelConfig`: strict JSON, real `event_id` whitelist, strict
+     vocabularies, deterministic rule fallback, serial / cancellable, explicit-action
+     only, no URI/token/secret, and not auto-persisted. The profile model-claim path
+     remains the Phase-32 `ProfileModelClient` (not re-ported).
+- **Phase 35:** Two explicit, **disabled-by-default** seams (see §21).
   1. **Periodic local-consolidation scheduler seam** — `PeriodicConsolidationScheduler`
      (in-process controller) + pure `SchedulingPolicy`: **no WorkManager dependency**,
      production default `SchedulerMode.DISABLED`; an explicit `LOCAL_ONLY` + `NOT_REQUIRED`
@@ -2274,3 +2316,106 @@ platform 34, Gradle 8.9):
 
 This phase changed documentation only (`MIGRATION_STATUS.md`; see also
 `DSH_PHASE_RESULT.md`); no source, no tests, and no build outputs were changed.
+
+## 22. Phase 36 — schedule wiring + explicit entity-enrichment UI + generic batch event enrichment
+
+Phase 36 closes the three **real, previously un-wired** gaps that Phase 35 left
+open, without repeating Phase 34/35:
+
+### 1. Schedule wiring (minimal replaceable Android adapter, explicit-only)
+
+- **No WorkManager dependency** exists in the offline Gradle cache (verified at
+  phase start), and downloading it violates the offline/no-network rule. Instead
+  this phase adds a **minimal replaceable `PeriodicTriggerAdapter`** (+
+  `PeriodicScheduleResult` + `InProcessPeriodicTriggerAdapter`) that wraps the
+  Phase-35 `PeriodicConsolidationScheduler` under the single canonical local task
+  name, and an explicit `PeriodicSchedulingHost`.
+- A new opt-in setting `periodicLocalConsolidationEnabled` (default **false**) is
+  the only persisted switch. The **only** registration entry is the explicit
+  Settings "应用调度" action (`schedulePeriodicLocalConsolidation`): `true`
+  registers one `LOCAL_ONLY + NOT_REQUIRED` local task, `false` cancels it and
+  schedules nothing. Constructing the host or the ViewModel never schedules — a
+  persisted `true` is inert until the explicit action is clicked. Nothing runs on
+  `Application.onCreate`, Home load, recomposition, or a repository/Application
+  constructor.
+- The scheduled job is `LocalOnlyPeriodicJob` (Phase-30/33/32 deterministic local
+  consolidation / index / profile rebuild): serial, idempotent, cancellable,
+  never calls `CloudConsolidationRepository`; unique task name; failure/cancel-safe.
+- An explicit "立即运行一次本地重构" action (`runPeriodicLocalConsolidationNow`)
+  triggers one run only when the task is actually scheduled and still opted-in.
+- **Replaceability:** a future WorkManager `Worker` can implement the
+  `PeriodicTriggerAdapter` contract without changing the host or app wiring.
+
+### 2. Explicit model entity-enrichment wiring (caller-only persistence)
+
+- The Phase-35 `EntityEnrichmentRunner` is now reachable from an explicit Settings
+  action (`runEntityEnrichment`) with honest typed state
+  (`enrichBusy` / `enrichResultMessage`); it never runs from launch/Home/
+  recomposition and stays zero-network unless configured + explicit action + real
+  candidates.
+- A new caller-only persistence seam (`EntityEnrichmentPersistence`) writes the
+  model-enriched `EntityDocument` **only on an explicit MODEL success**
+  (`canPersist` checks status == MODEL and a non-null document). LOCAL_ONLY /
+  FALLBACK / EMPTY never write and the prior artifact is preserved byte-for-byte.
+
+### 3. Generic batch event enrichment (bounded typed seam)
+
+- Ports the Harmony `DataPipelineModelClient.enrichEvents` path (keyword / domain /
+  entity / todo extraction over real indexed events) into the Android app as
+  `BatchEventEnrichTypes` + `BatchEventEnricher` + `BatchEventEnrichModelClient` +
+  `BatchEventEnrichClientFactory`, reusing the shared `ChatClient` /
+  `ConsolidationModelConfig`, plus deterministic `EnrichRules` rule helpers
+  (`deriveRuleKeywords` / `deriveRuleDomains` / `normalizeDomains` /
+  `workflowSceneLabels` / `weekdayLabelFromDate`, six-domain `DOMAIN_RULES`).
+- The seam is **strictly-JSON**, real-`event_id`-scoped (a reply referencing a
+  non-existent event id is dropped), strict domain (`eat|wear|live|travel|work|
+  other`) / entity (`person|place|merchant`) / `todo.type` vocabularies, merges
+  model terms with the deterministic rule baseline, falls back to a deterministic
+  local enrich on any failure/malformed/unknown-id, is serial + cancellable,
+  carries no URI/token/secret, and is **explicit-action only**; the result is
+  returned keyed by real event id and **never auto-persisted**. An explicit
+  Settings action (`runBatchEventEnrichment`) surfaces the typed outcome.
+- The **profile model-claim** path is the Phase-32 `ProfileModelClient` /
+  `ProfileModelValidator` (already ported); this phase documents it as the
+  authoritative profile-claims implementation and does **not** duplicate it.
+
+### Port-fidelity notes (honest deltas vs Harmony `enrichEvents`)
+
+- The seam is **distinct from (not a re-port of) the Phase-35
+  `EntityEnrichmentRunner`**: that seam clarifies the Phase-33 **entity index
+  candidates** (record/source-ref scope), while this seam performs Harmony's generic
+  `enrichEvents` path directly over the raw indexed events and is keyed by real
+  `event_id`; both reuse the same `ChatClient`/`ConsolidationModelConfig` and
+  strict-JSON/whitelist philosophy but operate on different inputs/outputs.
+- `profile_domains` is **not** emitted (the Android `IndexedEvent` shape has no such
+  field and the Phase-32 profile stack derives profile domains independently), so
+  `EnrichedEventFields` omits it.
+- Batching uses the **union of scene guides per chunk** (sequential chunks of 8)
+  instead of Harmony's group-by-`todoGuideKey`; each scene rule + the shared "不要
+  输出规则外的 type" tail still bound the prompt correctly.
+- All domain/entity/todo normalization, the real `event_id` whitelist, the `other`
+  coercion and the `type=buy`+pure-chat `agent_task` gate match the Harmony spec exactly.
+
+### Verification (Phase 36)
+
+Serial offline runs (`--offline --no-daemon --max-workers=1`, JDK 17.0.19, SDK
+platform 34, Gradle 8.9):
+1. Focused new classes `PeriodicSchedulingHostTest` / `BatchEventEnrichTest` /
+   `EntityEnrichmentPersistenceTest` / `SettingsSchedulingEnrichTest` — green.
+2. Full suite: `:app:testDebugUnitTest` — **121 test classes / 951 tests, 0
+   failures, 0 errors, 0 skipped** (baseline 117 / 922 → +4 / +29).
+3. Build: `:app:assembleDebug` — target APK independent SHA256
+   `90393ea0775e4f404c84cbad58d7e4ccff8f2ce5bb18b7c5cb418fd8b1ada78c`.
+4. `git diff --check` clean.
+
+### Remaining gaps (honestly not ported)
+
+- A **real Android WorkManager `Worker`/`PeriodicWorkRequest`** — intentionally not
+  added (not in offline cache / would need a network download). The
+  `PeriodicTriggerAdapter` is the replaceable seam for it.
+- **Automated background cadence** — scheduling is still explicit-action-driven;
+  no system-triggered background timer/cadence is registered.
+- **Surfacing batch-enrich derived fields into query/recommendation/collection**
+  — the Phase-36 batch event-enrichment seam returns a typed surface keyed by real
+  event id; persisting those derived keywords/domains/todos into `IndexService` /
+  Home recommendation / collection grouping is a future phase.

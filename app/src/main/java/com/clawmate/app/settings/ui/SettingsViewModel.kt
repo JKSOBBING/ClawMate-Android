@@ -87,6 +87,17 @@ class SettingsViewModel(
                 // No Context in the plain unit-test construction.
             }
         },
+    /**
+     * Phase 36 — an app-private base directory used for the explicit periodic
+     * local-consolidation scheduling host and the explicit model enrich seams.
+     * Absent in device-free construction (tests), where the default no-op /
+     * temp-free host schedules nothing and hands back an honest
+     * DISABLED/NotConfigured result without touching disk or the network.
+     */
+    private val schedulingHost: com.clawmate.app.datamanager.PeriodicSchedulingHost? = null,
+    private val batchEnricher: com.clawmate.app.datamanager.BatchEventEnricher? = null,
+    private val entityEnrichmentRunner: com.clawmate.app.datamanager.EntityEnrichmentRunner? = null,
+    private val entityPersistence: com.clawmate.app.datamanager.EntityEnrichmentPersistence? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -220,6 +231,8 @@ class SettingsViewModel(
 
     fun setWorkflowAutomationEnabled(value: Boolean) = updateDraft { it.copy(workflowAutomationEnabled = value) }
     fun setWorkflowHardwareSteps(value: Boolean) = updateDraft { it.copy(workflowHardwareStepsEnabled = value) }
+    fun setPeriodicLocalConsolidationEnabled(value: Boolean) =
+        updateDraft { it.copy(periodicLocalConsolidationEnabled = value) }
     fun setAccessibilityOptIn(value: Boolean) = updateDraft { it.copy(accessibilityOptIn = value) }
     fun setOverlayOptIn(value: Boolean) = updateDraft { it.copy(overlayOptIn = value) }
     fun setPcServerUrl(value: String) = updateDraft { it.copy(pcServerUrl = value) }
@@ -599,5 +612,187 @@ class SettingsViewModel(
             wait = d.wechatAutoSummaryWait,
         )
         return if (com.clawmate.app.wechat.domain.validateWechatAutoSummaryRequest(request).isEmpty()) request else null
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 36 — periodic local-only consolidation scheduling (explicit only)
+    // ------------------------------------------------------------------
+
+    /**
+     * Explicitly (re)apply the periodic local-consolidation schedule from the
+     * current draft opt-in. Reads the *persisted* [AppSettings.
+     * periodicLocalConsolidationEnabled] value (default false) and registers one
+     * local-only task via the injected scheduling host — or cancels it when off.
+     * Only ever from a Settings click; never on launch / Home-load /
+     * recomposition. When no host is injected (device-free construction) it
+     * reports an honest DISABLED/NotConfigured state without touching disk/network.
+     */
+    fun schedulePeriodicLocalConsolidation() {
+        val host = schedulingHost ?: run {
+            _state.update {
+                it.copy(
+                    periodicSchedulingBusy = false,
+                    periodicScheduled = false,
+                    periodicScheduleMessage = "未注入调度宿主 — 保持禁用（DISABLED）",
+                )
+            }
+            return
+        }
+        if (_state.value.periodicSchedulingBusy) return
+        val enabled = _state.value.draft.periodicLocalConsolidationEnabled
+        _state.update { it.copy(periodicSchedulingBusy = true, periodicScheduleMessage = null) }
+        val outcome = host.scheduleIfEnabled(enabled)
+        val scheduled = host.isScheduled()
+        val message = when (outcome) {
+            is com.clawmate.app.datamanager.PeriodicScheduleResult.Disabled ->
+                "已禁用：未注册任何周期任务（DISABLED）"
+            is com.clawmate.app.datamanager.PeriodicScheduleResult.Scheduled ->
+                "已注册本地周期任务：${outcome.taskName}（仅本地重构）"
+            is com.clawmate.app.datamanager.PeriodicScheduleResult.Replaced ->
+                "已更新本地周期任务：${outcome.taskName}（REPLACE）"
+            is com.clawmate.app.datamanager.PeriodicScheduleResult.KeptExisting ->
+                "本地周期任务已存在（KEEP）：${outcome.taskName}"
+        }
+        _state.update { it.copy(periodicSchedulingBusy = false, periodicScheduled = scheduled, periodicScheduleMessage = message) }
+    }
+
+    /**
+     * Explicitly trigger one deterministic local consolidation run now — only via
+     * a Settings click, and only when the local task is currently scheduled and
+     * enabled. Re-runs the Phase-30/33/32 local build (never the model-backed
+     * [com.clawmate.app.datamanager.CloudConsolidationRepository]), cancellable.
+     */
+    fun runPeriodicLocalConsolidationNow() {
+        val host = schedulingHost ?: run {
+            _state.update { it.copy(periodicSchedulingBusy = false, periodicScheduleMessage = "未注入调度宿主 — 无周期任务") }
+            return
+        }
+        if (_state.value.periodicSchedulingBusy) return
+        if (!_state.value.draft.periodicLocalConsolidationEnabled || !host.isScheduled()) {
+            _state.update { it.copy(periodicScheduleMessage = "未启用/未注册周期任务 — 未执行（仅显式启用后运行）") }
+            return
+        }
+        _state.update { it.copy(periodicSchedulingBusy = true, periodicScheduleMessage = null) }
+        viewModelScope.launch {
+            val result = runCatching { host.runNow() }.getOrElse { e ->
+                _state.update {
+                    it.copy(periodicSchedulingBusy = false, periodicScheduleMessage = "本地周期运行失败：${e.message}")
+                }
+                return@launch
+            }
+            if (result == null) {
+                _state.update { it.copy(periodicSchedulingBusy = false, periodicScheduleMessage = "无周期任务可运行 — 未执行") }
+            } else {
+                _state.update {
+                    it.copy(
+                        periodicSchedulingBusy = false,
+                        periodicScheduled = true,
+                        periodicScheduleMessage = "本地重构完成：记录=${result.localRecords} 事件=${result.indexedEvents} 场景=${result.sceneCount} 实体=${result.entityCount} 画像领域=${result.profileDomainCount}",
+                    )
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 36 — explicit model entity enrichment (Stream 2, persist-only-on-MODEL)
+    // ------------------------------------------------------------------
+
+    /**
+     * Explicitly run the Phase-35 entity-enrichment seam. Only ever from a
+     * Settings/Data-Manager click; never on launch/Home/recomposition. Zero
+     * network unless [com.clawmate.app.datamanager.ConsolidationModelConfig] is
+     * fully configured and the action is explicit. On a MODEL success the
+     * returned enriched document is **deliberately persisted** only here (the
+     * caller-facing write seam); LOCAL_ONLY / FALLBACK / EMPTY results are never
+     * written and the old artifact is preserved.
+     */
+    fun runEntityEnrichment() {
+        val runner = entityEnrichmentRunner ?: run {
+            _state.update { it.copy(enrichBusy = false, enrichResultMessage = "未注入实体增强运行器 — 未执行") }
+            return
+        }
+        if (_state.value.enrichBusy) return
+        val persistence = entityPersistence
+        _state.update { it.copy(enrichBusy = true, enrichResultMessage = null) }
+        viewModelScope.launch {
+            val config = com.clawmate.app.datamanager.ProfileModelConfig.fromEndpointConfig()
+            val result = runCatching {
+                runner.enrich(
+                    mode = com.clawmate.app.datamanager.EntityEnrichmentRunner.EnrichMode.ModelRequested(
+                        explicitAction = true,
+                        config = config,
+                    ),
+                    clientProvider = { cfg -> com.clawmate.app.datamanager.EntityEnrichmentClientFactory.client(cfg) },
+                )
+            }.getOrElse { e ->
+                _state.update { it.copy(enrichBusy = false, enrichResultMessage = "实体增强失败：${e.message}") }
+                return@launch
+            }
+            val modelEligible = persistence != null && persistence.canPersist(result)
+            val persisted = if (modelEligible) {
+                persistence!!.writeEnriched(result)
+            } else {
+                false // LOCAL_ONLY / FALLBACK / EMPTY are never written by this seam.
+            }
+            val status = result.status.token
+            val extra = when {
+                !modelEligible -> "（未写入，旧索引保持不变）"
+                persisted -> "（已写入增强索引）"
+                else -> "（写入失败，旧索引保持不变）"
+            }
+            _state.update {
+                it.copy(
+                    enrichBusy = false,
+                    enrichResultMessage = "实体增强状态=$status，候选=${result.candidateCount}，采纳实体=${result.admittedEntityCount} $extra",
+                )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 36 — explicit generic batch event enrichment (Stream 3)
+    // ------------------------------------------------------------------
+
+    /**
+     * Explicitly run the Phase-36 generic batch event-enrichment seam (keyword /
+     * domain / entity / todo over real indexed events). Only ever from a
+     * Settings/Data-Manager click; zero network unless configured + explicit
+     * action + real events. The result is a new typed surface keyed by real event
+     * id and **never auto-persisted** — the caller decides how to apply it. A
+     * LOCAL_ONLY / FALLBACK result carries the deterministic local enrich.
+     */
+    fun runBatchEventEnrichment() {
+        val enricher = batchEnricher ?: run {
+            _state.update { it.copy(batchEnrichResultMessage = "未注入批量增强运行器 — 未执行") }
+            return
+        }
+        if (_state.value.enrichBusy) return
+        _state.update { it.copy(enrichBusy = true, batchEnrichResultMessage = null) }
+        viewModelScope.launch {
+            val config = com.clawmate.app.datamanager.ProfileModelConfig.fromEndpointConfig()
+            val result = runCatching {
+                enricher.enrich(
+                    mode = com.clawmate.app.datamanager.BatchEventEnricher.EnrichMode.ModelRequested(
+                        explicitAction = true,
+                        config = config,
+                    ),
+                    clientProvider = { cfg -> com.clawmate.app.datamanager.BatchEventEnrichClientFactory.client(cfg) },
+                )
+            }.getOrElse { e ->
+                _state.update { it.copy(enrichBusy = false, batchEnrichResultMessage = "批量增强失败：${e.message}") }
+                return@launch
+            }
+            val sampled = result.enrichedFields.values.take(1).firstOrNull()
+            val sample = sampled?.let {
+                "样例：事件 ${it.eventId} → 关键词=${it.keywords.size} 领域=${it.domains} 实体=${it.entities.size} 待办=${it.todoType}"
+            }.orEmpty()
+            _state.update {
+                it.copy(
+                    enrichBusy = false,
+                    batchEnrichResultMessage = "批量增强状态=${result.status.token}，事件=${result.eventCount}，采纳=${result.admittedEventCount} $sample",
+                )
+            }
+        }
     }
 }

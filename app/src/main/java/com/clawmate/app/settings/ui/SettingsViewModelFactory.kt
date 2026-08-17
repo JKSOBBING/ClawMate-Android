@@ -19,10 +19,20 @@ class SettingsViewModelFactory(
      * construction (the ViewModel falls back to a no-op controller).
      */
     private val overlayServiceController: OverlayServiceController? = null,
+    /**
+     * Phase 36 — an app-private files directory used by the explicit periodic
+     * local-consolidation scheduling host and the explicit model enrich seams.
+     * Absent in device-free construction where the seams report honest DISABLED /
+     * NOT_CONFIGURED without touching disk or the network.
+     */
+    private val filesDir: java.io.File? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
+            val schedulingHost = filesDir?.let {
+                com.clawmate.app.datamanager.PeriodicSchedulingHost(it)
+            }
             return SettingsViewModel(
                 repository,
                 versionName,
@@ -32,6 +42,10 @@ class SettingsViewModelFactory(
                         override fun startService() {}
                         override fun stopService() {}
                     },
+                schedulingHost = schedulingHost,
+                batchEnricher = filesDir?.let { com.clawmate.app.datamanager.BatchEventEnricher(it) },
+                entityEnrichmentRunner = filesDir?.let { com.clawmate.app.datamanager.EntityEnrichmentRunner(it) },
+                entityPersistence = filesDir?.let { com.clawmate.app.datamanager.EntityEnrichmentPersistence(it) },
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
@@ -50,6 +64,7 @@ class SettingsViewModelFactory(
             versionName = versionName,
             versionCode = versionCode,
             overlayServiceController = AndroidOverlayServiceController(context),
+            filesDir = context.filesDir,
         )
     }
 }

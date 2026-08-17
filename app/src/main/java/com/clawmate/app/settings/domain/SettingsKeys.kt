@@ -127,6 +127,11 @@ object SettingsKeys {
     /** Whether to surface HDC/device-control workflow steps. */
     const val WORKFLOW_HARDWARE_STEPS_ENABLED = "workflow_hardware_steps_enabled"
 
+    /** Phase 36 — explicit opt-in to periodic local-only consolidation scheduling.
+     * Off by default; on alone is not enough (the explicit schedule action in
+     * Settings must also be invoked). Never auto-schedules on launch/Home. */
+    const val PERIODIC_LOCAL_CONSOLIDATION_ENABLED = "periodic_local_consolidation_enabled"
+
     /** Phase 19 — user opt-in to the AutoAgent controlled-accessibility boundary. */
     const val ACCESSIBILITY_OPT_IN = "accessibility_autoagent_opt_in"
 
@@ -193,6 +198,7 @@ object SettingsKeys {
         CHAT_COMPRESSION_THRESHOLD_PERCENT, CHAT_RECENT_ROUNDS,
         WORKFLOW_AUTOMATION_ENABLED, WORKFLOW_HARDWARE_STEPS_ENABLED, ACCESSIBILITY_OPT_IN,
         OVERLAY_OPT_IN, PC_SERVER_URL, PC_CONNECTED,
+        PERIODIC_LOCAL_CONSOLIDATION_ENABLED,
         WECHAT_AUTO_SUMMARY_ENABLED, WECHAT_AUTO_SUMMARY_DAYS, WECHAT_AUTO_SUMMARY_MAX_CONTACTS,
         WECHAT_AUTO_SUMMARY_SWIPE_SPEED, WECHAT_AUTO_SUMMARY_HISTORY_SWIPE_RATIO,
         WECHAT_AUTO_SUMMARY_STABLE_SWIPES, WECHAT_AUTO_SUMMARY_MAX_HISTORY_SWIPES, WECHAT_AUTO_SUMMARY_WAIT,
