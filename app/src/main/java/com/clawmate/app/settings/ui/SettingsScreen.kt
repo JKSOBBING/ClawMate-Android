@@ -62,10 +62,11 @@ import com.clawmate.app.log.ui.LogScreen
 fun SettingsScreen(context: Context, modifier: Modifier = Modifier) {
     val version = rememberAppVersion(context)
     val vm: SettingsViewModel = viewModel(
-        factory = SettingsViewModelFactory(
+        factory = SettingsViewModelFactory.forContext(
             repository = SettingsComponent.repository(context),
             versionName = version.first,
             versionCode = version.second,
+            context = context,
         ),
     )
     val state by vm.state.collectAsState()

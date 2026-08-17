@@ -901,6 +901,35 @@ The Phase-1 `ui/FeatureScreens.kt` chat placeholder was replaced by the real
 5. `ChatViewModel` drives the screen state from streamed deltas plus
    `ToolExecuted` events; `ChatScreen` renders history, incremental deltas,
    tool-execution status, empty, loading, error, and missing-config states.
+   Since **Phase 26** it also publishes coarse send/tool/completed/error/cancel
+   transitions into `OverlayStateRegistry`, so the optional status-only overlay
+   surface can show a bounded, sanitized agent-status line.
+
+## Overlay status overlay (Phase 26)
+
+The Harmony two-layer `SYSTEM_FLOAT_WINDOW` overlay (live agent status + edge
+glow, `pages/FloatWindow.ets` + `pages/EdgeFlowWindow.ets`) is ported as a
+**status-only** Android overlay that keeps every safety gate:
+
+- **Bounded status source**: `OverlayStateRegistry` stores a thread-safe,
+  sanitized, ≤160-char status text plus a tiny `OverlayAgentState` enum
+  (`IDLE`/`RUNNING`/`TOOL`/`ERROR`/`COMPLETED`). It never stores screenshots,
+  prompts, tokens, or secrets.
+- **Wired from the live agent loop**: `ChatViewModel.send` publishes
+  running/tool/completed/error and `cancelSend` returns to idle — chat behavior
+  and logging are unchanged.
+- **Real but narrow renderer**: `OverlayCapabilityFlags.rendererConfigured` is
+  `true` only because `OverlayFloatService` now renders that bounded status
+  text and refreshes it while the explicitly started service is alive. The gate
+  to `READY` still requires explicit opt-in **and** the observed
+  `SYSTEM_ALERT_WINDOW` grant.
+- **Explicit start/stop only**: the Settings UI offers a start/stop action that
+  is enabled only at gate `READY`; turning opt-in off stops it. It is never
+  started on app launch or merely on recomposition.
+- **Never edge-flow or GUI control**: the surface is `FLAG_NOT_TOUCHABLE`
+  (never intercepts input), never captures screens, never executes commands,
+  and never claims the Harmony edge-glow shader or agent GUI control (both
+  remain unsupported).
 
 ## Build & verify
 
@@ -961,6 +990,22 @@ Phase-24 avatar-generation tests across `AvatarGenerationClientTest`
 `AvatarPersistenceSeamTest`, `ProfileAvatarGenerationTest`, plus gate-state
 updates to `AvatarDomainTest` / `ProfileAvatarViewModelTest` /
 `AvatarAssetRepositoryTest`).
+
+**Phase 26** adds the status-only overlay. The focused overlay/settings unit
+tests run with a single Gradle worker:
+```
+ANDROID_HOME=/opt/deepseek-harness/android-sdk \
+ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk \
+GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home \
+ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
+/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle \
+    --no-daemon --max-workers=1 \
+    :app:testDebugUnitTest \
+    --tests 'com.clawmate.app.overlay.*' \
+    --tests 'com.clawmate.app.settings.SettingsOverlay*' \
+    --tests 'com.clawmate.app.settings.SettingsOverlayServiceControlTest'
+```
+The exact result count is recorded in `DSH_PHASE_RESULT.md`.
 
 ## No secrets
 

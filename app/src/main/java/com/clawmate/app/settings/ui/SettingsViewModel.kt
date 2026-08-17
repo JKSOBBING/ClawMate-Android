@@ -67,6 +67,26 @@ class SettingsViewModel(
      */
     private val overlayDetector: com.clawmate.app.overlay.OverlayPermissionDetector =
         com.clawmate.app.overlay.RegistryOverlayPermissionDetector(),
+    /**
+     * Phase 26 — injectable overlay *service* controller so the explicit
+     * start/stop action is unit-testable device-free. Defaults to a no-op-safe
+     * controller when constructed without a Context (the real Android
+     * [com.clawmate.app.overlay.AndroidOverlayServiceController] is wired by
+     * the Settings UI/factory that holds a Context). The pure
+     * [OverlayServiceStartPolicy] decision is always computed regardless of
+     * which controller is injected.
+     */
+    private val overlayServiceController: com.clawmate.app.overlay.OverlayServiceController =
+        object : com.clawmate.app.overlay.OverlayServiceController {
+            override fun startService() {
+                // No Context in the plain unit-test construction; the UI layer
+                // injects the Android controller when a Context is available.
+            }
+
+            override fun stopService() {
+                // No Context in the plain unit-test construction.
+            }
+        },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -505,6 +525,63 @@ class SettingsViewModel(
             overlayOptIn = d.overlayOptIn,
             overlayPermissionGranted = overlayDetector.isOverlayPermissionGranted(),
         )
+    }
+
+    /**
+     * Phase 26 — the pure decision for the explicit "start overlay status
+     * service" action. [OverlayServiceStartStep.START] only when the live gate
+     * is [OverlayGateStatus.READY]; otherwise [OverlayServiceStartStep.KEEP_STOPPED]
+     * with an honest reason. The UI must only dispatch a start from an explicit
+     * click handler — never on launch or recomposition.
+     */
+    fun overlayServiceStartStep(): com.clawmate.app.overlay.OverlayServiceStartStep =
+        com.clawmate.app.overlay.OverlayServiceStartPolicy.startStep(overlayGate())
+
+    /**
+     * Phase 26 — whether the overlay service must be stopped because the gate
+     * is no longer READY while the service is still present (typically the user
+     * turned opt-in off). Pure and testable.
+     */
+    fun overlayServiceStopRequired(): Boolean =
+        com.clawmate.app.overlay.OverlayServiceStartPolicy.stopRequired(
+            overlayGate(),
+            com.clawmate.app.overlay.OverlayStateRegistry.isOverlayPresent(),
+        )
+
+    /**
+     * Phase 26 — explicitly start the overlay status service. This only ever
+     * runs when the UI has already confirmed the pure [overlayServiceStartStep]
+     * is [OverlayServiceStartStep.START] (i.e. the gate is READY); if the gate
+     * is not READY the controller is not invoked (the service itself would also
+     * re-derive the gate and self-terminate). It mirrors the user's explicit
+     * opt-in onto [OverlayCapabilityFlags] so the service's own re-derived gate
+     * reflects the same opt-in, then dispatches the start.
+     */
+    fun startOverlayService() {
+        if (overlayServiceStartStep() == com.clawmate.app.overlay.OverlayServiceStartStep.START) {
+            com.clawmate.app.overlay.OverlayCapabilityFlags.overlayOptedIn = true
+            overlayServiceController.startService()
+        }
+    }
+
+    /**
+     * Phase 26 — explicitly stop the overlay status service and clear the
+     * mirrored opt-in flag (nothing renders without an explicit opt-in).
+     */
+    fun stopOverlayService() {
+        com.clawmate.app.overlay.OverlayCapabilityFlags.overlayOptedIn = false
+        overlayServiceController.stopService()
+    }
+
+    /**
+     * Phase 26 — stops the overlay status service when opt-in is turned off so
+     * it cannot keep rendering while not opted in (never silent; the overlay may
+     * only live while READY).
+     */
+    fun stopOverlayOnOptOut() {
+        if (com.clawmate.app.overlay.OverlayStateRegistry.isOverlayPresent()) {
+            stopOverlayService()
+        }
     }
 
     /** Validate the current WeChat summary draft into a buildable request (null when invalid). */

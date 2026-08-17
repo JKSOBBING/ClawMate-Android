@@ -145,6 +145,13 @@ class ChatViewModel(
         sendingJob?.cancel()
         sendingJob = viewModelScope.launch {
             _state.update { it.copy(isSending = true, error = null, agentRunning = true) }
+            // Phase 26 — publish the coarse "running" state to the live overlay
+            // status registry before any agent output streams. This is a pure
+            // observation side-channel; chat behavior/logging are unchanged.
+            com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+                com.clawmate.app.overlay.OverlayAgentState.RUNNING,
+                "正在回复…",
+            )
             val sessionId = repository.ensureActiveSession()
             com.clawmate.app.log.AppLogger.cloud(
                 com.clawmate.app.log.domain.LogLevel.INFO,
@@ -193,6 +200,13 @@ class ChatViewModel(
                             }
                         }
                         is ChatSendEvent.ToolExecuted -> {
+                            // Phase 26 — publish the coarse "tool running" state
+                            // with the bounded tool name to the live overlay
+                            // status registry (never the trace line's full args).
+                            com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+                                com.clawmate.app.overlay.OverlayAgentState.TOOL,
+                                "执行工具 ${event.toolName}",
+                            )
                             _state.update { current ->
                                 val streaming = current.messages
                                     .toMutableList()
@@ -213,6 +227,12 @@ class ChatViewModel(
                                 com.clawmate.app.log.domain.LogLevel.INFO,
                                 "Chat",
                                 "回复完成 session=$sessionId",
+                            )
+                            // Phase 26 — publish the "completed" state to the
+                            // live overlay status registry.
+                            com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+                                com.clawmate.app.overlay.OverlayAgentState.COMPLETED,
+                                "回复已完成",
                             )
                             _state.update { current ->
                                 val finalized = current.messages
@@ -240,6 +260,11 @@ class ChatViewModel(
                     "Chat",
                     "对话失败: ${e.userMessage}",
                 )
+                // Phase 26 — publish the honest "error" state to the overlay.
+                com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+                    com.clawmate.app.overlay.OverlayAgentState.ERROR,
+                    "对话失败",
+                )
                 _state.update { current ->
                     current.copy(
                         isSending = false,
@@ -253,6 +278,11 @@ class ChatViewModel(
                     )
                 }
             } catch (e: com.clawmate.app.chat.agent.AgentException) {
+                // Phase 26 — publish the honest "error" state to the overlay.
+                com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+                    com.clawmate.app.overlay.OverlayAgentState.ERROR,
+                    "智能体执行失败",
+                )
                 _state.update {
                     it.copy(
                         isSending = false,
@@ -265,6 +295,11 @@ class ChatViewModel(
                     )
                 }
             } catch (e: Exception) {
+                // Phase 26 — publish the honest "error" state to the overlay.
+                com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+                    com.clawmate.app.overlay.OverlayAgentState.ERROR,
+                    "发送失败",
+                )
                 _state.update {
                     it.copy(
                         isSending = false,
@@ -280,6 +315,11 @@ class ChatViewModel(
     /** Cancels an in-flight send. */
     fun cancelSend() {
         sendingJob?.cancel()
+        // Phase 26 — a cancelled turn returns the live overlay to idle.
+        com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
+            com.clawmate.app.overlay.OverlayAgentState.IDLE,
+            "",
+        )
         _state.update { it.copy(isSending = false, agentRunning = false, activeToolTrace = null) }
     }
 

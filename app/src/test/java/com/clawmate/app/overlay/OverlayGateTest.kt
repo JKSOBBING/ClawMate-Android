@@ -60,19 +60,20 @@ class OverlayGateTest {
     }
 
     @Test
-    fun `default build facts keep gate BLOCKED or NOT_CONFIGURED not READY`() {
-        // rendererConfigured is always false in this build; with no opt-in the
-        // boundary is NOT_CONFIGURED and even with opt-in it stays BLOCKED.
-        assertFalse(OverlayCapabilityFlags.rendererConfigured)
+    fun `default build facts keep gate BLOCKED or NOT_CONFIGURED not READY without opt-in and grant`() {
+        // Phase 26 ships the status-only renderer, but READY still additionally
+        // requires explicit opt-in + the observed SYSTEM_ALERT_WINDOW grant.
+        assertTrue(OverlayCapabilityFlags.rendererConfigured)
         val gateNotConfigured = OverlayGate(
             optedIn = false,
             overlayPermissionGranted = true,
             rendererConfigured = OverlayCapabilityFlags.rendererConfigured,
         )
         assertEquals(OverlayGateStatus.NOT_CONFIGURED, gateNotConfigured.status)
+        // Opted in + renderer, but the system grant is not observed → BLOCKED.
         val gateBlocked = OverlayGate(
             optedIn = true,
-            overlayPermissionGranted = true,
+            overlayPermissionGranted = false,
             rendererConfigured = OverlayCapabilityFlags.rendererConfigured,
         )
         assertEquals(OverlayGateStatus.BLOCKED, gateBlocked.status)
@@ -118,13 +119,14 @@ class OverlayGateTest {
     }
 
     @Test
-    fun `registry reports not granted and no renderer by default`() {
+    fun `registry reports not granted but status-only renderer configured by default`() {
         OverlayStateRegistry.reset()
         assertFalse(OverlayStateRegistry.isPermissionGranted())
         assertFalse(OverlayStateRegistry.isOverlayPresent())
         val detector = RegistryOverlayPermissionDetector()
         assertFalse(detector.isOverlayPermissionGranted())
-        assertFalse("no renderer in this build", detector.isRendererConfigured())
+        // Phase 26 — status-only renderer is configured; READY still needs the grant.
+        assertTrue(detector.isRendererConfigured())
     }
 
     @Test

@@ -23,11 +23,12 @@ interface OverlayPermissionDetector {
 
     /**
      * True only when the Android system reports the overlay runtime permission
-     * as granted (`Settings.canDrawOverlays`).
+     * as granted (`Settings.canDrawOverlays`). Never assumed.
      */
     fun isOverlayPermissionGranted(): Boolean
 
-    /** True when this build actually provides a safe overlay renderer (none today). */
+    /** True when this build actually provides a safe overlay renderer. Since
+     *  Phase 26 a real status-only renderer exists. */
     fun isRendererConfigured(): Boolean
 }
 
@@ -46,9 +47,11 @@ class AndroidOverlayPermissionDetector(
         Settings.canDrawOverlays(context)
 
     override fun isRendererConfigured(): Boolean {
-        // This build deliberately ships no on-device overlay renderer. Returning
-        // false keeps the boundary BLOCKED (never a claimed-but-fake capability).
-        return false
+        // Since Phase 26 a real status-only overlay renderer exists
+        // (OverlayFloatService rendering the bounded OverlayStateRegistry agent
+        // status). It still never captures screens, intercepts input, or
+        // executes commands.
+        return OverlayCapabilityFlags.rendererConfigured
     }
 }
 
@@ -69,11 +72,12 @@ class FakeOverlayPermissionDetector(
 /**
  * Detector backed by the live [OverlayStateRegistry] that the lifecycle-safe
  * scaffold populate. Used by the Settings UI/ViewModel so the displayed state
- * always mirrors what actually observed — never an assumption. The renderer is
- * deliberately absent in this build (false), keeping the boundary BLOCKED
- * rather than claiming a real overlay surface.
+ * always mirrors what actually observed — never an assumption. Since Phase 26 a
+ * real status-only renderer is configured, so [isRendererConfigured] reflects
+ * it; READY still additionally requires explicit opt-in and the observed
+ * `SYSTEM_ALERT_WINDOW` grant.
  */
 class RegistryOverlayPermissionDetector : OverlayPermissionDetector {
     override fun isOverlayPermissionGranted(): Boolean = OverlayStateRegistry.isPermissionGranted()
-    override fun isRendererConfigured(): Boolean = false
+    override fun isRendererConfigured(): Boolean = OverlayCapabilityFlags.rendererConfigured
 }

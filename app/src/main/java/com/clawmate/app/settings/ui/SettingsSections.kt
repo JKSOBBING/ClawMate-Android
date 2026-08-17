@@ -465,13 +465,18 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
 
     SettingsGroupCard(
         title = "悬浮窗 Overlay 边界",
-        subtitle = "受控可用性：未勾选时不渲染任何浮层；勾选后仍需系统悬浮窗授权与安全渲染器",
+        subtitle = "受控可用性：未勾选时不渲染任何浮层；勾选后仍需系统悬浮窗授权与安全状态渲染器",
     ) {
         SettingToggle(
             label = "启用悬浮窗 Overlay",
-            desc = "显式开启受控可用性检测（默认关闭；开启不等于获得渲染能力）",
+            desc = "显式开启受控可用性检测（默认关闭；开启等于获得渲染能力还需系统授权）",
             selected = state.draft.overlayOptIn,
-            onValueChange = vm::setOverlayOptIn,
+            onValueChange = { enabled ->
+                vm.setOverlayOptIn(enabled)
+                // Turning opt-in off must stop the overlay service (no silent
+                // rendering outside an explicit opt-in).
+                if (!enabled) vm.stopOverlayOnOptOut()
+            },
         )
 
         val gate = vm.overlayGate()
@@ -481,7 +486,7 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
             com.clawmate.app.overlay.OverlayGateStatus.BLOCKED ->
                 SettingsAction("未观察到系统悬浮窗授权 — BLOCKED", SettingsActionKind.Warning, enabled = false, onClick = {})
             com.clawmate.app.overlay.OverlayGateStatus.READY ->
-                SettingsAction("边界就绪（无安全渲染器，浮层仍受控）", SettingsActionKind.Warning, enabled = false, onClick = {})
+                SettingsAction("边界就绪 — READY（状态浮层，仅渲染受限状态文字）", SettingsActionKind.Warning, enabled = false, onClick = {})
         }
         SettingsActionRow(actions = listOf(overlayAction))
 
@@ -491,7 +496,7 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
         // Launcher is created unconditionally (remember count must stay stable
         // across recompositions); only its button is shown conditionally.
         val overlayRequest = vm.overlayPermissionRequest()
-        val overlayLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        val overlayPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
             androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
         ) { /* user returns from the system overlay-settings screen; we re-observe on rebuild */ }
         if (overlayRequest.canRequest) {
@@ -502,7 +507,7 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
                         kind = SettingsActionKind.Primary,
                         enabled = true,
                         onClick = {
-                            overlayLauncher.launch(
+                            overlayPermLauncher.launch(
                                 android.content.Intent(
                                     overlayRequest.action,
                                     android.net.Uri.parse("package:${context.packageName}"),
@@ -514,8 +519,36 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
             )
         }
         Text(
-            "当前构建未包含任何安全浮窗渲染器；OverlayGate 始终返回 NOT_CONFIGURED 或 BLOCKED，不会伪造任何浮层内容。",
+            "当边界 READY（已勾选 + 已授予系统悬浮窗权限）时，可通过下方按钮显式启动/停止本地状态浮层。该浮层只显示受限的智能体状态文字（≤160 字符），不提供截图、不拦截输入、不执行任何命令，也不支持边缘流光特效或智能体 GUI 控制。",
             fontSize = 12.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        // Explicit start/stop of the local status overlay service — only enabled
+        // while the gate is READY, and only ever dispatched inside a click
+        // handler (never on app launch or recomposition).
+        val startStep = vm.overlayServiceStartStep()
+        val present = com.clawmate.app.overlay.OverlayStateRegistry.isOverlayPresent()
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = when {
+                        present -> "状态浮层运行中 — 停止"
+                        startStep == com.clawmate.app.overlay.OverlayServiceStartStep.START -> "启动本地状态浮层"
+                        else -> "启动本地状态浮层（需先 READY）"
+                    },
+                    kind = if (present) SettingsActionKind.Danger else SettingsActionKind.Primary,
+                    enabled = if (present) true else startStep == com.clawmate.app.overlay.OverlayServiceStartStep.START,
+                    onClick = {
+                        if (present) vm.stopOverlayService() else vm.startOverlayService()
+                    },
+                ),
+            ),
+        )
+        Text(
+            "本地状态浮层仅在显式点击时启动/停止；应用启动或界面重组合不会自动启动。关闭「启用悬浮窗 Overlay」会自动停止浮层。边缘流光特效与智能体 GUI 控制在 Android 上仍不支持。",
+            fontSize = 11.sp,
             color = SettingsThemeColors.SecondaryText,
             modifier = Modifier.padding(top = 8.dp),
         )
