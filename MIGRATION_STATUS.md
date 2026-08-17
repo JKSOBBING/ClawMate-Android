@@ -145,6 +145,40 @@ OpenAI-compatible Planner chat backend, while preserving every safety boundary:
 - **No new credentials, no Runtime.exec/ProcessBuilder/adb/hdc/coordinate GUI
   automation.** See `DSH_PHASE_RESULT.md` for the focused test command and results.
 
+**Phase 29 (bounded daily-log event source into the Home recommendation
+pipeline) was executed in this worktree with the same toolchain (JDK 17.0.19,
+Android SDK platform 34, Gradle 8.9, `--no-daemon --max-workers=1`):
+`:app:testDebugUnitTest` with focused new tests passed (see §6 / `DSH_PHASE_RESULT.md`).**
+This phase brings the **first bounded daily-log input + local event-index
+foundation** into the Phase-28 explicit Home recommendation flow, honestly
+marking the remaining Harmony work as Partial/Deferred (no full
+ConsolidationService/IndexService port):
+- **Pure daily-log parser** (`datamanager/DailyLogParser`): parses Harmony metadata
+  headers (`workflow_metadata` / `latest_entry_index`) and numbered `1. …` entries
+  from app-private `filesDir/workflows/daily-log/YYYY-MM-DD/*.md`, with strict
+  bounds (date, file name, entry count, per-entry/total chars, metadata size).
+  Bad files are skipped with countable `DailyLogParseError`s — never thrown, so a
+  bad file cannot falsify a whole refresh.
+- **Bounded mapper + read-only source** (`datamanager/DailyLogPlannerEventMapper`,
+  `DailyLogEventSource`): maps typed entries into the existing
+  `HomeRecommendationPlannerEvent` shape with **stable source refs**
+  (`YYYY-MM-DD/file.md#N`) as event ids, bounded real text, `imagePaths` empty,
+  source label `DailyLog`, and no URI/image/network. The app-private file source
+  only reads existing files (never creates, never scans external storage).
+- **Explicit mixed input.** The Home "生成推荐" button now reads stored gallery
+  metadata **and** daily-log events; the repo blends them into the planner and the
+  output normalizer validates `source_event_ids` over **both** id namespaces. Old
+  gallery-only behavior stays compatible (single-arg `generate`). With no gallery
+  **and** no daily-log it short-circuits to NoData with zero network calls; never
+  read on Home load/recomposition/background.
+- **External-import API, not auto-creation.** `DailyLogWorkspace` documents how a
+  workflow/import layer will write daily-log files; the pipeline never creates
+  them. No shell/adb/hdc/GUI capabilities were added.
+- **MIGRATION_STATUS** top data-manager row already marks the full
+  ConsolidationService/IndexService (cloud consolidation/dedup/profile-claims/
+  index-partitions/periodic background scheduling) as **Partial/Deferred** — Phase
+  29 implements only parsing + planner input, not those remaining items.
+
 **Phase 27 (explicit profile-affinity "同频报告") was executed in this worktree
 with the same toolchain (JDK 17.0.19, Android SDK platform 34, Gradle 8.9,
 `--no-daemon --max-workers=1`): `:app:testDebugUnitTest` with the focused
@@ -261,7 +295,7 @@ a controlled disabled state), **Defer** (later phase).
 | 2 | **Home / recommendations** | `pages/home/HomePage.ets`; `datamanager/HomeRecommendationService.ets`, `DataManagerTypes.ets`, `IndexService.ets`, `ConsolidationService.ets` | Adapt + **data source Defer** | **Phase 6 shipped** the Compose Home UI (`home/domain/HomeDomain.kt`, `home/ui/HomeScreen.kt`): four persona pillars (理解你/守护你/陪伴你/成就你 as 吃/穿/住/行), honest profile loading/empty/error states, recommendation list with completion toggles + 未完成/全部 filter + pagination + expand, and an **honest NOT_CONFIGURED avatar section** (avatar generation is DISABLED on Android — never fabricated). Recommendation *content* still requires the upstream data-manager pipeline (a later phase); completion flags persist via `home/data/DataStoreHomeRecRepository.kt`. |
 | 3 | **Chat & agent loop** | `pages/chat/*` (ChatPage, ChatPageTypes, ChatMessageDataSource, ChatSessionController); `chat/ChatSessionTypes.ets`; `utils/CloudModelClient.ets` (SSE at :725); `utils/AgentLoopRunner.ets`, `ChatReactAgent.ets`, `ChatToolRegistry.ets`, `AgentActionParser.ets`, `AgentExecutionController.ets`; spec `docs/superpowers/specs/2026-06-10-chat-session-management-design.md` | Adapt | Compose `LazyColumn` chat; Repository + ViewModel; OpenAI-compatible `/v1/chat/completions` via OkHttp SSE exposed as `Flow<String>`; ReAct tool loop; Markdown renderer; Room persistence (source uses JSON files in `filesDir/chat-sessions/`). |
 | 4 | **Gallery / collection** | `utils/gallery/*` (GalleryAnalyzer, GalleryAutoScanner, GalleryOcrService, GallerySearchService, GalleryMonthlyInsights, GalleryMemorySync, GalleryStorage, GalleryTypes); `pages/gallery/GalleryPage.ets`; `pages/collection/CollectionPage.ets`, `CollectionGroupDetailPage.ets`; `datamanager/CollectionGroupingService.ets`; docs `docs/gallery/*` | Adapt | Android Photo Picker / MediaStore with URI grants (no broad storage permission). **Phase 3 shipped** the picker + EXIF read + Room persistence + collection grouping + search. **Phase 9 shipped** a real item detail flow (content URI / date / EXIF / analysis state / tags / summary / collection membership), explicit edit (title/summary/tags) + delete-by-item with confirmation (Room-persisted, groups recompute), and Android reverse geocoding via the platform `Geocoder`. **Phase 11 shipped** a real on-device Chinese OCR adapter (`gallery/ocr/AndroidOcrEngine`) using ML Kit `com.google.mlkit:text-recognition-chinese` (bundled model) over the picked content URI (ContentResolver → bounded Bitmap → ML Kit), with typed success/empty/cancel/model-download/error/unavailable states, an explicit **Analyze OCR** action in the detail panel, and Room persistence of only real recognized text + `analyzed` status. Cloud vision (MiniCPM-V) stays NOT_CONFIGURED. **Phase 15 shipped** the portable monthly-insights pure port over stored Room items (`gallery/insights/GalleryMonthlyInsights.kt`), an `observeMonthlyInsights` repository derivation, and a 月度洞察 panel in the existing Gallery screen (real Loading / Empty / Error states + honest NOT_CONFIGURED cloud AI-summary/embedding boundary). The optional cloud AI month summary / remote embedding still require a configured client (rows D1/D12). |
-| 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). |
+| 5 | **Data manager** | `datamanager/*` (DataManagerFacade, DataManagerStorage, DataManagerTypes, DataManagerUtils, DataPipelineModelClient, ConsolidationService, IndexService) | Adapt | Source is JSON-file rooted at `filesDir/` (`workflows/...`, `gallery-log/...`) with SHA-256 fingerprints. On Android prefer Room for structured sets + file store for media; port DataManagerFacade as a single entry point (Repository namespace). **Phase 29** ships the **first daily-log input + local event-index foundation** (`datamanager/`): pure `DailyLogParser` (Harmony metadata header + numbered `1. …` entries, strict date/file/count/char/metadata bounds, countable honest errors, never thrown), `DailyLogPlannerEventMapper` + read-only app-private `DailyLogEventSource` over `filesDir/workflows/daily-log/YYYY-MM-DD/*.md` (no external storage/URI/image/network, stable source-ref ids, `imagePaths` empty), and `DailyLogWorkspace` as the documented external-import write API. The Phase-28 Home "生成推荐" flow now blends stored gallery + daily-log events. **Remaining data-manager items stay Partial/Deferred (honestly not ported):** Harmony cloud/periodic consolidation (`ConsolidationService`), indexing/partitioning/profile-claims/dedup (`IndexService`), and any background scheduling. |
 | 6 | **Workflows / tasks** | `utils/Workflow*.ets` (WorkflowRunner ~2k lines, WorkflowStorage, WorkflowTypes, WorkflowJsonRepair, WorkflowSceneConfig, WorkflowDateContext); `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets`; default configs `resources/rawfile/workflows/configs/*.json` | Adapt + **GUI part Blocked** | Workflow JSON schema (metadata/defaults/context/steps; step types gui_task/gui_action/tool/loop/if) ports directly. Execution needs screenshot-driven VLM "decider" loop → on Android drive via adb/UIAutomator or a PC-side service; on-device GUI automation for arbitrary apps = platform blocker (see #11). |
 | 7 | **Settings** | `pages/settings/SettingsCenterPage.ets`, `SettingsCenterTypes.ets`, `SettingsCenterControls.ets`, `SettingsCenterTheme.ets`; key inventory in `pages/Index.ets:357–431` | Adapt | 5 sections: 个人与隐私(Personal/Privacy) · 数据采集(Data collection) · 模型与智能体(Model & agents) · 任务与自动化(Task automation) · 存储与关于(Storage & about). Source uses `PersistentStorage.persistProp` → **Phase 5 shipped** an Android `settings/` slice: DataStore-backed typed repository + `SensitiveValueUtils` masking port, Compose `SettingsScreen` with five-section navigation, and honest NOT_CONFIGURED/DISABLED states for unconfigured endpoints. |
 | 8 | **Voice / digital avatar** | `utils/voice/*` (MimoVoiceClient, HarmonySpeechRecognizerAsrProvider, HarmonyAudioPlayback, HarmonyPcmStreamPlayback, PcmWav, VoiceTtsPresets); `pages/chat/ChatVoiceOrchestrator.ets`, `DigitalAvatarView.ets`, `VoiceInteractionTypes.ets` | Adapt | **Phase 7 shipped** the chat voice-interaction vertical slice (`chat/voice/`): typed domain models + deterministic normalization (`VoiceInteractionTypes.kt`), ASR transcript merge + duplicate-final suppression (`VoiceTranscriptLogic.kt`), PCM16→WAV builder (`PcmWav.kt`), voice presets (`VoiceTtsPresets.kt`), voice-input start/stop guards (`VoiceOrchestratorLogic.kt`). ASR = Android `android.speech.SpeechRecognizer` adapter with explicit permission/unavailable/error/cancel states and **no hidden mic access** (RECORD_AUDIO surfaced in the UI, requested only on the mic tap). Output = Android `TextToSpeech` adapter (lifecycle-safe init, speak/pause/stop/replay, typed unavailable/error states). Cloud MiMO streaming/TTS stays behind an explicit **NOT_CONFIGURED** interface (`CloudMimoVoiceClient`) — never claimed configured or faked. Chat UI gained mic/listening/transcript + speak/stop/replay controls; a real final ASR transcript becomes ordinary editable chat input. Digital avatar remains DISABLED (not part of this slice). |
@@ -661,6 +695,43 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 
 ## 8. Changelog
 
+- **Phase 29 (this phase):** Bounded daily-log event source fed into the Phase-28
+  explicit Home recommendation flow — the first daily-log input + local event-index
+  foundation, honestly marked Partial/Deferred relative to the full Harmony
+  data-manager pipeline.
+  - **`datamanager/DailyLogParser.kt`** — pure, device-independent parser for
+    `filesDir/workflows/daily-log/YYYY-MM-DD/*.md`: Harmony metadata header
+    (`workflow_metadata` / `latest_entry_index`) + numbered `1. …` entries, strict
+    date/file-name/entry-count/per-entry/total-char + metadata-size bounds. Bad
+    files → countable `DailyLogParseError`s (never thrown), so one bad file cannot
+    falsify a whole refresh.
+  - **`datamanager/DailyLogPlannerEventMapper.kt`** — maps typed entries to the
+    existing `HomeRecommendationPlannerEvent`: stable source-ref ids
+    (`YYYY-MM-DD/file.md#N`), bounded real text, source `DailyLog`, `imagePaths`
+    empty, `domains` empty (honesty).
+  - **`datamanager/DailyLogEventSource.kt`** — read-only app-private source (only
+    reads existing files, never creates/rewrites, no external storage/URI/image/
+    network), plus a test factory.
+  - **`datamanager/DailyLogWorkspace.kt`** — documented external-import write API
+    for future workflow/import layers (files are never auto-created by the
+    recommendation pipeline).
+  - **`home/recommendation/HomeRecommendationRepository` (mod)** — `generate`
+    now accepts gallery items + daily-log entries and blends them into bounded
+    planner events; single-arg gallery-only API preserved for compatibility. The
+    output normalizer validates `source_event_ids` over both id namespaces.
+  - **`home/ui/HomeViewModel`(mod)**, `HomeViewModelFactory`, `HomeScreen`,
+    `ClawMateRoot` — wire an app-private daily-log source that is read **only** on
+    the explicit button action (never Home load/recomposition/background). No
+    gallery + no daily-log → NoData with zero network calls.
+  - Tests: `datamanager/DailyLogParserTest`, `datamanager/DailyLogPlannerEventMapperTest`,
+    `datamanager/FileDailyLogEventSourceTest`, `home/HomeDailyLogExplicitActionTest`,
+    `home/recommendation/HomeRecommendationDailyLogIntegrationTest`. Exit codes and
+    exact counts recorded in `DSH_PHASE_RESULT.md`.
+  - **Remaining data-manager work (Partial/Deferred, not claimed):** the Harmony
+    cloud consolidation/dedup/profile-claims (`ConsolidationService`), indexing/
+    partitions (`IndexService`), and any periodic background scheduling are **not
+    ported** in Phase 29 — only parsing and planner input were delivered. No new
+    credentials, no Runtime.exec/ProcessBuilder/adb/hdc/coordinate GUI automation.
 - **Phase 27 (this phase):** Explicit profile-affinity "同频报告" ported to the
   Android target. After a `.mobi-profile` share is imported into the local avatar
   profile, the import dialog offers an explicit **"生成同频报告"** button that
@@ -1295,10 +1366,10 @@ Legend — **Status**:
 
 | # | Focus / feature | Harmony source of truth | Android strategy | Status | What exists on Android (Phase 12) + remaining gap |
 | --- | --- | --- | --- | --- | --- |
-| A1 | **Profile snapshot & local profile** | `datamanager/avatar/AvatarTypes.ets`, `AvatarPromptBuilder.ets`, `pages/home/HomePage.ets` | Direct port + DataStore | **Done** | `profile/avatar/` ports the typed AvatarTypes contracts and provides a locally-editable, device-persisted profile (display name / summary / gender / age / 吃穿住行 domains) with a pure completeness reducer. **Phase 16** feeds the persisted profile into the Home pipeline via `ProfileBackedHomeProfileSource` + `HomeProfileBuilder` (a faithful `DataManagerFacade.homeProfileDomains/.../`domainClaimStatements` port that maps the four curated domain snapshots onto the Home pillars / completeness). **Phase 28** ships a real, explicit-user-action **Home recommendation generator from real Gallery data** (`home/recommendation/`): the Home "生成推荐" button plans recommendations through the shared OpenAI-compatible Planner chat backend via `GalleryBackedHomeRecommendationRepository` + `HomeRecommendationPlanner` (config gate + no-data short-circuit with ZERO calls, bounded real gallery text only, strict output validation + `source_event_ids` membership/dedup, redacted errors, no fabricated recommendations/images). No new credentials; endpoints/keys come from existing `EndpointConfig`. Gap: the Harmony `homeRecommendations` **indexed daily-log** pipeline (IndexService/ConsolidationService indexed todo sources) is **still not ported** — Phase 28 generates from explicit gallery data, not the Harmony auto-indexed daily-log source; avatar generation stays a documented boundary. |
+| A1 | **Profile snapshot & local profile** | `datamanager/avatar/AvatarTypes.ets`, `AvatarPromptBuilder.ets`, `pages/home/HomePage.ets` | Direct port + DataStore | **Done** | `profile/avatar/` ports the typed AvatarTypes contracts and provides a locally-editable, device-persisted profile (display name / summary / gender / age / 吃穿住行 domains) with a pure completeness reducer. **Phase 16** feeds the persisted profile into the Home pipeline via `ProfileBackedHomeProfileSource` + `HomeProfileBuilder` (a faithful `DataManagerFacade.homeProfileDomains/.../`domainClaimStatements` port that maps the four curated domain snapshots onto the Home pillars / completeness). **Phase 28** ships a real, explicit-user-action **Home recommendation generator from real Gallery data** (`home/recommendation/`): the Home "生成推荐" button plans recommendations through the shared OpenAI-compatible Planner chat backend via `GalleryBackedHomeRecommendationRepository` + `HomeRecommendationPlanner` (config gate + no-data short-circuit with ZERO calls, bounded real gallery text only, strict output validation + `source_event_ids` membership/dedup, redacted errors, no fabricated recommendations/images). No new credentials; endpoints/keys come from existing `EndpointConfig`. **Phase 29** adds the **first bounded daily-log input + local event-index foundation** for that same explicit flow: `datamanager/DailyLogParser` (metadata header + numbered `1. …` entries, strict date/file/count/char/metadata bounds, countable honest errors, never thrown), `DailyLogPlannerEventMapper` + a read-only app-private `DailyLogEventSource` (only reads existing `filesDir/workflows/daily-log/YYYY-MM-DD/*.md`, no external storage/URI/image/network), stable source-ref ids (`date/file.md#N`), and `DailyLogWorkspace` as the documented external-import write API (files are never auto-created). The button now reads stored gallery **and** daily-log events; empty-both short-circuits to NoData with zero calls; `source_event_ids` validation spans both id namespaces; gallery-only compatibility is preserved. Remaining gap (Partial/Deferred, not claimed): the Harmony **cloud consolidation/dedup/profile-claims/index-partitions and periodic background scheduling** (`ConsolidationService`/`IndexService`) are **not ported** — Phase 29 delivers only parsing + planner input; avatar generation stays a documented boundary. |
 | A2 | **Avatar generation (image)** | `SeedreamAvatarProvider.ets`, `AvatarService.ets`, `AvatarStorage.ets`, `AvatarForeground*.ets` | Wired provider (Phase 24) | **Done (configured provider + local result path)** | **Phase 24** closes the A2 cloud-generation gap: a real `profile/avatar/data/generation/` slice ports the verified Seedream HTTP contract (`SeedreamAvatarProvider.ets`) to OkHttp on the existing stack. `AvatarGenerationClient`/`SeedreamAvatarProvider` POST the exact wire body (`model/prompt/sequential_image_generation/response_format/[output_format unless seedream-4-5]/size/stream/watermark/[image]`) with `Authorization: Bearer`, honour connect/read timeouts + coroutine cancellation, parse only a real `data[0].b64_json`/`url` image (bounded base64 decode; validated URL download with content-type + size gates), and redact secrets. The honest gate is now `NOT_CONFIGURED`/`PARTIALLY_CONFIGURED`/`READY`; the screen runs a user-initiated `生成数字分身` with `READY → RUNNING → SUCCESS/ERROR` (never faked, no network call when unconfigured or below the 20% profile-completeness floor; explicit tap = recorded text-to-image consent with a bounded prompt). Real generated bytes persist through the existing app-private `AvatarAssetRepository.persistGeneratedImage` as a `seedream-*` version (local asset result path). **696 tests, 0 failures** (device-free: config gate, no-call, request-body bounds, URL normalization, response parsing, error redaction, cancellation, state mapping, persistence seam). Gap (non-portable, honest): Harmony `AvatarForeground*` subject-segmentation/transparent crop depends on Harmony `subjectSegmentation` (no Android equivalent) and remains a documented boundary — a generated main image is still real and displayed. |
 | A3 | **Home avatar card** | `pages/home/HomePage.ets` | Real screen entry | **Done** | The Home avatar card now opens the 数字分身 screen (was a dead disabled button). **Phase 24**: a configured provider can now generate a real avatar image that is persisted and displayed via the avatar asset repository (Coil image path). |
-| A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (portable part + 同频报告); NFC still missing** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. **Phase 17** adds the portable import/merge pipeline: pure `profile/share/ProfileShareImporter` (parse + validate malformed/oversized/unsupported-version/missing-field; deterministic local-first merge of the four persona-domain summaries into `LocalAvatarProfile`), a byte-capped content read, DataStore persist and an honest success/error result dialog. **Phase 27** adds the cloud "同频报告" affinity analysis: an explicit "生成同频报告" button on the import dialog drives the planner, faithfully porting Harmony `runProfileShareAffinityAnalysis` / `buildProfileAffinityMessages` onto the shared OpenAI-compatible chat backend (typed config gate, two bounded profile texts only, redacted errors, lifecycle cancellation, never automatic). Remaining gap (non-portable): the Harmony "knock" NFC approximation — **only NFC is still missing** (documented, deferred, no fake). |
+| A4 | **Profile knock share** | `utils/ProfileKnockShareService.ets`, `module.json5` | Adapter | **Done (portable part + 同频报告); NFC still missing** | `ProfileShareActivity` receives `.mobi-profile`/`application/vnd.mobiinfra.profile+json` intents. **Phase 17** adds the portable import/merge pipeline: pure `profile/share/ProfileShareImporter` (parse + validate malformed/oversized/unsupported-version/missing-field; deterministic local-first merge of the four persona-domain summaries into `LocalAvatarProfile`), a byte-capped content read, DataStore persist and an honest success/error result dialog. **Phase 27** adds the cloud "同频报告" affinity analysis: an explicit "生成同频报告" button on the import dialog drives the planner, faithfully porting Harmony `runProfileShareAffinityAnalysis` / `buildProfileAffinityMessages` onto the shared OpenAI-compatible chat backend (typed config gate, two bounded profile texts only, redacted errors, lifecycle cancellation, never automatic). **Phase 29 note:** the "同频报告" stays a separate explicit, bounded two-profile-text flow — it is **not** fed from daily-log/gallery events and is unaffected by the new daily-log event source (both remain explicit user actions with zero-call no-data/config gates). Remaining gap (non-portable): the Harmony "knock" NFC approximation — **only NFC is still missing** (documented, deferred, no fake). |
 | B1 | **AutoAgent / GUI automation** | `autoagent/AutoAgentAbility.ets` (AccessibilityExtensionAbility), `utils/ChatReactAgent.ets` | Blocked | **Partial (Phase 22 safe semantic executor)** | Chat ReAct agent loop exists (Phase 3); arbitrary-app GUI automation maps to Android AccessibilityService (needs user opt-in) or the PC HDC bridge (Phase 8 adapter). **Phase 22** ships a real, tightly controlled on-device executor for a minimal **semantic** allowlist — `click_text`, `click_content_description`, `back`, `scroll_forward`, `scroll_backward`, `global_back`, `global_home` — reached only through the typed executor (`AccessibilityAutoAgentService.executeSafeAction` + `ControlledSafeAccessibilityDispatcher`), which validates opt-in + observed system grant + the live **foreground package allowlist before every action** and returns honest `NOT_CONFIGURED`/`BLOCKED_SERVICE`/`BLOCKED_PACKAGE`/`UNSUPPORTED`/`ERROR`/`SUCCESS` (no fake success). The coordinate/gesture actions (`tap`/`type_text`/`swipe`/`open_app`/`capture_screen`) remain **Blocked** (Phase 19 `AccessibilityGate` preserved); no gestures (`canPerformGestures=false`), no screenshots, no hidden input, no shell/adb/hdc, no cross-app data extraction. AutoAgentAbility's higher-level arbitrary-app GUI automation stays a doc'd platform blocker / PC-bridge gap. |
 | C1 | **Float / edge overlay** | `pages/FloatWindow.ets`, `pages/EdgeFlowWindow.ets`, `entryability/EntryAbility.ets` | Overlay boundary → status-only renderer (Phase 20 → Phase 26) | **Status-only overlay (Phase 26); edge-flow/GUI control unsupported** | Harmony `SYSTEM_FLOAT_WINDOW` two-layer overlay becomes a truthful Android overlay boundary in **Phase 20**: `SYSTEM_ALERT_WINDOW` is *declared* (manifest prerequisite so `Settings.canDrawOverlays` can honestly read true). Portable `overlay/` implements: a testable `OverlayPermissionDetector` (Android/Fake/Registry) over `Settings.canDrawOverlays`; an explicit user opt-in `overlayOptIn` setting; an `OverlayGate` (`NOT_CONFIGURED`/`BLOCKED`/`READY`); a `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` permission-request action; and a lifecycle-safe `OverlayFloatService` that never starts silently (no screen capture, no GUI actions). **Phase 26 makes the migration materially real with a status-only renderer**: [OverlayStateRegistry] now holds a thread-safe, sanitized, ≤160-char agent-status text + a tiny idle/running/tool/error/completed enum; [ChatViewModel] publishes send/tool/completed/error/cancel transitions into it (chat behavior/logging unchanged); [OverlayCapabilityFlags].`rendererConfigured` becomes `true` only because that narrow status renderer exists; and [OverlayFloatService] now renders and live-refreshes that bounded status text while the **explicitly started** service is alive, halting when the gate drops from READY. The Settings UI adds an explicit start/stop action (only enabled at gate READY; turning opt-in off stops it; never at launch or recomposition). The gate still requires explicit opt-in **and** the observed `SYSTEM_ALERT_WINDOW` grant. Edge-flow glow (Harmony `EdgeFlowWindow.ets`) and agent GUI controls remain unsupported — the service never overlies input (`FLAG_NOT_TOUCHABLE`), never captures screens, never executes commands, and never claims edge-flow support. |
 | C2 | **Log view** | `pages/LogView.ets`, `utils/AppLogger.ets`, `CloudLogOutput.ets` | Done (Phase 14) | **Done** | `log/` ports the LogView/CloudLogOutput bounded-ring-buffer idea to Android: a capacity-bounded in-app ring buffer (`RingBufferInAppLogRepository`, FIFO eviction), a `SensitiveLogRedactor` that scrubs secrets before insertion, a Compose `LogScreen` reachable from the Settings 运行日志 section (source tabs / severity / query / refresh / auto-refresh / auto-scroll / copy / clear / honest empty state), and real app events wired (app launch, settings save + HDC result, chat send/complete/error, gallery OCR states). No Harmony `native.getLogs()`/AppStorage cloud-gallery string is claimed — events that never occur never appear. |
@@ -1551,3 +1622,63 @@ subject-segmentation / transparent-crop / message-thumbnail derivation depends o
 the Harmony `subjectSegmentation` visual service, which has no Android
 equivalent, so it remains a documented boundary — the generated main image is
 never the less real and is displayed via the asset repository.
+
+## 15. Phase 29 — bounded daily-log event source into Home recommendations
+
+This phase adds the first **bounded daily-log input + local event-index
+foundation** to the Android Home recommendation pipeline, honestly marking the
+remaining Harmony data-manager work as **Partial/Deferred** (no full
+`ConsolidationService`/`IndexService` port).
+
+### What was delivered
+
+1. **Pure daily-log parser** (`datamanager/DailyLogParser`) — device-independent,
+   no Android deps:
+   - Parses the Harmony metadata header (`<!-- DAILY_LOG_METADATA … -->`) for
+     `workflow_metadata` + `latest_entry_index`, and numbered `1. …` entries
+     separated by blank lines, from the app-private
+     `filesDir/workflows/daily-log/YYYY-MM-DD/*.md` layout.
+   - Strict bounds: day-directory `YYYY-MM-DD`, `.md` file name + length cap,
+     per-file entry-count cap, per-entry and total-character caps, and a metadata
+     size cap ([DailyLogBounds]).
+   - Bad files are skipped and reported as countable `DailyLogParseError`s —
+     **never thrown**, so a hostile/oversized file cannot falsify a whole refresh.
+2. **Bounded mapper** (`datamanager/DailyLogPlannerEventMapper`) — maps typed
+   entries into the existing `HomeRecommendationPlannerEvent` shape:
+   - `eventId` = stable source ref `YYYY-MM-DD/file.md#N`; `date` = real `sourceDate`.
+   - Bounded real text (`todo_text`/`summary`/`normalized_fact`); `imagePaths` is
+     always empty (a raw path/URI/byte is never emitted).
+   - Honest `sources = ["DailyLog"]`; `domains` empty (no category guessing).
+3. **Read-only app-private source** (`datamanager/DailyLogEventSource` +
+   `FileDailyLogEventSource`) — reads **only** existing daily-log text already
+   present in `filesDir/workflows/daily-log`; never creates files, never scans
+   external storage, no URI/image/network. A test factory (`overDirectory`)
+   mirrors the behaviour over a temp dir for unit tests.
+4. **External-import API, not auto-creation** (`datamanager/DailyLogWorkspace`) —
+   the one documented way a future workflow/import layer writes daily-log files;
+   the recommendation pipeline never auto-creates them. No shell/adb/hdc/GUI
+   capabilities were added.
+5. **Explicit mixed input** — the Home "生成推荐" button now reads stored gallery
+   metadata **and** daily-log events (wired through `HomeViewModel`,
+   `HomeViewModelFactory`, `HomeScreen`, `ClawMateRoot`). The repository blends
+   them into the planner and the output normalizer validates `source_event_ids`
+   over **both** id namespaces. Gallery-only behavior stays compatible; no gallery
+   and no daily-log → NoData with **zero network calls**. Never read on Home
+   load/recomposition/background.
+
+### Remaining (Partial/Deferred — honestly not ported)
+
+- Harmony **cloud/periodic consolidation and dedup** (`ConsolidationService`
+  `collectSourceEntries` + model dedup), **profile/claim derivation**,
+  **index partitions** (`IndexService`) and any **periodic background
+  scheduling** are **not** implemented. Phase 29 delivers only the parsing and
+  planner-input foundation and the bounded event source; future phases are
+  required before the Harmony daily-log → IndexedEvent → HomeRecommendation flow
+  is complete.
+
+### Verification (Phase 29)
+
+Focused serial run (JDK 17.0.19, Android SDK platform 34, Gradle 8.9,
+`--no-daemon --max-workers=1`) of the new Phase-29 tests plus a full unit-test
+run passed — see `DSH_PHASE_RESULT.md` for the exact commands, counts and the
+commit hash.

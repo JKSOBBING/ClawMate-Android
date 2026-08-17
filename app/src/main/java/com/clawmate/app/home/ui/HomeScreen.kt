@@ -71,7 +71,8 @@ fun HomeScreen(
     homeRecRepository: HomeRecRepository,
     profileSource: HomeProfileSource = com.clawmate.app.home.data.EmptyHomeProfileSource,
     galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
-    viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource, galleryItemsSource)),
+    dailyLogSource: (suspend () -> List<com.clawmate.app.datamanager.DailyLogEntry>)? = null,
+    viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource, galleryItemsSource, dailyLogSource)),
 ) {
     val state by viewModel.state.collectAsState()
     val list by viewModel.list.collectAsState()

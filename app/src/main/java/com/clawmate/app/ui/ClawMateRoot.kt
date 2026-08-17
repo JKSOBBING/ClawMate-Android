@@ -29,6 +29,8 @@ import com.clawmate.app.chat.ui.ChatScreen
 import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.ui.GalleryScreen
+import com.clawmate.app.datamanager.DailyLogEntry
+import com.clawmate.app.datamanager.DailyLogEventSourceFactory
 import com.clawmate.app.home.data.DataStoreHomeRecRepository
 import com.clawmate.app.home.data.DataStoreOnboardingRepository
 import com.clawmate.app.home.data.HomeProfileSource
@@ -103,6 +105,17 @@ fun ClawMateRoot(
                 .first()
         }.getOrElse { emptyList() }
     }
+    // Phase 29: the same explicit "生成推荐" action also consumes real app-private
+    // daily-log text already present under filesDir/workflows/daily-log/*. The
+    // source is read-only, never creates files, doesn't touch external storage/
+    // URI/image/network, and is invoked only from the explicit button via the
+    // ViewModel (never at launch/recomposition/background).
+    val appPrivateDailyLogSource: suspend () -> List<DailyLogEntry> = {
+        DailyLogEventSourceFactory
+            .appPrivate(context.filesDir)
+            .load()
+            .entries
+    }
     val homeProfileSource = profileSource ?: ProfileBackedHomeProfileSource(
         profileRepository = profileRepo,
         recommendationRepository = recommendationRepository,
@@ -121,6 +134,7 @@ fun ClawMateRoot(
             homeRecRepository = homeRecs,
             profileSource = homeProfileSource,
             galleryItemsSource = galleryItemsSource,
+            dailyLogSource = appPrivateDailyLogSource,
         )
     }
 }
@@ -130,6 +144,7 @@ private fun MainTabScaffold(
     homeRecRepository: HomeRecRepository,
     profileSource: HomeProfileSource,
     galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)?,
+    dailyLogSource: (suspend () -> List<DailyLogEntry>)?,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -162,12 +177,12 @@ private fun MainTabScaffold(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             val context = LocalContext.current
             when (backStackEntry?.destination?.route) {
-                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource)
+                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource)
                 Destination.Summary.route -> GalleryScreen()
                 Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> WorkflowTaskScreen(context)
                 Destination.Settings.route -> SettingsScreen(context)
-                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource)
+                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource)
             }
         }
     }

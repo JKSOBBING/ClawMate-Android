@@ -2,6 +2,7 @@ package com.clawmate.app.home.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clawmate.app.datamanager.DailyLogEntry
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.home.data.HomeRecRepository
 import com.clawmate.app.home.domain.HomeProfileViewModel
@@ -43,11 +44,18 @@ data class RecommendationListUi(
  * state into a real generation flow (未配置 / 无数据 / 运行中 / 成功 / 失败). It is
  * **never** called at launch, on recomposition or from a background job — only
  * from the explicit Home button.
+ *
+ * Phase 29: an optional [dailyLogSource] contributes real app-private daily-log
+ * entries to the same explicit generation (bounded [DailyLogEntry]s read from
+ * the `workflows/daily-log` tree). It is read only when the user taps the
+ * button — never from Home load/recomposition or a background job — and only
+ * from app-private files; no external storage / URI / image / network is touched.
  */
 class HomeViewModel(
     private val homeRecRepository: HomeRecRepository,
     private val recommendationRepository: HomeRecommendationRepository? = null,
     private val galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
+    private val dailyLogSource: (suspend () -> List<DailyLogEntry>)? = null,
     profileLoader: suspend () -> HomeProfileViewModel,
 ) : ViewModel() {
 
@@ -94,9 +102,12 @@ class HomeViewModel(
 
     /**
      * Explicit user action: generate recommendations from the real stored gallery
-     * items and inject the successful result into the current Home state,
-     * applying/persisting completion flags. With no repository/source injected,
-     * reports an honest disabling state. Never auto-invoked.
+     * items plus real app-private daily-log entries (Phase 29) and inject the
+     * successful result into the current Home state, applying/persisting
+     * completion flags. With no repository/gallery source injected, reports an
+     * honest disabling state. Never auto-invoked — the gallery and daily-log
+     * sources are read only when the user taps the button, never at Home
+     * load/recomposition or from a background job.
      */
     fun generateRecommendations() {
         val repository = recommendationRepository
@@ -118,7 +129,15 @@ class HomeViewModel(
             } catch (e: Exception) {
                 emptyList()
             }
-            val result = repository.generate(items)
+            val dailyLog = try {
+                dailyLogSource?.invoke().orEmpty()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _generation.value = HomeRecommendationGenerationState.Idle
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val result = repository.generate(items, dailyLog)
             when (result.state) {
                 is HomeRecommendationGenerationState.Success -> onGenerationSuccess(result)
                 else -> _generation.value = result.state
