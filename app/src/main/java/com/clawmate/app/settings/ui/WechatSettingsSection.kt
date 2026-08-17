@@ -21,8 +21,10 @@ import com.clawmate.app.wechat.domain.validateWechatAutoSummaryRequest
  * backed by DataStore via the shared [SettingsViewModel]. The collection
  * boundary ([WechatCollectionGate]) is shown as a typed, honest status row: it
  * stays BLOCKED / NOT_CONFIGURED unless a health-verified PC HDC bridge is
- * registered, and it never drives WeChat, sends arbitrary commands, or fakes a
- * summary. Numbers are normalized on change through the ported pure normalizers.
+ * registered, and becomes AVAILABLE only when a verified adapter is present and
+ * auto-summary is enabled. The explicit [WechatCollectionGate.collect] invokes
+ * only the safe `wechat_collect` adapter action; it never drives WeChat, sends
+ * arbitrary commands, or fakes a summary. Numbers are normalized on change through the ported pure normalizers.
  */
 @Composable
 fun WechatSettingsSection(state: SettingsUiState, vm: SettingsViewModel) {
@@ -113,6 +115,11 @@ private fun WechatCollectionBoundaryCard(
                 SettingsActionKind.Warning,
                 false,
             )
+            WechatCollectionStatus.AVAILABLE -> Triple(
+                "采集可用 — 已配置并健康校验的 bridge，可发起显式采集",
+                SettingsActionKind.Success,
+                true,
+            )
             WechatCollectionStatus.UNAVAILABLE -> Triple(
                 "采集不可用",
                 SettingsActionKind.Secondary,
@@ -133,7 +140,7 @@ private fun WechatCollectionBoundaryCard(
             )
         }
         Text(
-            "Android 不驱动微信、不发送任意命令；采集需已健康校验的 bridge，且适配器未暴露安全的 wechat_collect 动作，故始终上报 BLOCKED 而不伪造摘要。",
+            "Android 不驱动微信、不发送任意命令。仅当已配置并健康校验的 bridge 且自动汇总开启时，显式采集才会调用安全的 wechat_collect 动作；未通过校验/未启用/未配置均不发起任何采集，亦不伪造摘要。",
             fontSize = 11.sp,
             color = SettingsThemeColors.SecondaryText,
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),

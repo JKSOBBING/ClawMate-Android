@@ -22,6 +22,7 @@ import com.clawmate.app.wechat.domain.normalizeWechatAutoSummarySwipeSpeed
 import com.clawmate.app.wechat.domain.normalizeWechatAutoSummaryWait
 import com.clawmate.app.task.TaskComponent
 import com.clawmate.app.task.hdc.BridgeBackedWorkflowDeviceAdapter
+import com.clawmate.app.task.hdc.DisabledWorkflowDeviceAdapter
 import com.clawmate.app.task.hdc.HdcBridgeClient
 import com.clawmate.app.task.hdc.HdcBridgeResult
 import com.clawmate.app.task.hdc.HdcUrlNormalizer
@@ -368,15 +369,18 @@ class SettingsViewModel(
         SensitiveValueUtils.restoreMaskedSensitiveSettingDefault(persistedKey, defaultValue)
 
     /**
-     * Build the Phase-13 WeChat collection boundary from live state: a bridge is
-     * "verified" only when a health-verified adapter is registered via
-     * [TaskComponent]. Collection never dispatches; the gate reports a truthful
-     * BLOCKED/NOT_CONFIGURED state.
+     * Build the Phase-25B WeChat collection boundary from live state: collection
+     * is available only when a health-verified adapter is registered via
+     * [TaskComponent]. The explicit [WechatCollectionGate.collect] invokes the
+     * safe `wechatCollect` adapter action; failing any gate (validation /
+     * disabled auto-summary / not-configured adapter) returns an honest
+     * BLOCKED / NOT_CONFIGURED without any bridge call.
      */
     fun wechatCollectionGate(): com.clawmate.app.wechat.domain.WechatCollectionGate {
-        val verified = runCatching { TaskComponent.currentAdapter().isConfigured }.getOrDefault(false)
+        val adapter = runCatching { TaskComponent.currentAdapter() }
+            .getOrDefault(DisabledWorkflowDeviceAdapter)
         return com.clawmate.app.wechat.domain.WechatCollectionGate(
-            verifiedBridgeConfigured = verified,
+            adapter = adapter,
             summaryEnabled = _state.value.draft.wechatAutoSummaryEnabled,
         )
     }
