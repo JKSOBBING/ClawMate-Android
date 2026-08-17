@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.home.data.HomeProfileSource
 import com.clawmate.app.home.data.HomeRecRepository
 import com.clawmate.app.home.domain.AvatarStatus
@@ -52,6 +53,7 @@ import com.clawmate.app.home.domain.HomeProfileViewModel
 import com.clawmate.app.home.domain.HomeRecommendationViewModel
 import com.clawmate.app.home.domain.HomeUiState
 import com.clawmate.app.home.domain.recommendationColor
+import com.clawmate.app.home.recommendation.HomeRecommendationGenerationState
 import com.clawmate.app.profile.avatar.ui.ProfileAvatarHost
 
 /**
@@ -60,17 +62,20 @@ import com.clawmate.app.profile.avatar.ui.ProfileAvatarHost
  * Shows the honest profile lifecycle (loading / error / empty / ready), the
  * avatar section (NOT_CONFIGURED on Android), the four persona pillars
  * (理解你/守护你/陪伴你/成就你), and the recommendation list with completion
- * toggles, 未完成/全部 filter, and pagination. Avatar generation is never
- * fabricated; it stays DISABLED until a real Android implementation exists.
+ * toggles, 未完成/全部 filter, an explicit Phase-28 "生成推荐" action (filled from
+ * real gallery data) and pagination. Avatar generation is never fabricated; it
+ * stays DISABLED until a real Android implementation exists.
  */
 @Composable
 fun HomeScreen(
     homeRecRepository: HomeRecRepository,
     profileSource: HomeProfileSource = com.clawmate.app.home.data.EmptyHomeProfileSource,
-    viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource)),
+    galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
+    viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource, galleryItemsSource)),
 ) {
     val state by viewModel.state.collectAsState()
     val list by viewModel.list.collectAsState()
+    val generation by viewModel.generation.collectAsState()
 
     // Phase 12: the avatar section opens the real Profile / Avatar screen
     // (local profile editing + honest generation boundary) instead of staying a
@@ -87,6 +92,8 @@ fun HomeScreen(
         is HomeUiState.Ready -> HomeContent(
             profile = s.profile,
             list = list,
+            generation = generation,
+            onGenerateRecommendations = { viewModel.generateRecommendations() },
             onToggleShowAll = viewModel::setShowAll,
             onPrevious = viewModel::previousPage,
             onNext = viewModel::nextPage,
@@ -133,6 +140,8 @@ private fun ErrorBox(message: String) {
 private fun HomeContent(
     profile: HomeProfileViewModel,
     list: RecommendationListUi,
+    generation: HomeRecommendationGenerationState,
+    onGenerateRecommendations: () -> Unit,
     onToggleShowAll: (Boolean) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -164,6 +173,8 @@ private fun HomeContent(
         // --------------------------------------------------- recommendations
         RecommendationsSection(
             list = list,
+            generation = generation,
+            onGenerateRecommendations = onGenerateRecommendations,
             onToggleShowAll = onToggleShowAll,
             onPrevious = onPrevious,
             onNext = onNext,
@@ -354,6 +365,8 @@ private fun PillarCell(item: HomeDomainViewModel, modifier: Modifier = Modifier)
 @Composable
 private fun RecommendationsSection(
     list: RecommendationListUi,
+    generation: HomeRecommendationGenerationState,
+    onGenerateRecommendations: () -> Unit,
     onToggleShowAll: (Boolean) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -390,14 +403,7 @@ private fun RecommendationsSection(
         }
 
         if (list.recommendations.isEmpty()) {
-            Text(
-                "暂无待办事项",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF7C8494),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            EmptyRecommendationsState(generation, onGenerateRecommendations)
             return
         }
 
@@ -460,6 +466,97 @@ private fun RecommendationsSection(
             }
         }
         Text("", modifier = Modifier.padding(bottom = 24.dp))
+    }
+}
+
+/**
+ * Honest empty state with the explicit Phase-28 "生成推荐" action. Shows the real
+ * lifecycle state of the earlier generation attempt (未配置 / 无数据 / 运行中 / 成功 /
+ * 失败). Only an explicit button tap ever starts generation.
+ */
+@Composable
+private fun EmptyRecommendationsState(
+    generation: HomeRecommendationGenerationState,
+    onGenerateRecommendations: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "暂无待办事项",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF7C8494),
+        )
+        when (generation) {
+            is HomeRecommendationGenerationState.Running -> {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text(
+                        "正在生成推荐…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF6D7481),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+            }
+            is HomeRecommendationGenerationState.Error -> {
+                Text(
+                    generation.userMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFC2564E),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                GenerateRecommendationsButton(onGenerateRecommendations, running = false)
+            }
+            is HomeRecommendationGenerationState.NotConfigured -> {
+                Text(
+                    "尚未配置云端模型",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF8B93A4),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                GenerateRecommendationsButton(onGenerateRecommendations, running = false)
+            }
+            is HomeRecommendationGenerationState.NoData -> {
+                Text(
+                    "图库中暂无可用内容",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF8B93A4),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                GenerateRecommendationsButton(onGenerateRecommendations, running = false)
+            }
+            is HomeRecommendationGenerationState.Success -> {
+                // A prior success admitted some recommendations; the list should
+                // not be empty here, but keep the button available to regenerate.
+                GenerateRecommendationsButton(onGenerateRecommendations, running = false)
+            }
+            HomeRecommendationGenerationState.Idle -> {
+                GenerateRecommendationsButton(onGenerateRecommendations, running = false)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenerateRecommendationsButton(
+    onGenerateRecommendations: () -> Unit,
+    running: Boolean,
+) {
+    Button(
+        onClick = onGenerateRecommendations,
+        enabled = !running,
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8066FF)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    ) {
+        Text("生成推荐", fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 

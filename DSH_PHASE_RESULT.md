@@ -1,41 +1,62 @@
-# Phase 27 result: explicit profile affinity report
+# Phase 28 result: explicit home recommendations from gallery data
 
-DSH fixed the focused-test regression and added a real, explicit-user-action
-"同频报告" (profile-affinity report) to the existing ProfileShareActivity import
-flow, faithfully porting Harmony `runProfileShareAffinityAnalysis` /
-`buildProfileAffinityMessages` onto the shared OpenAI-compatible Planner chat
-backend — with all safety boundaries preserved.
+DSH added a real, explicit-user-action "生成推荐" (generate recommendations)
+flow to the Home screen that plans recommendations from **real, already-stored
+Android Gallery data** on the shared OpenAI-compatible Planner chat backend —
+faithfully porting Harmony `DataPipelineModelClient.planHomeRecommendations` /
+`HOME_RECOMMENDATION_SYSTEM_PROMPT` — with all safety boundaries preserved.
 
-## Fixed regression (focused test)
+## Fixed focused-test regression
 
-`ProfileAffinityAnalyzerTest` previously reported **14 tests, 1 failed**:
-`buildLocalAffinityProfileText is capped to the input bound and never raw`
-asserted `text.contains("summary0")` but the production mapping prefers
-`domain.summary` over `shortSummary`, and the fixture set a non-blank `summary`
-that shadowed the populated `shortSummary`. Real local profiles only ever
-populate `shortSummary` (the editor and `ProfileShareImporter` write that
-field; `summary` stays blank), so the fixture was corrected to mirror that real
-state (populate `shortSummary`, leave `summary` blank) — the test now exercises
-the real `shortSummary` fallback path. **Safety boundary unchanged.**
+`HomeRecommendationPlannerTest` previously reported **22 tests, 1 failed**:
+the "never leaks a URI or key" test asserted
+`assertFalse(user.contains("image_paths"))`.
 
-## Review fixes shipped
+The production prompt *faithfully* includes the Harmony protocol field
+`image_paths: []` (the field name is not sensitive data; raw image references
+never leave the device, so the value is always the empty list). The real safety
+requirement is that the `image_paths` array is empty / carries no non-empty
+path value — not that the protocol field name is absent.
 
-- **`ProfileAffinityBounds.MAX_REPORT_RESPONSE_BYTES`** was declared but unused.
-  Since the affinity analyzer only ever receives the parsed
-  `ChatCompletionResult.content` (the shared `ChatCompletionsClient` buffers the
-  raw HTTP body internally and its behaviour is intentionally unchanged), a raw
-  HTTP body byte cap cannot be enforced from this layer. Rather than fake an
-  implementation, the unused declaration was **removed**; the effective output
-  safety boundary is `MAX_REPORT_CHARACTERS` (16 KiB).
-- **`showRetryDialog` / `showReportFailure`** `technical` parameter was unused —
-  removed (signature + both call sites).
-- **`.gitignore`** only keeps the necessary `.gradle-home/` entry (a real
-  generated local Gradle home/cache in this worktree); no repository build
-  artifacts are added.
-- Verified already-correct boundaries: `ProfileAffinityConfig.fromEndpointConfig`
-  gate (null when unconfigured), prompt carrying only two bounded profile texts,
-  `SensitiveLogRedactor`-based error redaction, explicit "生成同频报告" button
-  only, and `onDestroy` coroutine cancellation.
+The assertion was fixed to **parse the user JSON payload and assert every
+`image_paths` value across every event is empty** (plus the unchanged
+`content://` / URI / secret checks). **Real safety boundary unchanged** — the
+Harmony protocol field is kept, `image_paths` is and remains
+`emptyList()` in production.
+
+## Implementation (Phase 28)
+
+- **`HomeRecommendationPlanner`** — builds the two-message prompt (system +
+  bounded user JSON payload mirroring the Harmony shape) and calls the shared
+  `ChatClient`. Only real planner-event text + current date leave the device.
+- **`GalleryPlannerEventMapper`** — maps real stored `GalleryPhotoItem`s into
+  bounded planner events: real text fields capped, keywords/tags distinct &
+  capped, `imagePaths` always empty, real URI/bytes/keys never emitted.
+- **`HomeRecommendationNormalizer`** — strict output validation: non-empty
+  title, `domain` constrained to the six allowed domains, tag/desc/title length
+  bounds, `source_event_ids` must belong to input (and each input id is used at
+  most once), recommendation count capped.
+- **`GalleryBackedHomeRecommendationRepository`** — config gate
+  (`fromEndpointConfig` null → `NotConfigured`, zero calls) and no-data
+  short-circuit (no gallery, or all blank → `NoData`, zero calls). Only runs
+  from an explicit call; no background work / service / WorkManager.
+- **`HomeViewModel.generateRecommendations()`** — explicit user action driven
+  by the Home "生成推荐" button only; never auto-invoked (init loads profile
+  only). Error surfaces are redacted (`SensitiveLogRedactor`) and bounded.
+
+## Verification performed
+
+- **Explicit button only**: "生成推荐" wired to `viewModel.generateRecommendations()`
+  via `Button(onClick=...)`; no LaunchedEffect/auto/background invocation.
+- **Zero calls when unconfigured / when no real gallery data**: covered by tests
+  (config gate returns null and repo short-circuits to NotConfigured; repo returns
+  NoData with zero calls for empty/blank input).
+- **Gallery metadata bounded input**: mapper caps todo_text/summary/normalized_fact/
+  keywords; emits no URI/bytes/keys.
+- **`source_event_ids` validation**: non-input ids dropped, dedup so each input id
+  appears at most once, count cap — covered by tests.
+- **Error redaction**: typed redacted failure, `safeMessage` never contains
+  secrets — covered by tests.
 
 ## Focused verification (serial)
 
@@ -43,26 +64,24 @@ Command:
 
 ```
 sdk.dir=/opt/deepseek-harness/android-sdk
-GRADLE_USER_HOME=<worktree>/.gradle-home/.gradle
-gradle :app:testDebugUnitTest --tests com.clawmate.app.profile.affinity.ProfileAffinityAnalyzerTest --offline --console=plain
+./.phase28-gradle.sh :app:testDebugUnitTest \
+  --tests "com.clawmate.app.home.recommendation.*" \
+  --tests "com.clawmate.app.home.HomeRecommendationViewModelTest"
 ```
 
-Result (from `app/build/test-results/testDebugUnitTest/TEST-...ProfileAffinityAnalyzerTest.xml`):
-**build → BUILD SUCCESSFUL; 14 tests, 0 failures, 0 errors.** `:app:compileDebugKotlin`
-and `:app:compileDebugUnitTestKotlin` both succeeded (main source incl. the
-ProfileShareActivity wiring and test source compile cleanly).
+Result (from `app/build/test-results/testDebugUnitTest/*.xml`, `--no-daemon
+--max-workers=1`): **build → BUILD SUCCESSFUL; 22 tests, 0 failures, 0 errors**
+across `GalleryPlannerEventMapperTest` (6), `HomeRecommendationPlannerTest` (12)
+and `HomeRecommendationViewModelTest` (4).
 
 ## Known limitations / unfinished risk
 
-- The report is only produced by the explicit user action after a successful
-  import and only when the Planner backend is configured; it is never generated
-  automatically — matching the honest boundary.
-- A raw HTTP-body byte cap is deliberately **not** asserted at the affinity layer
-  because the shared `ChatCompletionsClient` owns that buffering and its behavior
-  is intentionally left unchanged; the content-character bound
-  (`MAX_REPORT_CHARACTERS`) is the admitted-output safety boundary.
-- The affinity result is shown in the existing dialog surface (AlertDialog text);
-  no separate Compose report screen was added this phase.
+- Recommendations are produced only by the explicit Home "生成推荐" action and
+  only when the Planner backend is configured; never automatic.
+- Input is limited to already-stored Gallery text metadata; a photo with no
+  analysed text is honestly skipped (no fabricated content).
+- The original Harmony code is reference-only on HarmonyOS. Nothing under
+  `/root/mobiinfra-oh` was modified.
 - No new credentials / secrets; endpoints and keys come from existing
   `EndpointConfig`. No Runtime.exec/ProcessBuilder/adb/hdc/coordinate GUI
   automation. Existing `ChatCompletionsClient` behaviour unchanged.

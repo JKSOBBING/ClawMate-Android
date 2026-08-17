@@ -64,3 +64,27 @@ val HOME_RECOMMENDATION_COLORS: Map<String, String> = mapOf(
 /** Accent color for a recommendation domain with a safe fallback. */
 fun recommendationColor(domain: String): String =
     HOME_RECOMMENDATION_COLORS[domain.lowercase(Locale.ROOT)] ?: "#8066FF"
+
+/**
+ * Map a persisted-recommendation fingerprint ([HomeRecommendationState]) to its
+ * UI presentation ([HomeRecommendationViewModel]). Accent color is derived from
+ * the real domain; the gallery-image slots are left empty (raw image URIs are
+ * never surfaced from the recommendation pipeline — Phase 28 only transmits real
+ * text). Pure and deterministic, so it is unit-testable.
+ */
+fun HomeRecommendationState.toViewModel(): HomeRecommendationViewModel =
+    HomeRecommendationViewModel(
+        id = id,
+        domain = domain,
+        tag = tag,
+        title = title,
+        desc = desc,
+        meta = meta,
+        color = recommendationColor(domain),
+        imageRefs = emptyList(),
+        thumbnailUri = "",
+        sourceEventIds = sourceEventIds,
+        detail = "",
+        agentTask = "",
+        completed = completed,
+    )

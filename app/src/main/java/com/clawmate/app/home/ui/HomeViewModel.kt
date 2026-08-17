@@ -2,11 +2,15 @@ package com.clawmate.app.home.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.home.data.HomeRecRepository
 import com.clawmate.app.home.domain.HomeProfileViewModel
 import com.clawmate.app.home.domain.HomeRecommendationViewModel
 import com.clawmate.app.home.domain.HomeUiState
 import com.clawmate.app.home.domain.RecommendationListLogic
+import com.clawmate.app.home.domain.toViewModel
+import com.clawmate.app.home.recommendation.HomeRecommendationGenerationState
+import com.clawmate.app.home.recommendation.HomeRecommendationRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,10 +35,19 @@ data class RecommendationListUi(
  *
  * Recommendation completion toggles are persisted through [HomeRecRepository];
  * the list itself never invents recommendations — it colours the ones supplied
- * by the profile source with the stored flags.
+ * by the profile source (or generated explicitly, Phase 28) with the stored
+ * flags.
+ *
+ * Phase 28: when a [HomeRecommendationRepository] and a gallery-items source are
+ * injected, the explicit [generateRecommendations] action turns the honest empty
+ * state into a real generation flow (未配置 / 无数据 / 运行中 / 成功 / 失败). It is
+ * **never** called at launch, on recomposition or from a background job — only
+ * from the explicit Home button.
  */
 class HomeViewModel(
     private val homeRecRepository: HomeRecRepository,
+    private val recommendationRepository: HomeRecommendationRepository? = null,
+    private val galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
     profileLoader: suspend () -> HomeProfileViewModel,
 ) : ViewModel() {
 
@@ -43,6 +56,15 @@ class HomeViewModel(
 
     private val _list = MutableStateFlow(RecommendationListUi())
     val list: StateFlow<RecommendationListUi> = _list.asStateFlow()
+
+    /**
+     * Phase-28 explicit generation state — drives the Home "生成推荐" button.
+     * Idle until the user explicitly taps the button.
+     */
+    private val _generation = MutableStateFlow<HomeRecommendationGenerationState>(
+        HomeRecommendationGenerationState.Idle,
+    )
+    val generation: StateFlow<HomeRecommendationGenerationState> = _generation.asStateFlow()
 
     init {
         load(profileLoader)
@@ -66,6 +88,64 @@ class HomeViewModel(
                 _state.value = HomeUiState.Error(e.message ?: "加载首页画像失败")
             }
         }
+    }
+
+    // --------------------------------------------------- explicit Phase-28 generate
+
+    /**
+     * Explicit user action: generate recommendations from the real stored gallery
+     * items and inject the successful result into the current Home state,
+     * applying/persisting completion flags. With no repository/source injected,
+     * reports an honest disabling state. Never auto-invoked.
+     */
+    fun generateRecommendations() {
+        val repository = recommendationRepository
+        val gallerySource = galleryItemsSource
+        if (repository == null || gallerySource == null || !repository.isConfigured()) {
+            _generation.value = HomeRecommendationGenerationState.Error(
+                message = "未配置推荐生成",
+                userMessage = "未配置云端模型或图库来源，无法生成推荐。",
+            )
+            return
+        }
+        viewModelScope.launch {
+            _generation.value = HomeRecommendationGenerationState.Running
+            val items = try {
+                gallerySource()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _generation.value = HomeRecommendationGenerationState.Idle
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val result = repository.generate(items)
+            when (result.state) {
+                is HomeRecommendationGenerationState.Success -> onGenerationSuccess(result)
+                else -> _generation.value = result.state
+            }
+        }
+    }
+
+    private suspend fun onGenerationSuccess(result: com.clawmate.app.home.recommendation.HomeRecommendationGenerationResult) {
+        val state = result.state as HomeRecommendationGenerationState.Success
+        val viewModels = state.recommendations.map { it.toViewModel() }
+        val flags = try {
+            homeRecRepository.snapshot()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        val coloured = homeRecRepository.applyFlags(viewModels, flags)
+        // Fold the freshly generated recommendations into the current profile.
+        val current = _state.value
+        if (current is HomeUiState.Ready) {
+            _state.value = HomeUiState.Ready(
+                current.profile.copy(recommendations = coloured),
+            )
+        }
+        _list.update { it.copy(recommendations = coloured, showAll = false, pageIndex = 0) }
+        // The completion flags are now persisted (true for completed items). Keep
+        // the generation state as a successful summary for the button label.
+        _generation.value = HomeRecommendationGenerationState.Success(state.recommendations)
     }
 
     // ----------------------------------------------------------- list actions

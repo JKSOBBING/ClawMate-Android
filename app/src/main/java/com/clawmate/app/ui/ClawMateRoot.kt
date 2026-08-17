@@ -24,7 +24,10 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.flow.first
 import com.clawmate.app.chat.ui.ChatScreen
+import com.clawmate.app.gallery.GalleryComponent
+import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.ui.GalleryScreen
 import com.clawmate.app.home.data.DataStoreHomeRecRepository
 import com.clawmate.app.home.data.DataStoreOnboardingRepository
@@ -32,6 +35,7 @@ import com.clawmate.app.home.data.HomeProfileSource
 import com.clawmate.app.home.data.HomeRecRepository
 import com.clawmate.app.home.data.OnboardingRepository
 import com.clawmate.app.home.data.ProfileBackedHomeProfileSource
+import com.clawmate.app.home.recommendation.HomeRecommendationFactory
 import com.clawmate.app.home.ui.HomeScreen
 import com.clawmate.app.profile.avatar.data.DataStoreProfileAvatarRepository
 import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
@@ -87,7 +91,22 @@ fun ClawMateRoot(
     // what the user actually curated in the 数字分身 screen. Callers that inject
     // their own source (e.g. tests) keep full control.
     val profileRepo = profileRepository ?: DataStoreProfileAvatarRepository(context)
-    val homeProfileSource = profileSource ?: ProfileBackedHomeProfileSource(profileRepo)
+
+    // Phase 28: the Home "生成推荐" button is powered by a real repository that
+    // converts the app-private Room gallery items into bounded planner events. It
+    // is gated so zero network I/O happens when the Planner backend is not
+    // configured or there is no real gallery data. Never invoked on launch.
+    val recommendationRepository = HomeRecommendationFactory.realRepository()
+    val galleryItemsSource: suspend () -> List<GalleryPhotoItem> = {
+        runCatching {
+            GalleryComponent.getRepository(context).observeItems()
+                .first()
+        }.getOrElse { emptyList() }
+    }
+    val homeProfileSource = profileSource ?: ProfileBackedHomeProfileSource(
+        profileRepository = profileRepo,
+        recommendationRepository = recommendationRepository,
+    )
 
     val onboardingVersion by onboarding.onboardingVersion.collectAsState(initial = "")
     val showOnboarding = com.clawmate.app.home.domain.shouldShowFirstLaunchOnboarding(onboardingVersion)
@@ -98,7 +117,11 @@ fun ClawMateRoot(
             onFinished = { /* version persisted; flow re-resolves and swaps to tabs */ },
         )
     } else {
-        MainTabScaffold(homeRecRepository = homeRecs, profileSource = homeProfileSource)
+        MainTabScaffold(
+            homeRecRepository = homeRecs,
+            profileSource = homeProfileSource,
+            galleryItemsSource = galleryItemsSource,
+        )
     }
 }
 
@@ -106,6 +129,7 @@ fun ClawMateRoot(
 private fun MainTabScaffold(
     homeRecRepository: HomeRecRepository,
     profileSource: HomeProfileSource,
+    galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)?,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -138,12 +162,12 @@ private fun MainTabScaffold(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             val context = LocalContext.current
             when (backStackEntry?.destination?.route) {
-                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource)
+                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource)
                 Destination.Summary.route -> GalleryScreen()
                 Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> WorkflowTaskScreen(context)
                 Destination.Settings.route -> SettingsScreen(context)
-                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource)
+                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource)
             }
         }
     }
