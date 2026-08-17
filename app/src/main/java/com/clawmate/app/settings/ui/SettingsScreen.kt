@@ -2,6 +2,7 @@ package com.clawmate.app.settings.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,6 +48,7 @@ import com.clawmate.app.settings.SettingsComponent
 import com.clawmate.app.settings.domain.SETTINGS_SECTIONS
 import com.clawmate.app.settings.domain.SettingsSectionId
 import com.clawmate.app.log.ui.LogScreen
+import com.clawmate.app.profile.share.nfc.NfcProfileShareActivity
 
 /**
  * Compose Settings screen — the Android vertical slice of the HarmonyOS 设置 tab
@@ -92,13 +94,13 @@ fun SettingsScreen(context: Context, modifier: Modifier = Modifier) {
                 )
             }
         } else {
-            SectionList(state = state, vm = vm)
+            SectionList(state = state, vm = vm, context = context)
         }
     }
 }
 
 @Composable
-private fun SectionList(state: SettingsUiState, vm: SettingsViewModel) {
+private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: Context) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -113,12 +115,54 @@ private fun SectionList(state: SettingsUiState, vm: SettingsViewModel) {
             color = SettingsThemeColors.TitleColor,
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 10.dp),
         )
+        // Phase 31 — explicit, single-entry NFC profile-share boundary. This card
+        // launches the NFC screen only on explicit user tap; nothing auto-enables
+        // NFC on launch, on recomposition, or in the background.
+        NfcShareEntry(context = context)
         SETTINGS_SECTIONS.forEach { item ->
             SectionListItem(
                 item = item,
                 onClick = { vm.selectSection(item.id) },
             )
         }
+    }
+}
+
+@Composable
+private fun NfcShareEntry(context: Context) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .background(SettingsThemeColors.Primary.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
+            .clickable {
+                val intent = Intent(context, NfcProfileShareActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .background(SettingsThemeColors.Primary, RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("N", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp, end = 10.dp)) {
+            Text("一碰分享（NFC）", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SettingsThemeColors.TitleColor)
+            Text(
+                "通过 NFC 发送或接收 ClawMate 画像（需显式点击开启会话）",
+                fontSize = 12.sp,
+                color = SettingsThemeColors.SecondaryText,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Text("›", fontSize = 28.sp, color = Color(0xFF8A93A3))
     }
 }
 

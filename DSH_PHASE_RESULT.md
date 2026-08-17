@@ -1,94 +1,122 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 30 (local daily-log consolidation + index foundation)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 31 (Android NFC profile-knock-share adapter)
 
 ## Commit
 
-- `Phase 30 add local daily-log consolidation and index foundation` (single
-  focused commit on top of Phase 29 `deae68e`).
+- Working against base `dd49fc4` (Phase 30). The changes are exported as a real
+  diff in `/root/phase31.patch` (paths `a/ClawMate-Android/…` `b/ClawMate-Android/…`).
 
 ## Context / provenance
 
-The Phase-30 implementation is a faithful **deterministic, local-only** subset
-port of Harmony `ConsolidationService.ets` + `IndexService.ets` + the
-`DataManagerUtils.ets` helpers, reduced to the *no-cloud-model* path. It builds
-directly on the Phase-29 `datamanager/` foundations (`DailyLogParser`,
-`DailyLogEventSource`, `DailyLogWorkspace`).
+Phase 31 migrates the Harmony **一碰分享** (knock-share) *capability* in
+`ProfileKnockShareService.ets` + `module.json5`/`profile/utd.json5` to a real
+**Android NFC (NDEF)** adapter, closing the last A4 gap. It is a genuine
+`NfcAdapter` implementation: honest availability, explicit user-triggered
+send/receive sessions, NDEF-MIME + UTF-8/JSON + schema/version + app/type
+validation **delegated to the existing `ProfileShareImporter`**, a ≤512 KiB
+payload cap both ways, and duplicate-safety across lifecycle rebuilds. No
+simulation, no fake device state, no adb/shell/hdc, no coordinate GUI, no
+background auto-scan.
 
-> Note on delivery: the earlier sandbox session that started Phase 30 wrote into a
-> temporary worktree (`/tmp/clawmate-phase30-local-index`) that was pruned before
-> it finished, so only the *design* and one types file survived on disk. This
-> session **reconstructed the full, tested implementation** from that recorded
-> design and the Harmony reference sources, then exported the real diff. The
-> changes below are the actually-built, actually-tested code — not placeholders.
+The Harmony code is read-only reference (`/root/mobiinfra-oh` was **not**
+modified).
 
-## Files changed — new production files (`app/src/main/java/com/clawmate/app/datamanager/`)
+## Files changed
 
-- `LocalConsolidationTypes.kt` — typed, bounded `@Serializable` models
-  (`ConsolidatedRecord` / `ConsolidatedMetadata` / `ConsolidatedState` /
-  `IndexedEvent` / `EventPartition` / `EventPartitionIndex` / `IndexManifest` /
-  `TemporalDocument` / `StateIndex` / `QueryOptions` / `QueryResult`) + fixed
-  `-local-` schema/version markers, tolerant decode defaults.
-- `ConsolidationText.kt` — pure text helpers (ports of `normalizeFreeText`,
-  `normalizeDedupText`, `normalizedSimilarityKey`, `summarizeText`,
-  `stableUnique`, `isIsoDate`, `monthKeyFromDate`, `normalizeTags`,
-  `extractAmountTokens`, `sameStringSet`, `dateToTime`).
-- `ConsolidationEngine.kt` — deterministic engine (port of
-  `ConsolidationService.consolidateGroup` + `DataManagerUtils` dedup/creation):
-  heuristic per-entry split, recent-scope matching, exact + normalized dedup,
-  `updateExistingRecord` merge, `createNewRecord`, stable monotonic `record_id`s,
-  defensive `MAX_RECORDS_PER_GROUP` cap.
-- `AtomicJsonStore.kt` — atomic temp+rename writes, bounded 4 MiB, tolerant reads.
-- `ConsolidationCodec.kt` — deterministic JSON serde with schema/version and
-  tolerant recovery (corrupt/partial state recovers to empty, re-consolidated).
-- `ConsolidationRepository.kt` — scan existing daily-log → consolidate each
-  month/file group → persist `outputs/<month>/<file>.md.state.json` + markdown,
-  rebuild `state-index.json` (only when non-empty input).
-- `IndexService.kt` — rebuild month partitions, partition-index, event manifest
-  (source sha256 + per-event input hashes), temporal month docs; stable event ids
-  `${relativeStatePath}#${recordId}`; no artifact created for empty input.
-- `DailyLogLocalIndex.kt` — read-only bounded query by date / month / source /
-  keyword (newest-first, tolerant, no auto-creation).
-- `LocalConsolidationIndexRunner.kt` — the single explicit, zero-network
-  orchestrator returning a typed `RunOutcome`.
+New production files (`app/src/main/java/com/clawmate/app/profile/share/nfc/`):
+
+- `ProfileKnockNfcTypes.kt` — status enum (NOT_SUPPORTED / DISABLED / READY /
+  SENDING / RECEIVING / SUCCESS / CANCELLED / ERROR), typed error enum,
+  `ProfileKnockReceivedOutcome`, `NfcProfileShareGateway` and
+  `ProfileKnockDedupeStore` boundaries.
+- `ProfileKnockEnvelopeCodec.kt` — pure envelope build/encode (bounded, ≤512 KiB,
+  canonical UTD/MIME/`.mobi-profile` contract aligned with Harmony) + incoming
+  NDEF validation (MIME/type, size, UTF-8/JSON, schema/version, app/type via the
+  importer) + stable message signature.
+- `ProfileKnockNfcStateMachine.kt` — pure JVM state machine: availability gating,
+  READY→SENDING/RECEIVING, send-write handoff, receive-validate→dedupe→import,
+  CANCELLED, typed ERROR, reset/retry.
+- `NfcProfileShareViewModel.kt` — the typed ViewModel boundary; exposes
+  `uiState: StateFlow<UiState>` and only explicit actions.
+- `NfcProfileShareScreen.kt` — Compose screen; real state + explicit controls only.
+- `NfcProfileShareActivity.kt` — lifecycle-safe host (reader mode enabled only
+  while RESUMED and an explicit SEND/RECEIVE session is armed, released in
+  `onPause`/`onDestroy`; never background or on launch).
+- `device/AndroidNfcProfileShareGateway.kt` — real NfcAdapter gateway (reader-mode
+  receive via `onTagDiscovered`; NDEF write via `Ndef`/`NdefFormatable`).
+- `device/PrefsProfileKnockDedupeStore.kt` — persistent duplicate-signature store.
+
+Modified files:
+
+- `app/src/main/AndroidManifest.xml` — `android.permission.NFC` + **non-required**
+  `android.hardware.nfc` feature (no-NFC devices still install); registers
+  `NfcProfileShareActivity` (not exported, singleTask).
+- `app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt` — explicit
+  Settings entry card `一碰分享（NFC）` (launch on tap; never auto-starts).
 
 ## New test file
 
-- `app/src/test/java/com/clawmate/app/datamanager/LocalConsolidationTest.kt` —
-  10 focused JVM tests over isolated temp dirs covering: exact dedup across runs,
-  normalized dedup, stable/monotonic `record_id`s + stable event ids,
-  `event_id` format, oversized-entry bound, corrupt/missing state recovery,
-  query-by-date/month/source, query limit + truncation, empty-input creates no
-  artifacts, and atomic-store missing/read semantics.
+- `app/src/test/java/com/clawmate/app/profile/share/nfc/ProfileKnockNfcTest.kt` —
+  **21 focused, offline JVM tests** (fake gateway + fake dedupe + fake repo, no
+  device/network): payload build + size cap (oversize refused at encode),
+  NDEF-MIME / protocol + malformed / oversize / unsupported-version / non-UTF-8
+  validation, state-machine transitions, no-NFC / disabled / cancelled / send
+  write-error, duplicate dedupe (incl. across a machine rebuild = lifecycle
+  restart), and "importer-not-bypassed" merge preservation.
 
-## Verification
+## Verification (serial, `--no-daemon --max-workers=1`, offline)
 
-Focused serial run on JDK 17.0.19, Android SDK platform 34, Gradle 8.9,
-`--no-daemon --max-workers=1`:
+Toolchain: JDK 17.0.19, Android SDK platform 34 at `/opt/deepseek-harness/android-sdk`
+(via `local.properties` `sdk.dir`), Gradle 8.9.
+
+1. Focused new tests:
 
 ```
-ANDROID_HOME=/opt/deepseek-harness/android-sdk \
-ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk \
-GRADLE_USER_HOME=/root/.gradle \
-ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
-/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle \
-    --no-daemon --max-workers=1 --offline \
-    :app:testDebugUnitTest --tests "com.clawmate.app.datamanager.LocalConsolidationTest"
+./gradlew --offline --no-daemon --max-workers=1 :app:testDebugUnitTest \
+    --tests "com.clawmate.app.profile.share.nfc.ProfileKnockNfcTest"
 ```
+Result: `BUILD SUCCESSFUL` — `ProfileKnockNfcTest` **tests=21, failures=0, errors=0**
+(`app/build/test-results/testDebugUnitTest/TEST-com.clawmate.app.profile.share.nfc.ProfileKnockNfcTest.xml`).
 
-Result: `BUILD SUCCESSFUL`. `LocalConsolidationTest`: **tests=10, failures=0,
-errors=0**.
-`app/build/test-results/testDebugUnitTest/TEST-com.clawmate.app.datamanager.LocalConsolidationTest.xml`.
+2. Full unit suite:
+
+```
+./gradlew --offline --no-daemon --max-workers=1 :app:testDebugUnitTest
+```
+Result: `BUILD SUCCESSFUL` — **110 test classes / 832 tests, 0 failures, 0 errors, 0 skipped**
+(aggregated from the `app/build/test-results/testDebugUnitTest/TEST-*.xml` reports).
+
+3. Build:
+
+```
+./gradlew --offline --no-daemon --max-workers=1 :app:assembleDebug
+```
+Result: `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/app-debug.apk` produced.
+Merged manifest contains `android.permission.NFC`, the non-required NFC
+`<uses-feature>`, and the `NfcProfileShareActivity`.
 
 ## Safety
 
-- Reads **only** already-present app-private daily-log; never auto-creates input.
-- **Zero network**; no URI/image/external-storage reads in the new module.
-- No `Runtime.exec` / `ProcessBuilder` / shell / adb / hdc / AccessibilityService
-  additions.
-- Atomic, bounded writes; corrupt artifacts recover to empty rather than throwing.
+- NFC permission is a normal (install-time) permission; the `<uses-feature>` is
+  **required=false** so the app installs on no-NFC devices, where the screen
+  honestly reports NOT_SUPPORTED.
+- Reader mode is enabled only inside the foreground Activity and always released
+  in `onPause`/`onDestroy`; no background/launch/recomposition auto-start.
+- Send emits only the canonical bounded profile envelope (no URI, image, token,
+  or unrelated data); payload capped at 512 KiB both directions.
+- Receiving validates via the existing `ProfileShareImporter` (shared merge
+  pipeline cannot be bypassed) and fails closed on any invalid input (never
+  updates local profile, except after a true successful import).
+- Duplicate messages are not re-imported: persistent dedupe store + in-memory
+  session cache, bounded.
+- No new credentials, no network access added; no secret persisted (only bounded
+  message signatures).
 
-## Remaining (honestly not ported)
+## Remaining (honestly not ported / not fully equivalent)
 
-Harmony **cloud/periodic consolidation + model-based dedup**, **profile/claim
-derivation**, `workflow_scene_id` enrichment, image referencing for records, and
-any **periodic background scheduling** — Phase 30 is strictly deterministic-local
-and only ever runs from an explicit user action.
+- **Harmony `harmonyShare` knockShare discovery**: peer-targeted `sendCapability` /
+  `dataReceive` registration, the system "knock" handshake UX, and the Harmony
+  share sandbox inbox have no Android equivalent. Android substitutes explicit
+  foreground reader-mode sessions and literal NDEF peer contact.
+- **Harmony system share / launch-Want UI**: the Harmony file-open/share system
+  surface is covered on Android by the existing `ACTION_VIEW` intent flow in
+  `ProfileShareActivity`, not reimplemented in the NFC path.

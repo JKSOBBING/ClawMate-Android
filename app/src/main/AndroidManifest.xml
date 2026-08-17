@@ -42,6 +42,18 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!--
+        Phase 31 — NFC profile-knock-share ("一碰分享") boundary.
+        NFC is a normal (install-time) permission; Android requires no runtime
+        grant for it. The <uses-feature> is declared NON-required so devices
+        without NFC hardware can still install the app: the NFC screen honestly
+        reports NOT_SUPPORTED / DISABLED and never fabricates capability.
+    -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false" />
+
     <application
         android:name=".ClawMateApplication"
         android:allowBackup="true"
@@ -82,6 +94,15 @@
                     android:pathPattern=".*\\.mobi\\-profile(\\.json)?$" />
             </intent-filter>
         </activity>
+
+        <!-- Phase 31 — NFC profile-knock-share screen (reader mode). No intent-filter
+             is required: reader mode routes every discovered tag to onTagDiscovered,
+             and the session decides send vs receive. Launched only from the explicit
+             entry point in Settings; never started on launch or in the background. -->
+        <activity
+            android:name=".profile.share.nfc.NfcProfileShareActivity"
+            android:exported="false"
+            android:launchMode="singleTask" />
 
         <!-- content:// provider for sharing/importing .mobi-profile summary files.
              Modern Android forbids sharing via file:// URIs; FileProvider is the
