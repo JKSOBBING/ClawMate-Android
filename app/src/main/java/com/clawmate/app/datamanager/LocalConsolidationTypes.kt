@@ -68,6 +68,13 @@ object LocalConsolidationTypes {
         @SerialName("workflow_scene_ids") val workflowSceneIds: List<Int> = emptyList(),
         @SerialName("dedup_status") val dedupStatus: String = "new",
         @SerialName("dedup_text") val dedupText: String = "",
+        /**
+         * Auditable, bounded model/local decision notes (e.g. `new`,
+         * `duplicate(exact_existing_match)`, `merge_with_existing(signature_match)`).
+         * Never carries a secret, URI or token. Empty for the deterministic-local
+         * path (backward compatible with old Phase-30 artifacts that lack the key).
+         */
+        @SerialName("model_notes") val modelNotes: List<String> = emptyList(),
     )
 
     /** Bounded consolidated-state metadata for one month/file group. */
@@ -79,6 +86,13 @@ object LocalConsolidationTypes {
         @SerialName("updated_at") val updatedAt: String = "",
         @SerialName("total_records") val totalRecords: Int = 0,
         @SerialName("month") val month: String = "",
+        /**
+         * Stable per-source-ref processing hash (port of Harmony
+         * `ConsolidatedMetadata.processed_entry_hashes`) so the model path can
+         * skip entries it has already processed. Backward compatible: old
+         * artifacts decode to an empty map and are processed once.
+         */
+        @SerialName("processed_entry_hashes") val processedEntryHashes: Map<String, String> = emptyMap(),
     )
 
     /** The persisted consolidation artifact for one month/file group. */

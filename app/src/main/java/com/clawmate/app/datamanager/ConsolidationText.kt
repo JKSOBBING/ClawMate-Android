@@ -79,4 +79,45 @@ object ConsolidationText {
             0L
         }
     }
+
+    /** Current UTC instant as an ISO string (e.g. `2026-08-17T12:34:56Z`). */
+    fun epochIsoNowUtc(): String =
+        java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC).toInstant().toString()
+
+    /**
+     * Lowercase hex SHA-256 of [value]'s UTF-8 bytes (port of the index-service
+     * digest). Used for stable processed-entry hashes; never a secret or token.
+     */
+    fun sha256Text(value: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+}
+
+/**
+ * Workflow-scene label resolution (port of Harmony `WorkflowSceneConfig.ets`'s
+ * `memorySceneLabel`). Pure and deterministic so model prompts can carry a short,
+ * bounded scene context hint for a real `workflow_scene_id` (never fabricated).
+ */
+object SceneLabels {
+    private val LABELS: Map<Int, String> = linkedMapOf(
+        0 to "购物",
+        1 to "外卖",
+        2 to "娱乐",
+        3 to "聊天",
+        4 to "生活",
+        5 to "社交",
+        6 to "差旅",
+        // Memory/gallery extra scenes (the 7 -> 1 legacy merge is applied first).
+        8 to "文档",
+        9 to "健康",
+        10 to "办公",
+        11 to "图库",
+    )
+
+    /** Real scene label for a `workflow_scene_id` (legacy 7 maps to 外卖 = 1); empty when unknown. */
+    fun memorySceneLabel(sceneId: Int): String {
+        val normalized = if (sceneId == 7) 1 else sceneId
+        return LABELS[normalized].orEmpty()
+    }
 }

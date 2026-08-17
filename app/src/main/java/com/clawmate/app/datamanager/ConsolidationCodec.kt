@@ -79,6 +79,7 @@ object LocalConsolidationCodec {
             r = r.copy(sourceDates = ConsolidationText.stableUnique(r.sourceDates).sorted())
             r = r.copy(tags = ConsolidationText.normalizeTags(r.tags))
             r = r.copy(workflowSceneIds = SceneEntityNormalizer.normalizeSceneIds(r.workflowSceneIds))
+            r = r.copy(modelNotes = ConsolidationText.stableUnique(r.modelNotes))
             if (r.recordId < 0 || r.normalizedFact.isBlank()) null else r
         }
         return state.copy(records = rebound)
