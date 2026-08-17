@@ -20,6 +20,11 @@ data class HomeDomainViewModel(
     val claims: List<String>,
     val color: String,
     val eventCount: Int,
+    /**
+     * Phase 32: real indexed evidence ids backing this pillar's claims (display
+     * only, read-only; never persisted or written back to user data).
+     */
+    val evidenceIds: List<String> = emptyList(),
 )
 
 /** Empty-profile sentinel text used by the source for an un-populated domain. */

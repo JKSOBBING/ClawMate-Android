@@ -1,69 +1,103 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 31 (Android NFC profile-knock-share adapter)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 32 (profile index / claims foundation)
 
 ## Commit
 
-- Working against base `dd49fc4` (Phase 30). The changes are exported as a real
-  diff in `/root/phase31.patch` (paths `a/ClawMate-Android/…` `b/ClawMate-Android/…`).
+- Working against base `741b248` (Phase 31). The changes are exported as a real
+  diff in `/root/phase32.patch` (paths `a/ClawMate-Android/…` `b/ClawMate-Android/…`).
 
 ## Context / provenance
 
-Phase 31 migrates the Harmony **一碰分享** (knock-share) *capability* in
-`ProfileKnockShareService.ets` + `module.json5`/`profile/utd.json5` to a real
-**Android NFC (NDEF)** adapter, closing the last A4 gap. It is a genuine
-`NfcAdapter` implementation: honest availability, explicit user-triggered
-send/receive sessions, NDEF-MIME + UTF-8/JSON + schema/version + app/type
-validation **delegated to the existing `ProfileShareImporter`**, a ≤512 KiB
-payload cap both ways, and duplicate-safety across lifecycle rebuilds. No
-simulation, no fake device state, no adb/shell/hdc, no coordinate GUI, no
-background auto-scan.
+Phase 32 migrates the Harmony **profile index / claims** part of the data-manager
+pipeline (`IndexService.buildProfileDocument` / `DataManagerTypes` profile types /
+`deriveProfileDomains`) to Android, **on top of, and without repeating, the
+Phase-31 NFC adapter**. It reads the Phase-30 event partitions
+(`indexes/events/<month>.json`), aggregates the events into the four persona
+domains (`eat`/`wear`/`live`/`travel`) by deterministic literal evidence, and
+materialises a typed profile into
+`workflows/profile-consolidation/indexes/profile/state.json` plus a bounded
+`profile.md`.
+
+No fabrication: claims only ever reference real indexed event ids and pass strict
+bounds/whitelist validation; with no model config a local-only run carries empty
+claims and is honestly typed `NOT_CONFIGURED`/`LOCAL_ONLY`. A model failure
+preserves the deterministic local result (typed PARTIAL/ERROR) and never
+overwrites a valid persisted model state. All activity is explicit-user-triggered.
 
 The Harmony code is read-only reference (`/root/mobiinfra-oh` was **not**
 modified).
 
 ## Files changed
 
-New production files (`app/src/main/java/com/clawmate/app/profile/share/nfc/`):
+New production files (`app/src/main/java/com/clawmate/app/datamanager/`):
 
-- `ProfileKnockNfcTypes.kt` — status enum (NOT_SUPPORTED / DISABLED / READY /
-  SENDING / RECEIVING / SUCCESS / CANCELLED / ERROR), typed error enum,
-  `ProfileKnockReceivedOutcome`, `NfcProfileShareGateway` and
-  `ProfileKnockDedupeStore` boundaries.
-- `ProfileKnockEnvelopeCodec.kt` — pure envelope build/encode (bounded, ≤512 KiB,
-  canonical UTD/MIME/`.mobi-profile` contract aligned with Harmony) + incoming
-  NDEF validation (MIME/type, size, UTF-8/JSON, schema/version, app/type via the
-  importer) + stable message signature.
-- `ProfileKnockNfcStateMachine.kt` — pure JVM state machine: availability gating,
-  READY→SENDING/RECEIVING, send-write handoff, receive-validate→dedupe→import,
-  CANCELLED, typed ERROR, reset/retry.
-- `NfcProfileShareViewModel.kt` — the typed ViewModel boundary; exposes
-  `uiState: StateFlow<UiState>` and only explicit actions.
-- `NfcProfileShareScreen.kt` — Compose screen; real state + explicit controls only.
-- `NfcProfileShareActivity.kt` — lifecycle-safe host (reader mode enabled only
-  while RESUMED and an explicit SEND/RECEIVE session is armed, released in
-  `onPause`/`onDestroy`; never background or on launch).
-- `device/AndroidNfcProfileShareGateway.kt` — real NfcAdapter gateway (reader-mode
-  receive via `onTagDiscovered`; NDEF write via `Ndef`/`NdefFormatable`).
-- `device/PrefsProfileKnockDedupeStore.kt` — persistent duplicate-signature store.
+- `ProfileTypes.kt` — profile state/domain/claim/model-payload models, four-domain
+  keys + display names, strict bounds, generation tokens + `local_only`, typed
+  `ProfileBuildStatus` and `ProfileBuildResult`.
+- `ProfileDomainUtils.kt` — four-domain evidence rules + `deriveProfileDomains`,
+  `domainInputHash`, `dateRange`, `deriveLocalSummary`.
+- `ProfileCodec.kt` — tolerant profile JSON serde.
+- `ProfileIndexBuilder.kt` — loads real events, projects domains, builds
+  `ProfileState` (`buildProfileDocument` contract), renders bounded markdown,
+  writes state.json + profile.md atomically.
+- `ProfileModelConfig.kt` — typed config gated by the shared OpenAI Planner
+  `EndpointConfig`; plus `ProfileModelValidator` (strict JSON decode + whitelist +
+  evidence-reference) and `ProfileCodecModelJson`.
+- `ProfileModelClient.kt` — per-domain model generation via the existing
+  `ChatCompletionsClient` (bounded real event text only), with strict validation
+  and typed `DomainUpgrade`.
+- `ProfileIndexRunner.kt` — local-only when unconfigured, model-backed when
+  configured, deterministic-reuse, preserves local projection on failure.
+- `ProfileGenerationTypes.kt` / `RealProfileGenerationRepository.kt` — the
+  explicit "生成画像" Home seam and typed lifecycle state.
 
-Modified files:
+New production files in the Home layer:
 
-- `app/src/main/AndroidManifest.xml` — `android.permission.NFC` + **non-required**
-  `android.hardware.nfc` feature (no-NFC devices still install); registers
-  `NfcProfileShareActivity` (not exported, singleTask).
-- `app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt` — explicit
-  Settings entry card `一碰分享（NFC）` (launch on tap; never auto-starts).
+- `app/src/main/java/com/clawmate/app/home/domain/ProfileIndexBlender.kt` —
+  local-first display blend (user-curated domain wins; un-populated pillars filled
+  from bounded index summary/claims + real evidence ids; never writes back).
+- `app/src/main/java/com/clawmate/app/home/data/ProfileIndexHomeProfileSource.kt`
+  — reads persisted profile state + curated profile and blends into Home.
 
-## New test file
+Modified production files:
 
-- `app/src/test/java/com/clawmate/app/profile/share/nfc/ProfileKnockNfcTest.kt` —
-  **21 focused, offline JVM tests** (fake gateway + fake dedupe + fake repo, no
-  device/network): payload build + size cap (oversize refused at encode),
-  NDEF-MIME / protocol + malformed / oversize / unsupported-version / non-UTF-8
-  validation, state-machine transitions, no-NFC / disabled / cancelled / send
-  write-error, duplicate dedupe (incl. across a machine rebuild = lifecycle
-  restart), and "importer-not-bypassed" merge preservation.
+- `app/src/main/java/com/clawmate/app/datamanager/DataManagerPaths.kt` — profile
+  subtree (`indexes/profile/state.json`, `indexes/profile/profile.md`).
+- `app/src/main/java/com/clawmate/app/datamanager/AtomicJsonStore.kt` — added
+  bounded `writeText` / `readText`.
+- `app/src/main/java/com/clawmate/app/home/ui/HomeViewModel.kt` —
+  `profileGeneration` state + explicit `generateProfile()` (refreshes home profiles
+  after a successful build).
+- `app/src/main/java/com/clawmate/app/home/ui/HomeViewModelFactory.kt` — injects
+  the profile-generation repository.
+- `app/src/main/java/com/clawmate/app/home/ui/HomeScreen.kt` — explicit "生成画像"
+  section + button (running / local-only success / model success / partial /
+  not-configured / error).
+- `app/src/main/java/com/clawmate/app/home/domain/HomeDomain.kt` — `evidenceIds`
+  field on the Home pillar card (display-only).
+- `app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt` — wires
+  `RealProfileGenerationRepository` + `ProfileIndexHomeProfileSource`.
 
-## Verification (serial, `--no-daemon --max-workers=1`, offline)
+## New test files
+
+- `app/src/test/java/com/clawmate/app/datamanager/ProfileIndexTest.kt` — **19
+  focused, offline JVM tests** over temp dirs exercising the real Phase-30 → 32
+  pipeline: empty/no-index → zero network + no artifact + no pseudo claims; no
+  events → no model call even when configured; four-domain mapping (incl. no
+  `work`/`other` leakage); real date ranges + evidence ids; repeated-run stability;
+  model-claim reuse + fresh-failure typed ERROR with local preserved; strict model
+  validation (unknown kind / low-confidence / unknown evidence / <2 evidence /
+  over-length / event-detail / malformed JSON); unconfigured zero-call local-only;
+  corrupt + oversized artifact recovery; bounded markdown; pure
+  `deriveProfileDomains`; `ProfileGenerationStateMapper` honesty.
+- `app/src/test/java/com/clawmate/app/home/ProfileIndexBlenderTest.kt` — **4 tests**:
+  user-populated domain preserved verbatim (local-first), empty domain filled from
+  real index summary/claims/evidence, no data → honest empty with no fabricated
+  claims, and four-domain bounded import only.
+- `app/src/test/java/com/clawmate/app/home/ProfileGenerationViewModelTest.kt` —
+  **3 tests**: no-repo disabling error, explicit generate surfaces a successful
+  state, and profile generation is never invoked on load.
+
+## Verification (serial, `--offline --no-daemon --max-workers=1`)
 
 Toolchain: JDK 17.0.19, Android SDK platform 34 at `/opt/deepseek-harness/android-sdk`
 (via `local.properties` `sdk.dir`), Gradle 8.9.
@@ -72,51 +106,47 @@ Toolchain: JDK 17.0.19, Android SDK platform 34 at `/opt/deepseek-harness/androi
 
 ```
 ./gradlew --offline --no-daemon --max-workers=1 :app:testDebugUnitTest \
-    --tests "com.clawmate.app.profile.share.nfc.ProfileKnockNfcTest"
+    --tests "com.clawmate.app.datamanager.ProfileIndexTest" \
+    --tests "com.clawmate.app.home.ProfileIndexBlenderTest" \
+    --tests "com.clawmate.app.home.ProfileGenerationViewModelTest"
 ```
-Result: `BUILD SUCCESSFUL` — `ProfileKnockNfcTest` **tests=21, failures=0, errors=0**
-(`app/build/test-results/testDebugUnitTest/TEST-com.clawmate.app.profile.share.nfc.ProfileKnockNfcTest.xml`).
+Result: `BUILD SUCCESSFUL` — **tests=19+4+3=26, failures=0, errors=0**.
 
-2. Full unit suite:
+2. Full unit suite: `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`, **113 test
+   classes / 858 tests, 0 failures, 0 errors, 0 skipped** (aggregated from the
+   `app/build/test-results/testDebugUnitTest/TEST-*.xml` reports; baseline Phase-31
+   was 110 classes / 832 tests, this phase adds 3 classes / 26 tests).
 
-```
-./gradlew --offline --no-daemon --max-workers=1 :app:testDebugUnitTest
-```
-Result: `BUILD SUCCESSFUL` — **110 test classes / 832 tests, 0 failures, 0 errors, 0 skipped**
-(aggregated from the `app/build/test-results/testDebugUnitTest/TEST-*.xml` reports).
-
-3. Build:
-
-```
-./gradlew --offline --no-daemon --max-workers=1 :app:assembleDebug
-```
-Result: `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/app-debug.apk` produced.
-Merged manifest contains `android.permission.NFC`, the non-required NFC
-`<uses-feature>`, and the `NfcProfileShareActivity`.
+3. Build: `:app:assembleDebug` — `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/app-debug.apk`
+   produced.
 
 ## Safety
 
-- NFC permission is a normal (install-time) permission; the `<uses-feature>` is
-  **required=false** so the app installs on no-NFC devices, where the screen
-  honestly reports NOT_SUPPORTED.
-- Reader mode is enabled only inside the foreground Activity and always released
-  in `onPause`/`onDestroy`; no background/launch/recomposition auto-start.
-- Send emits only the canonical bounded profile envelope (no URI, image, token,
-  or unrelated data); payload capped at 512 KiB both directions.
-- Receiving validates via the existing `ProfileShareImporter` (shared merge
-  pipeline cannot be bypassed) and fails closed on any invalid input (never
-  updates local profile, except after a true successful import).
-- Duplicate messages are not re-imported: persistent dedupe store + in-memory
-  session cache, bounded.
-- No new credentials, no network access added; no secret persisted (only bounded
-  message signatures).
+- **Zero network unless configured and real events exist.** No model config or no
+  indexed events → typed local result, no request.
+- **No fabricated claims.** Local-only runs carry empty claims (LOCAL_ONLY); model
+  claims are admitted only when they reference real indexed event ids and pass
+  every bound (kind/confidence whitelist, lengths, count, min evidence).
+- **Model failure preserves determinism.** Returns typed PARTIAL/ERROR and never
+  overwrites a previously persisted valid model state; the deterministic local
+  projection is kept.
+- **Explicit user action only.** The Home "生成画像" button is the only entry and is
+  never invoked at launch / recomposition / background / normal Home load.
+- **Corrupt/oversized artifacts recover honestly** (to empty/local), never falsify a
+  run.
+- **Local-first Home integration.** `ProfileIndexBlender` fills only un-populated
+  pillars from bounded index summary/claims + real evidence ids; a user's curated
+  domain is preserved verbatim; no URI / image / token / unrelated data is imported.
+- No new credentials, no NFC changes (Phase 31 NFC behaviour is untouched), no
+  `Runtime.exec`/ProcessBuilder/adb/hdc/coordinate GUI automation.
 
 ## Remaining (honestly not ported / not fully equivalent)
 
-- **Harmony `harmonyShare` knockShare discovery**: peer-targeted `sendCapability` /
-  `dataReceive` registration, the system "knock" handshake UX, and the Harmony
-  share sandbox inbox have no Android equivalent. Android substitutes explicit
-  foreground reader-mode sessions and literal NDEF peer contact.
-- **Harmony system share / launch-Want UI**: the Harmony file-open/share system
-  surface is covered on Android by the existing `ACTION_VIEW` intent flow in
-  `ProfileShareActivity`, not reimplemented in the NFC path.
+- **Periodic scheduling** of consolidation/index/profile rebuild (no WorkManager /
+  background job; explicit user action only).
+- **Full cloud consolidation / model-based dedup / enrichment** (Harmony uses the
+  cloud client for split/dedup/enrich; Phase 32 remains deterministic-local for
+  projection, with only claims generation using the model).
+- **`workflow_scene_id` enrichment** and the **entity resolver**
+  (`entity/index.json`, `entityMatchIds`, alias postings) — not ported; claims rely
+  on literal four-domain text evidence only.

@@ -36,7 +36,6 @@ import com.clawmate.app.home.data.DataStoreOnboardingRepository
 import com.clawmate.app.home.data.HomeProfileSource
 import com.clawmate.app.home.data.HomeRecRepository
 import com.clawmate.app.home.data.OnboardingRepository
-import com.clawmate.app.home.data.ProfileBackedHomeProfileSource
 import com.clawmate.app.home.recommendation.HomeRecommendationFactory
 import com.clawmate.app.home.ui.HomeScreen
 import com.clawmate.app.profile.avatar.data.DataStoreProfileAvatarRepository
@@ -116,7 +115,16 @@ fun ClawMateRoot(
             .load()
             .entries
     }
-    val homeProfileSource = profileSource ?: ProfileBackedHomeProfileSource(
+    // Phase 32: the Home "生成画像" button reads the app-private indexed events
+    // and materialises the four-domain profile (local-only when the model is
+    // unconfigured, model-backed otherwise). It is only ever invoked from the
+    // explicit button — never on launch/recomposition/background.
+    val profileGenerationRepository =
+        com.clawmate.app.datamanager.RealProfileGenerationRepository.appPrivate(context.filesDir)
+    // Phase 32: the Home pillar cards blend the user-curated local profile with
+    // the index-derived profile (local-first, never overwriting user edits).
+    val homeProfileSource = profileSource ?: com.clawmate.app.home.data.ProfileIndexHomeProfileSource(
+        baseDir = context.filesDir,
         profileRepository = profileRepo,
         recommendationRepository = recommendationRepository,
     )
@@ -135,6 +143,7 @@ fun ClawMateRoot(
             profileSource = homeProfileSource,
             galleryItemsSource = galleryItemsSource,
             dailyLogSource = appPrivateDailyLogSource,
+            profileGenerationRepository = profileGenerationRepository,
         )
     }
 }
@@ -145,6 +154,7 @@ private fun MainTabScaffold(
     profileSource: HomeProfileSource,
     galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)?,
     dailyLogSource: (suspend () -> List<DailyLogEntry>)?,
+    profileGenerationRepository: com.clawmate.app.datamanager.ProfileGenerationRepository?,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -177,12 +187,12 @@ private fun MainTabScaffold(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             val context = LocalContext.current
             when (backStackEntry?.destination?.route) {
-                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource)
+                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource, profileGenerationRepository = profileGenerationRepository)
                 Destination.Summary.route -> GalleryScreen()
                 Destination.Chat.route -> ChatScreen(context)
                 Destination.Task.route -> WorkflowTaskScreen(context)
                 Destination.Settings.route -> SettingsScreen(context)
-                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource)
+                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource, profileGenerationRepository = profileGenerationRepository)
             }
         }
     }

@@ -56,7 +56,8 @@ class HomeViewModel(
     private val recommendationRepository: HomeRecommendationRepository? = null,
     private val galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
     private val dailyLogSource: (suspend () -> List<DailyLogEntry>)? = null,
-    profileLoader: suspend () -> HomeProfileViewModel,
+    private val profileGenerationRepository: com.clawmate.app.datamanager.ProfileGenerationRepository? = null,
+    private val profileLoader: suspend () -> HomeProfileViewModel,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -73,6 +74,17 @@ class HomeViewModel(
         HomeRecommendationGenerationState.Idle,
     )
     val generation: StateFlow<HomeRecommendationGenerationState> = _generation.asStateFlow()
+
+    /**
+     * Phase-32 explicit profile-generation state — drives the Home "生成画像"
+     * button. Idle until the user explicitly taps the button; never read on Home
+     * load/recomposition/background.
+     */
+    private val _profileGeneration = MutableStateFlow<com.clawmate.app.datamanager.ProfileGenerationState>(
+        com.clawmate.app.datamanager.ProfileGenerationState.Idle,
+    )
+    val profileGeneration: StateFlow<com.clawmate.app.datamanager.ProfileGenerationState> =
+        _profileGeneration.asStateFlow()
 
     init {
         load(profileLoader)
@@ -199,6 +211,63 @@ class HomeViewModel(
                     if (it.id == id) it.copy(completed = stored) else it
                 }
                 current.copy(recommendations = updated)
+            }
+        }
+    }
+
+    // --------------------------------------------------- explicit Phase-32 generate image
+
+    /**
+     * Explicit user action: generate the four-domain profile (image) from real
+     * app-private indexed events. With no [profileGenerationRepository] injected,
+     * reports an honest disabling state. Never auto-invoked — the repository is
+     * only consulted when the user taps the 生成画像 button, never at Home
+     * load/recomposition or from a background job. A successful run triggers a
+     * one-time reload of the home profile so the (index-derived) pillars refresh.
+     */
+    fun generateProfile() {
+        val repository = profileGenerationRepository
+        if (repository == null) {
+            _profileGeneration.value = com.clawmate.app.datamanager.ProfileGenerationState.Error(
+                message = "未配置画像生成入口",
+                userMessage = "画像生成入口未配置，暂时无法生成画像。",
+            )
+            return
+        }
+        viewModelScope.launch {
+            _profileGeneration.value = com.clawmate.app.datamanager.ProfileGenerationState.Running
+            val state = try {
+                repository.generate()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _profileGeneration.value = com.clawmate.app.datamanager.ProfileGenerationState.Idle
+                throw e
+            } catch (e: Exception) {
+                com.clawmate.app.datamanager.ProfileGenerationState.Error(
+                    message = "画像生成失败",
+                    userMessage = "画像生成失败，请重试。",
+                )
+            }
+            _profileGeneration.value = state
+            when (state) {
+                is com.clawmate.app.datamanager.ProfileGenerationState.Success,
+                is com.clawmate.app.datamanager.ProfileGenerationState.Partial,
+                -> {
+                    // The generated state.json/profile.md changed under an app-private
+                    // base dir; refresh the home pillars from the (possibly updated)
+                    // index-derived profile so the UI reflects real evidence.
+                    _state.value = HomeUiState.Loading
+                    val result = runCatching { profileLoader() }
+                    result.onSuccess { profile ->
+                        val flags = try { homeRecRepository.snapshot() } catch (e: Exception) { emptyMap() }
+                        val coloured = homeRecRepository.applyFlags(profile.recommendations, flags)
+                        _list.update { it.copy(recommendations = coloured) }
+                        _state.value = HomeUiState.Ready(profile.copy(recommendations = coloured))
+                    }
+                    result.onFailure { e ->
+                        _state.value = HomeUiState.Error(e.message ?: "加载首页画像失败")
+                    }
+                }
+                else -> Unit
             }
         }
     }

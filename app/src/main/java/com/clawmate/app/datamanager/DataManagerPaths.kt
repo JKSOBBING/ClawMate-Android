@@ -17,6 +17,8 @@ import java.io.File
  *       indexes/events/partition-index.json        (partition list)
  *       indexes/manifest.json                      (event manifest)
  *       indexes/temporal/<month>.json              (temporal month doc)
+ *       indexes/profile/state.json                 (Phase-32 profile state)
+ *       indexes/profile/profile.md                 (Phase-32 bounded rendered markdown)
  * ```
  *
  * Reading/querying never creates directories; writes create parents only via the
@@ -37,11 +39,24 @@ object DataManagerPaths {
     const val MANIFEST_FILE_NAME: String = "manifest.json"
     const val OUTPUT_STATE_SUFFIX: String = ".state.json"
 
+    const val PROFILE_DIR_RELATIVE: String = "$INDEXES_ROOT_RELATIVE/profile"
+    const val PROFILE_STATE_FILE_NAME: String = "state.json"
+    const val PROFILE_MARKDOWN_FILE_NAME: String = "profile.md"
+
     fun dailyLogRoot(baseDir: File): File = File(baseDir, DAILY_LOG_RELATIVE)
     fun outputsRoot(baseDir: File): File = File(baseDir, OUTPUTS_ROOT_RELATIVE)
     fun indexesRoot(baseDir: File): File = File(baseDir, INDEXES_ROOT_RELATIVE)
     fun eventsDir(baseDir: File): File = File(baseDir, EVENTS_DIR_RELATIVE)
     fun temporalDir(baseDir: File): File = File(baseDir, TEMPORAL_DIR_RELATIVE)
+
+    /** Profile subtree: `indexes/profile/`. */
+    fun profileDir(baseDir: File): File = File(baseDir, PROFILE_DIR_RELATIVE)
+
+    /** Persisted profile state: `indexes/profile/state.json`. */
+    fun profileState(baseDir: File): File = File(profileDir(baseDir), PROFILE_STATE_FILE_NAME)
+
+    /** Bounded rendered markdown: `indexes/profile/profile.md`. */
+    fun profileMarkdown(baseDir: File): File = File(profileDir(baseDir), PROFILE_MARKDOWN_FILE_NAME)
 
     fun stateIndex(baseDir: File): File = File(outputsRoot(baseDir), STATE_INDEX_FILE_NAME)
     fun partitionIndex(baseDir: File): File = File(eventsDir(baseDir), PARTITION_INDEX_FILE_NAME)

@@ -61,10 +61,16 @@ import com.clawmate.app.profile.avatar.ui.ProfileAvatarHost
  *
  * Shows the honest profile lifecycle (loading / error / empty / ready), the
  * avatar section (NOT_CONFIGURED on Android), the four persona pillars
- * (理解你/守护你/陪伴你/成就你), and the recommendation list with completion
+ * (理解你/守护你/陪伴你/成就你), the recommendation list with completion
  * toggles, 未完成/全部 filter, an explicit Phase-28 "生成推荐" action (filled from
  * real gallery data) and pagination. Avatar generation is never fabricated; it
  * stays DISABLED until a real Android implementation exists.
+ *
+ * Phase 32 adds an explicit "生成画像" action (only from the button tap, never at
+ * Home load/recomposition/background) that builds the four-domain profile from
+ * real app-private indexed events; its typed lifecycle state
+ * ([ProfileGenerationState]) is surfaced honestly (running / local-only success /
+ * model success / partial / not-configured / error).
  */
 @Composable
 fun HomeScreen(
@@ -72,11 +78,13 @@ fun HomeScreen(
     profileSource: HomeProfileSource = com.clawmate.app.home.data.EmptyHomeProfileSource,
     galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
     dailyLogSource: (suspend () -> List<com.clawmate.app.datamanager.DailyLogEntry>)? = null,
-    viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource, galleryItemsSource, dailyLogSource)),
+    profileGenerationRepository: com.clawmate.app.datamanager.ProfileGenerationRepository? = null,
+    viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource, galleryItemsSource, dailyLogSource, profileGenerationRepository)),
 ) {
     val state by viewModel.state.collectAsState()
     val list by viewModel.list.collectAsState()
     val generation by viewModel.generation.collectAsState()
+    val profileGeneration by viewModel.profileGeneration.collectAsState()
 
     // Phase 12: the avatar section opens the real Profile / Avatar screen
     // (local profile editing + honest generation boundary) instead of staying a
@@ -94,7 +102,9 @@ fun HomeScreen(
             profile = s.profile,
             list = list,
             generation = generation,
+            profileGeneration = profileGeneration,
             onGenerateRecommendations = { viewModel.generateRecommendations() },
+            onGenerateProfile = { viewModel.generateProfile() },
             onToggleShowAll = viewModel::setShowAll,
             onPrevious = viewModel::previousPage,
             onNext = viewModel::nextPage,
@@ -142,7 +152,9 @@ private fun HomeContent(
     profile: HomeProfileViewModel,
     list: RecommendationListUi,
     generation: HomeRecommendationGenerationState,
+    profileGeneration: com.clawmate.app.datamanager.ProfileGenerationState,
     onGenerateRecommendations: () -> Unit,
+    onGenerateProfile: () -> Unit,
     onToggleShowAll: (Boolean) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -171,6 +183,12 @@ private fun HomeContent(
         CompletenessCard(completeness = profile.completeness)
         PillarsRow(domains = profile.domains)
 
+        // --------------------------------------------------- explicit 生成画像
+        ProfileGenerationSection(
+            profileGeneration = profileGeneration,
+            onGenerateProfile = onGenerateProfile,
+        )
+
         // --------------------------------------------------- recommendations
         RecommendationsSection(
             list = list,
@@ -181,6 +199,127 @@ private fun HomeContent(
             onNext = onNext,
             onSetCompleted = onSetCompleted,
         )
+    }
+}
+
+/**
+ * Phase-32 explicit "生成画像" action card. Only an explicit button tap ever
+ * triggers the build — never Home load / recomposition / background. The typed
+ * lifecycle state is surfaced honestly (running / local-only success / model
+ * success / partial / not-configured / error), so a model failure is never shown
+ * as a fabricated profile.
+ */
+@Composable
+private fun ProfileGenerationSection(
+    profileGeneration: com.clawmate.app.datamanager.ProfileGenerationState,
+    onGenerateProfile: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7EC)),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "画像生成",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF3A2E12),
+            )
+            when (profileGeneration) {
+                is com.clawmate.app.datamanager.ProfileGenerationState.Running -> {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            "正在生成画像…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF6D4C27),
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
+                is com.clawmate.app.datamanager.ProfileGenerationState.Success -> {
+                    val label = if (profileGeneration.isModel) "画像已生成（含模型结论）" else "已生成本地画像"
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF6D4C27),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        "覆盖 ${profileGeneration.eventCount} 条事件 · 画像条目 ${profileGeneration.claimCount}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF9A7B46),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    ProfileGenerateButton(onGenerateProfile, running = false)
+                }
+                is com.clawmate.app.datamanager.ProfileGenerationState.Partial -> {
+                    Text(
+                        "画像部分生成（部分领域暂未形成）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFC2564E),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        "覆盖 ${profileGeneration.eventCount} 条事件 · 画像条目 ${profileGeneration.claimCount}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF9A7B46),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    ProfileGenerateButton(onGenerateProfile, running = false)
+                }
+                is com.clawmate.app.datamanager.ProfileGenerationState.Error -> {
+                    Text(
+                        profileGeneration.userMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFC2564E),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    ProfileGenerateButton(onGenerateProfile, running = false)
+                }
+                is com.clawmate.app.datamanager.ProfileGenerationState.NotConfigured -> {
+                    Text(
+                        "尚未配置云端模型，可生成本地画像",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF9A7B46),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    ProfileGenerateButton(onGenerateProfile, running = false)
+                }
+                is com.clawmate.app.datamanager.ProfileGenerationState.NoData -> {
+                    Text(
+                        "日记数据还不足以生成画像",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF9A7B46),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                com.clawmate.app.datamanager.ProfileGenerationState.Idle -> {
+                    ProfileGenerateButton(onGenerateProfile, running = false)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileGenerateButton(
+    onGenerateProfile: () -> Unit,
+    running: Boolean,
+) {
+    Button(
+        onClick = onGenerateProfile,
+        enabled = !running,
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE7A63C)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    ) {
+        Text("生成画像", fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 

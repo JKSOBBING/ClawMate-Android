@@ -18,12 +18,18 @@ import com.clawmate.app.home.recommendation.HomeRecommendationRepository
  * An optional [dailyLogSource] (Phase 29) contributes real app-private daily-log
  * entries to that same explicit generation (read only on button tap, never on
  * Home load/recomposition/background).
+ *
+ * An optional [profileGenerationRepository] (Phase 32) backs the explicit
+ * "生成画像" button; it reads real app-private indexed events (local-only when
+ * unconfigured, model-backed otherwise) and is only invoked on the explicit
+ * button tap — never at launch/recomposition/background.
  */
 class HomeViewModelFactory(
     private val homeRecRepository: HomeRecRepository,
     private val profileSource: HomeProfileSource,
     private val galleryItemsSource: (suspend () -> List<GalleryPhotoItem>)? = null,
     private val dailyLogSource: (suspend () -> List<DailyLogEntry>)? = null,
+    private val profileGenerationRepository: com.clawmate.app.datamanager.ProfileGenerationRepository? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -33,6 +39,7 @@ class HomeViewModelFactory(
                 recommendationRepository = profileSource.recommendationRepository,
                 galleryItemsSource = galleryItemsSource,
                 dailyLogSource = dailyLogSource,
+                profileGenerationRepository = profileGenerationRepository,
                 profileLoader = { profileSource.load() },
             ) as T
         }

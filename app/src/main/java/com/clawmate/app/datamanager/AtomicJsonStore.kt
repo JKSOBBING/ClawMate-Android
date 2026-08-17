@@ -24,7 +24,15 @@ class AtomicJsonStore(
      */
     fun <T> writeJson(target: File, value: T, serializer: (T) -> String): File? {
         val text = runCatching { serializer(value) }.getOrNull() ?: return null
-        if (text.toByteArray().size.toLong() > maxFileBytes) return null
+        return writeText(target, text)
+    }
+
+    /**
+     * Write [text] atomically and size-bounded to [target]. Shared by the JSON
+     * writer and the bounded markdown writer (Phase-32 profile `profile.md`).
+     */
+    fun writeText(target: File, text: String, maxBytes: Long = maxFileBytes): File? {
+        if (text.toByteArray().size.toLong() > maxBytes) return null
         return runCatching {
             target.absoluteFile.parentFile?.mkdirs()
             val temp = File(target.absoluteFile.parentFile, ".${target.name}.tmp")
@@ -51,6 +59,13 @@ class AtomicJsonStore(
             val text = file.readText()
             deserialize(text)
         }.getOrNull()
+    }
+
+    /** Read a bounded text artifact; null when missing / oversized / corrupt. */
+    fun readText(target: File, maxBytes: Long = maxFileBytes): String? {
+        val file = target.absoluteFile
+        if (!file.isFile || file.length() > maxBytes) return null
+        return runCatching { file.readText() }.getOrNull()
     }
 
     private fun moveReplace(temp: File, target: File, backup: File) {
