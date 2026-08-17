@@ -116,6 +116,37 @@ build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`): a single bounded
 exact total is recorded in `DSH_PHASE_RESULT.md`). The new `log/` slice and the
 运行日志 Settings section are wired into the Settings center.
 
+**Phase 27 (explicit profile-affinity "同频报告") was executed in this worktree
+with the same toolchain (JDK 17.0.19, Android SDK platform 34, Gradle 8.9,
+`--no-daemon --max-workers=1`): `:app:testDebugUnitTest` with the focused
+`ProfileAffinityAnalyzerTest` **14 tests, 0 failures, 0 errors**.** This phase
+adds a real, explicit-user-action cloud report on top of the existing
+ProfileShareActivity import flow, faithfully porting the Harmony
+`runProfileShareAffinityAnalysis` / `buildProfileAffinityMessages` behaviour to
+the shared OpenAI-compatible Planner chat backend — while preserving every
+safety boundary:
+
+- **Typed config gate.** `ProfileAffinityConfig.fromEndpointConfig()` returns
+  null unless the Planner base URL + API key + model are all configured and the
+  URL normalizes to a usable endpoint, so no network call can ever fire without
+  credentials.
+- **Explicit button only.** The report is generated **only** from the explicit
+  "生成同频报告" button after a successful import — never on launch or
+  automatically post-import.
+- **Two bounded profile texts only.** The two-message prompt carries only the
+  local profile summary (`buildLocalAffinityProfileText`, `shortSummary`-based,
+  capped at `MAX_PROFILE_INPUT_CHARACTERS`) and the imported remote profile
+  text (also capped by `limitProfileText`); source URIs, tokens, and unrelated
+  local data are never transmitted.
+- **Output bounded + errors redacted.** `MAX_REPORT_CHARACTERS` caps the report;
+  `SensitiveLogRedactor` scrubs `sk-*`/`Bearer`/keys from error paths; typed
+  `ProfileAffinityException` reasons surface honest user-facing messages.
+- **Lifecycle cancellation.** `onDestroy` cancels the in-flight coroutine and
+  dismisses the dialog.
+- **No new credentials, no Runtime.exec/ProcessBuilder/adb/hdc/coordinate GUI
+  automation;** existing `ChatCompletionsClient` behaviour is unchanged. See
+  `DSH_PHASE_RESULT.md` for the focused test command and results.
+
 **Phase 26 (status-only live agent-status overlay) was executed in this
 worktree with the same toolchain and a single Gradle worker
 (`--no-daemon --max-workers=1`).** The overlay migration becomes materially
@@ -600,6 +631,45 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 ---
 
 ## 8. Changelog
+
+- **Phase 27 (this phase):** Explicit profile-affinity "同频报告" ported to the
+  Android target. After a `.mobi-profile` share is imported into the local avatar
+  profile, the import dialog offers an explicit **"生成同频报告"** button that
+  calls the shared OpenAI-compatible Planner chat backend with a faithful
+  two-message prompt carrying only the two **bounded** profile texts
+  (`MAX_PROFILE_INPUT_CHARACTERS` per profile), `temperature = 0.2`,
+  `maxTokens = 2048`, mirroring Harmony `runProfileShareAffinityAnalysis`. The
+  returned Markdown report is bounded by `MAX_REPORT_CHARACTERS`; error paths are
+  redacted via `SensitiveLogRedactor` and mapped to typed, user-safe reasons. The
+  `ProfileAffinityConfig.fromEndpointConfig()` gate returns null when the
+  Planner backend is not configured (no call ever fires). The report is never
+  generated automatically and only after the explicit user action; `onDestroy`
+  cancels the in-flight coroutine. Reuses the existing Planner chat config/URL/
+  key/model — **no new credentials**, no hard-coded endpoints, no
+  Runtime.exec/ProcessBuilder/adb/hdc, no coordinate GUI automation, and the
+  existing `ChatCompletionsClient` behaviour is unchanged.
+  - **`profile/affinity/ProfileAffinityTypes.kt`** — `ProfileAffinityConfig`
+    (validated config gate over `EndpointConfig`), `ProfileAffinityBounds`
+    (`MAX_PROFILE_INPUT_CHARACTERS`, `MAX_REPORT_CHARACTERS`),
+    `ProfileAffinityErrorReason`, typed `ProfileAffinityException`
+    (secret-redacted `message`, honest `userMessage`), `ProfileAffinityResult`,
+    and `buildLocalAffinityProfileText` (bounded, deterministic local profile
+    summary built from `LocalAvatarProfile.shortSummary`).
+  - **`profile/affinity/ProfileAffinityAnalyzer.kt`** — builds the exact
+    two-message prompt, caps both profile inputs, calls `ChatClient.completion`,
+    enforces the report bound, and maps `ChatException` to typed reasons.
+  - **`profile/affinity/ProfileAffinityFactory.kt`** — minimal manual factory that
+    wraps the real `ChatCompletionsClient` (same OkHttp construction as chat) with
+    no hard-coded endpoint/secret; tests inject a fake `ChatClient`.
+  - **`profile/ProfileShareActivity.kt`** (mod) — retains the imported local/remote
+    profile facts, adds the explicit "生成同频报告" action, bounded success/failure
+    dialogs and a retry path, plus `onDestroy` lifecycle cancellation.
+  - **`profile/affinity/ProfileAffinityAnalyzerTest.kt`** — 14 device-free tests
+    (config gate, two-message prompt with no URI/key, temperature/maxTokens,
+    input/output bounds, empty/error mapping, factory wiring). The
+    `buildLocalAffinityProfileText` fixture was corrected to mirror a real local
+    profile (only `shortSummary` populated, `summary` blank) so it verifies the
+    real production fallback instead of shadowing it.
 
 - **Phase 22 (this phase):** Real but tightly controlled AccessibilityService
   action executor for the safe semantic allowlist (row B1). Android finally
