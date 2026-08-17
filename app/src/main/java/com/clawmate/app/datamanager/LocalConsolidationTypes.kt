@@ -30,7 +30,24 @@ object LocalConsolidationTypes {
         const val EVENT_PARTITION_V1: String = "datamanager-event-partition-index-local-v1"
         const val EVENT_MANIFEST_V1: String = "datamanager-event-manifest-local-v1"
         const val TEMPORAL_V1: String = "datamanager-temporal-local-v1"
+        const val WORKFLOW_SCENE_INDEX_V1: String = "datamanager-workflow-scene-index-local-v1"
+        const val ENTITY_INDEX_V1: String = "datamanager-entity-index-local-v1"
     }
+
+    /**
+     * One typed entity mention found on a real event (mirrors Harmony
+     * `EntityMention`, reduced to the three indexed types `person`/`place`/
+     * `merchant`). Only these tokens are ever admitted into the entity index;
+     * `name`/`aliases` are bounded real text extracted from an event, never a
+     * fabricated value. Unknown types, empty names and over-long fields are
+     * dropped by the conservative entity resolver / builder.
+     */
+    @Serializable
+    data class EntityMention(
+        @SerialName("type") val type: String = "",
+        @SerialName("name") val name: String = "",
+        @SerialName("aliases") val aliases: List<String> = emptyList(),
+    )
 
     /**
      * One consolidated record (mirrors Harmony `AggregatedRecord`). `record_id`
@@ -48,6 +65,7 @@ object LocalConsolidationTypes {
         @SerialName("normalized_fact") val normalizedFact: String = "",
         @SerialName("raw_excerpts") val rawExcerpts: List<String> = emptyList(),
         @SerialName("tags") val tags: List<String> = emptyList(),
+        @SerialName("workflow_scene_ids") val workflowSceneIds: List<Int> = emptyList(),
         @SerialName("dedup_status") val dedupStatus: String = "new",
         @SerialName("dedup_text") val dedupText: String = "",
     )
@@ -93,6 +111,8 @@ object LocalConsolidationTypes {
         @SerialName("tags") val tags: List<String> = emptyList(),
         @SerialName("source_refs") val sourceRefs: List<String> = emptyList(),
         @SerialName("sources") val sources: List<String> = listOf("DailyLog"),
+        @SerialName("workflow_scene_ids") val workflowSceneIds: List<Int> = emptyList(),
+        @SerialName("entity_mentions") val entityMentions: List<EntityMention> = emptyList(),
     )
 
     /** Month-partitioned index artifact (mirrors Harmony `EventPartition`). */

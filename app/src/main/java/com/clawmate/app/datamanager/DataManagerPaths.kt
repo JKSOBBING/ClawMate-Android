@@ -43,6 +43,11 @@ object DataManagerPaths {
     const val PROFILE_STATE_FILE_NAME: String = "state.json"
     const val PROFILE_MARKDOWN_FILE_NAME: String = "profile.md"
 
+    const val WORKFLOW_SCENE_DIR_RELATIVE: String = "$INDEXES_ROOT_RELATIVE/workflow-scene"
+    const val WORKFLOW_SCENE_INDEX_FILE_NAME: String = "index.json"
+    const val ENTITY_DIR_RELATIVE: String = "$INDEXES_ROOT_RELATIVE/entity"
+    const val ENTITY_INDEX_FILE_NAME: String = "index.json"
+
     fun dailyLogRoot(baseDir: File): File = File(baseDir, DAILY_LOG_RELATIVE)
     fun outputsRoot(baseDir: File): File = File(baseDir, OUTPUTS_ROOT_RELATIVE)
     fun indexesRoot(baseDir: File): File = File(baseDir, INDEXES_ROOT_RELATIVE)
@@ -57,6 +62,18 @@ object DataManagerPaths {
 
     /** Bounded rendered markdown: `indexes/profile/profile.md`. */
     fun profileMarkdown(baseDir: File): File = File(profileDir(baseDir), PROFILE_MARKDOWN_FILE_NAME)
+
+    /** Workflow-scene subtree: `indexes/workflow-scene/`. */
+    fun workflowSceneDir(baseDir: File): File = File(baseDir, WORKFLOW_SCENE_DIR_RELATIVE)
+
+    /** Persisted workflow-scene index: `indexes/workflow-scene/index.json`. */
+    fun workflowSceneIndex(baseDir: File): File = File(workflowSceneDir(baseDir), WORKFLOW_SCENE_INDEX_FILE_NAME)
+
+    /** Entity subtree: `indexes/entity/`. */
+    fun entityDir(baseDir: File): File = File(baseDir, ENTITY_DIR_RELATIVE)
+
+    /** Persisted entity index: `indexes/entity/index.json`. */
+    fun entityIndex(baseDir: File): File = File(entityDir(baseDir), ENTITY_INDEX_FILE_NAME)
 
     fun stateIndex(baseDir: File): File = File(outputsRoot(baseDir), STATE_INDEX_FILE_NAME)
     fun partitionIndex(baseDir: File): File = File(eventsDir(baseDir), PARTITION_INDEX_FILE_NAME)

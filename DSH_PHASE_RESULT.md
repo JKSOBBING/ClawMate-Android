@@ -1,152 +1,126 @@
-# DSH_PHASE_RESULT — ClawMate Android, Phase 32 (profile index / claims foundation)
+# DSH_PHASE_RESULT — ClawMate Android, Phase 33 (workflow-scene + entity index/resolver foundation)
 
 ## Commit
 
-- Working against base `741b248` (Phase 31). The changes are exported as a real
-  diff in `/root/phase32.patch` (paths `a/ClawMate-Android/…` `b/ClawMate-Android/…`).
+- Working against base `83366b5` (Phase 32) in worktree `/root/phase33-worktree`.
+  The changes are exported as a real, reviewable diff in `/root/phase33.patch`
+  (paths `a/ClawMate-Android/…` `b/ClawMate-Android/…`), applying cleanly from
+  `/root` with `git apply -p1`.
+- Base repo `/root/ClawMate-Android` and Harmony reference `/root/mobiinfra-oh`
+  are read-only: **neither was modified**. All edits live in the phase-33 worktree.
 
 ## Context / provenance
 
-Phase 32 migrates the Harmony **profile index / claims** part of the data-manager
-pipeline (`IndexService.buildProfileDocument` / `DataManagerTypes` profile types /
-`deriveProfileDomains`) to Android, **on top of, and without repeating, the
-Phase-31 NFC adapter**. It reads the Phase-30 event partitions
-(`indexes/events/<month>.json`), aggregates the events into the four persona
-domains (`eat`/`wear`/`live`/`travel`) by deterministic literal evidence, and
-materialises a typed profile into
-`workflows/profile-consolidation/indexes/profile/state.json` plus a bounded
-`profile.md`.
+Phase 33 ports Harmony `IndexService.buildWorkflowSceneDocument` and the
+deterministic (local) half of `IndexService.buildEntityDocument`
+(`entity/index.json`, alias postings, mention assignments, `ENTITY_TYPE_KEYS`) to
+Android, **on top of, without repeating, Phase 32** (profile/claims) or Phase 31
+(NFC). It:
 
-No fabrication: claims only ever reference real indexed event ids and pass strict
-bounds/whitelist validation; with no model config a local-only run carries empty
-claims and is honestly typed `NOT_CONFIGURED`/`LOCAL_ONLY`. A model failure
-preserves the deterministic local result (typed PARTIAL/ERROR) and never
-overwrites a valid persisted model state. All activity is explicit-user-triggered.
+1. propagates real `workflow_scene_ids` from the daily-log `task_scene_id`
+   metadata through the Phase-30 consolidation into indexed events (backward
+   compatible with old Phase-30 artifacts);
+2. builds `workflows/profile-consolidation/indexes/workflow-scene/index.json`
+   (`postings: sceneId -> stable event ids`) from those real scene ids;
+3. builds `workflows/profile-consolidation/indexes/entity/index.json` (canonical
+   entities person/place/merchant, aliases, event ids, alias postings, mention
+   assignments) via a deterministic **local-only** resolver from real event
+   mentions + conservative labelled-name extraction — no fabricated entities;
+4. exposes the single explicit, testable rebuild (`EntitySceneIndexRunner`) that
+   atomically writes exactly the two artifacts and never touches profile
+   `state.json`/`profile.md` or Home data.
 
-The Harmony code is read-only reference (`/root/mobiinfra-oh` was **not**
-modified).
+The Harmony code is read-only reference (/root/mobiinfra-oh was **not** modified).
 
 ## Files changed
 
 New production files (`app/src/main/java/com/clawmate/app/datamanager/`):
 
-- `ProfileTypes.kt` — profile state/domain/claim/model-payload models, four-domain
-  keys + display names, strict bounds, generation tokens + `local_only`, typed
-  `ProfileBuildStatus` and `ProfileBuildResult`.
-- `ProfileDomainUtils.kt` — four-domain evidence rules + `deriveProfileDomains`,
-  `domainInputHash`, `dateRange`, `deriveLocalSummary`.
-- `ProfileCodec.kt` — tolerant profile JSON serde.
-- `ProfileIndexBuilder.kt` — loads real events, projects domains, builds
-  `ProfileState` (`buildProfileDocument` contract), renders bounded markdown,
-  writes state.json + profile.md atomically.
-- `ProfileModelConfig.kt` — typed config gated by the shared OpenAI Planner
-  `EndpointConfig`; plus `ProfileModelValidator` (strict JSON decode + whitelist +
-  evidence-reference) and `ProfileCodecModelJson`.
-- `ProfileModelClient.kt` — per-domain model generation via the existing
-  `ChatCompletionsClient` (bounded real event text only), with strict validation
-  and typed `DomainUpgrade`.
-- `ProfileIndexRunner.kt` — local-only when unconfigured, model-backed when
-  configured, deterministic-reuse, preserves local projection on failure.
-- `ProfileGenerationTypes.kt` / `RealProfileGenerationRepository.kt` — the
-  explicit "生成画像" Home seam and typed lifecycle state.
-
-New production files in the Home layer:
-
-- `app/src/main/java/com/clawmate/app/home/domain/ProfileIndexBlender.kt` —
-  local-first display blend (user-curated domain wins; un-populated pillars filled
-  from bounded index summary/claims + real evidence ids; never writes back).
-- `app/src/main/java/com/clawmate/app/home/data/ProfileIndexHomeProfileSource.kt`
-  — reads persisted profile state + curated profile and blends into Home.
+- `EntitySceneIndexTypes.kt` — `WorkflowSceneDocument` (`schema`/`generated_at`/
+  `postings`), `EntityDocument`/`EntityDefinition`, `SceneEntityIndexResult`,
+  typed `EntityResolutionStatus`.
+- `EntitySceneCodec.kt` — tolerant, bounded serde for the scene + entity artifacts.
+- `SceneEntityNormalizer.kt` — `normalizeSceneId/Ids` (incl. legacy 7→1),
+  `normalizeEntityName`, `entityLookupKey/entityDisplayKey/lookupText`,
+  `normalizeEntityMentions`, conservative `deriveRuleEntities`, `uniqueEntityNames`.
+- `WorkflowSceneIndexBuilder.kt` — build+persist `workflow-scene/index.json`.
+- `EntityResolver.kt` — deterministic local resolution (typed value-overlap merge).
+- `EntitySceneIndexBuilder.kt` — collect event mentions (+ conservative extraction),
+  resolve and persist `entity/index.json`.
+- `EntitySceneIndexRunner.kt` — single explicit rebuild entry (reads event
+  partitions, atomic two-artifact write, model gate).
+- `EntityModelConfig.kt` — `EntityModelBoundary` typed model gate (blocked /
+  not-configured / configured) reusing `ProfileModelConfig`.
 
 Modified production files:
 
-- `app/src/main/java/com/clawmate/app/datamanager/DataManagerPaths.kt` — profile
-  subtree (`indexes/profile/state.json`, `indexes/profile/profile.md`).
-- `app/src/main/java/com/clawmate/app/datamanager/AtomicJsonStore.kt` — added
-  bounded `writeText` / `readText`.
-- `app/src/main/java/com/clawmate/app/home/ui/HomeViewModel.kt` —
-  `profileGeneration` state + explicit `generateProfile()` (refreshes home profiles
-  after a successful build).
-- `app/src/main/java/com/clawmate/app/home/ui/HomeViewModelFactory.kt` — injects
-  the profile-generation repository.
-- `app/src/main/java/com/clawmate/app/home/ui/HomeScreen.kt` — explicit "生成画像"
-  section + button (running / local-only success / model success / partial /
-  not-configured / error).
-- `app/src/main/java/com/clawmate/app/home/domain/HomeDomain.kt` — `evidenceIds`
-  field on the Home pillar card (display-only).
-- `app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt` — wires
-  `RealProfileGenerationRepository` + `ProfileIndexHomeProfileSource`.
+- `LocalConsolidationTypes.kt` — `IndexedEvent.workflow_scene_ids` +
+  `entity_mentions`, `ConsolidatedRecord.workflow_scene_ids`, new
+  `EntityMention` model, scene/entity schema constants (all with backward-compatible
+  defaults so old artifacts decode honestly).
+- `ConsolidationEngine.kt` — `CandidateFact.workflowSceneId` read from
+  `task_scene_id` metadata; records now carry deduped/sorted real scene ids.
+- `ConsolidationCodec.kt` — `rebindRecords` normalizes `workflow_scene_ids`.
+- `IndexService.kt` — event projection now includes `workflow_scene_ids`.
+- `DataManagerPaths.kt` — `workflowSceneIndex` + `entityIndex` paths.
 
-## New test files
+## New test file
 
-- `app/src/test/java/com/clawmate/app/datamanager/ProfileIndexTest.kt` — **19
-  focused, offline JVM tests** over temp dirs exercising the real Phase-30 → 32
-  pipeline: empty/no-index → zero network + no artifact + no pseudo claims; no
-  events → no model call even when configured; four-domain mapping (incl. no
-  `work`/`other` leakage); real date ranges + evidence ids; repeated-run stability;
-  model-claim reuse + fresh-failure typed ERROR with local preserved; strict model
-  validation (unknown kind / low-confidence / unknown evidence / <2 evidence /
-  over-length / event-detail / malformed JSON); unconfigured zero-call local-only;
-  corrupt + oversized artifact recovery; bounded markdown; pure
-  `deriveProfileDomains`; `ProfileGenerationStateMapper` honesty.
-- `app/src/test/java/com/clawmate/app/home/ProfileIndexBlenderTest.kt` — **4 tests**:
-  user-populated domain preserved verbatim (local-first), empty domain filled from
-  real index summary/claims/evidence, no data → honest empty with no fabricated
-  claims, and four-domain bounded import only.
-- `app/src/test/java/com/clawmate/app/home/ProfileGenerationViewModelTest.kt` —
-  **3 tests**: no-repo disabling error, explicit generate surfaces a successful
-  state, and profile generation is never invoked on load.
+- `app/src/test/java/com/clawmate/app/datamanager/EntitySceneIndexTest.kt` —
+  **17 focused, offline JVM tests** over temp dirs: empty input → zero network +
+  no artifacts; events without scene/mentions never auto-create; multi-scene
+  postings (dedup + sorted stable ids); rerun stability; same-type alias merge;
+  different-type no-merge; unknown/empty/over-long dropped; corrupt + oversized
+  artifact recovery; old Phase-30 artifact backward compatibility; bounded JSON;
+  conservative rule extraction (no pseudo/log-segment entities); model gate
+  (BLOCKED/NOT_CONFIGURED/CONFIGURED); runner-with-configured-model still local +
+  zero network; runner never creates profile/Home artifacts; real `task_scene_id`
+  → scene-index propagation through the Phase-30 pipeline; legacy 7→1 scene map.
 
 ## Verification (serial, `--offline --no-daemon --max-workers=1`)
 
 Toolchain: JDK 17.0.19, Android SDK platform 34 at `/opt/deepseek-harness/android-sdk`
 (via `local.properties` `sdk.dir`), Gradle 8.9.
 
-1. Focused new tests:
-
-```
-./gradlew --offline --no-daemon --max-workers=1 :app:testDebugUnitTest \
-    --tests "com.clawmate.app.datamanager.ProfileIndexTest" \
-    --tests "com.clawmate.app.home.ProfileIndexBlenderTest" \
-    --tests "com.clawmate.app.home.ProfileGenerationViewModelTest"
-```
-Result: `BUILD SUCCESSFUL` — **tests=19+4+3=26, failures=0, errors=0**.
-
-2. Full unit suite: `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`, **113 test
-   classes / 858 tests, 0 failures, 0 errors, 0 skipped** (aggregated from the
-   `app/build/test-results/testDebugUnitTest/TEST-*.xml` reports; baseline Phase-31
-   was 110 classes / 832 tests, this phase adds 3 classes / 26 tests).
-
-3. Build: `:app:assembleDebug` — `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/app-debug.apk`
+1. Focused new tests: `:app:testDebugUnitTest --tests EntitySceneIndexTest`
+   — `BUILD SUCCESSFUL`, **tests=18, failures=0, errors=0**.
+2. Existing datamanager suites (`ProfileIndexTest`, `LocalConsolidationTest`,
+   `FileDailyLogEventSourceTest`, etc.) — `BUILD SUCCESSFUL`, 0 failures.
+3. Full unit suite: `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`, **114 test
+   classes / 875 tests, 0 failures, 0 errors, 0 skipped** (aggregated from the
+   `app/build/test-results/testDebugUnitTest/TEST-*.xml` reports; the Phase-32
+   baseline was 113 classes / 858 tests, this phase adds 1 class / 17 tests).
+4. Build: `:app:assembleDebug` — `BUILD SUCCESSFUL`; `app/build/outputs/apk/debug/app-debug.apk`
    produced.
+5. `git diff --check` — clean (no whitespace errors).
 
 ## Safety
 
-- **Zero network unless configured and real events exist.** No model config or no
-  indexed events → typed local result, no request.
-- **No fabricated claims.** Local-only runs carry empty claims (LOCAL_ONLY); model
-  claims are admitted only when they reference real indexed event ids and pass
-  every bound (kind/confidence whitelist, lengths, count, min evidence).
-- **Model failure preserves determinism.** Returns typed PARTIAL/ERROR and never
-  overwrites a previously persisted valid model state; the deterministic local
-  projection is kept.
-- **Explicit user action only.** The Home "生成画像" button is the only entry and is
-  never invoked at launch / recomposition / background / normal Home load.
-- **Corrupt/oversized artifacts recover honestly** (to empty/local), never falsify a
-  run.
-- **Local-first Home integration.** `ProfileIndexBlender` fills only un-populated
-  pillars from bounded index summary/claims + real evidence ids; a user's curated
-  domain is preserved verbatim; no URI / image / token / unrelated data is imported.
-- No new credentials, no NFC changes (Phase 31 NFC behaviour is untouched), no
-  `Runtime.exec`/ProcessBuilder/adb/hdc/coordinate GUI automation.
+- **Zero network by default.** Android's entity path is deterministic local-only;
+  a model call is only ever invited by an explicit, fully-configured,
+  user-triggered index/enrichment action (`EntityModelBoundary.gate`) — never on
+  Home launch/load, and never with missing config or no real mentions.
+- **No fabricated entities.** Only real event mention tokens or conservative
+  labelled-name extractions are admitted; unknown types / empty / over-long /
+  URI / image / token / whole-log-segment are dropped.
+- **Scene ids come from real events** (`task_scene_id` metadata), never invented.
+- **Backward compatible** with old Phase-30 event partitions (new fields default
+  to empty on tolerant decode).
+- **Bounded + atomic** scene/entity artifacts; corrupt / oversized recover to an
+  honest empty document (never thrown / never falsified). `EntitySceneIndexRunner`
+  writes only the two artifacts and preserves profile state / `profile.md` / Home
+  data unchanged.
+- No new credentials, no NFC changes (Phase-31 behaviour untouched), no
+  `Runtime.exec`/adb/hdc/coordinate GUI automation, no external-storage scanning.
 
 ## Remaining (honestly not ported / not fully equivalent)
 
 - **Periodic scheduling** of consolidation/index/profile rebuild (no WorkManager /
   background job; explicit user action only).
-- **Full cloud consolidation / model-based dedup / enrichment** (Harmony uses the
-  cloud client for split/dedup/enrich; Phase 32 remains deterministic-local for
-  projection, with only claims generation using the model).
-- **`workflow_scene_id` enrichment** and the **entity resolver**
-  (`entity/index.json`, `entityMatchIds`, alias postings) — not ported; claims rely
-  on literal four-domain text evidence only.
+- **Full cloud consolidation / model-based dedup** and the **model-backed entity
+  resolution/enrichment path** (Harmony uses the cloud model client; Android keeps
+  the deterministic local resolver + typed model gate with **no network-invoked
+  calls by default**).
+- **`workflow_scene_id` enrichment** (per-event scene labels / reweighting) is not
+  yet surfaced into query/recommendation surfaces — Phase 33 persists the scene
+  postings only.

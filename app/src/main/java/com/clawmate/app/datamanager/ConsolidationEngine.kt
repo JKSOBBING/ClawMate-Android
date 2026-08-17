@@ -35,6 +35,8 @@ object ConsolidationEngine {
         val sourceRef: String,
         val sourceDate: String,
         val dedupText: String,
+        /** Real workflow scene id read from the entry's `task_scene_id` metadata (-1 when none). */
+        val workflowSceneId: Int = -1,
     )
 
     /**
@@ -124,6 +126,7 @@ object ConsolidationEngine {
     private fun heuristicSplit(entry: DailyLogEntry): List<CandidateFact> {
         val text = ConsolidationText.normalizeFreeText(entry.text)
         if (text.isEmpty()) return emptyList()
+        val sceneId = sceneIdFromMetadata(entry.workflowMetadata)
         val atomic = extractAtomicClauses(text)
         if (atomic.isNotEmpty()) {
             return atomic.map { part ->
@@ -137,6 +140,7 @@ object ConsolidationEngine {
                     sourceRef = entry.sourceRef,
                     sourceDate = entry.sourceDate,
                     dedupText = ConsolidationText.normalizeDedupText(normalized),
+                    workflowSceneId = sceneId,
                 )
             }
         }
@@ -150,8 +154,16 @@ object ConsolidationEngine {
                 sourceRef = entry.sourceRef,
                 sourceDate = entry.sourceDate,
                 dedupText = ConsolidationText.normalizeDedupText(text),
+                workflowSceneId = sceneId,
             ),
         )
+    }
+
+    /** Read a real `task_scene_id` from the flat workflow metadata (port of Harmony `workflowSceneIdFromMetadata`). */
+    private fun sceneIdFromMetadata(metadata: Map<String, String>): Int {
+        val raw = metadata["task_scene_id"] ?: return -1
+        val value = raw.trim().toIntOrNull() ?: return -1
+        return value
     }
 
     /** Port of `extractAtomicClauses`: best-effort clause splitting with guards. */
@@ -252,6 +264,9 @@ object ConsolidationEngine {
             summary = ConsolidationText.summarizeText(fact.summary.ifEmpty { fact.normalizedFact })
         }
         var tags = ConsolidationText.stableUnique(record.tags + fact.tags)
+        val sceneIds = SceneEntityNormalizer.normalizeSceneIds(
+            record.workflowSceneIds + if (fact.workflowSceneId >= 0) listOf(fact.workflowSceneId) else emptyList(),
+        )
         var dedupStatus = record.dedupStatus
         if (dedupStatus != "duplicate") dedupStatus = "merged"
         return record.copy(
@@ -262,6 +277,7 @@ object ConsolidationEngine {
             normalizedFact = normalizedFact,
             summary = summary,
             tags = tags,
+            workflowSceneIds = sceneIds,
             dedupStatus = dedupStatus,
         )
     }
@@ -277,6 +293,7 @@ object ConsolidationEngine {
             normalizedFact = ConsolidationText.normalizeFreeText(fact.normalizedFact),
             rawExcerpts = listOf(fact.rawExcerpt),
             tags = ConsolidationText.stableUnique(fact.tags),
+            workflowSceneIds = if (fact.workflowSceneId >= 0) listOf(fact.workflowSceneId) else emptyList(),
             dedupStatus = "new",
             dedupText = fact.dedupText,
         )

@@ -55,6 +55,7 @@ class IndexService(
                     tags = ConsolidationText.stableUnique(record.tags),
                     sourceRefs = ConsolidationText.stableUnique(record.sourceRefs),
                     sources = eventSourceNames(record.sourceRefs),
+                    workflowSceneIds = SceneEntityNormalizer.normalizeSceneIds(record.workflowSceneIds),
                 )
             }
             events += stateEvents
