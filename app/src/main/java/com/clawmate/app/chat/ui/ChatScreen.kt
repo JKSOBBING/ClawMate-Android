@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -52,8 +53,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageRole
 import com.clawmate.app.chat.model.ChatSession
+import com.clawmate.app.chat.model.AttachmentSource
+import com.clawmate.app.chat.model.PendingChatAttachment
+import com.clawmate.app.chat.model.PendingAttachmentState
 import com.clawmate.app.chat.voice.VoiceInteractionStatus
 import com.clawmate.app.chat.voice.VoiceSessionSnapshot
+import com.clawmate.app.gallery.photo.PickResult
+import com.clawmate.app.gallery.photo.rememberPhotoPicker
 
 /**
  * Compose chat screen for the cloud-model vertical slice (Phase 2) extended
@@ -101,6 +107,28 @@ fun ChatScreen(context: android.content.Context) {
             vm.beginVoiceInput()
         }
     }
+
+    // Phase 45 — image attachment selection. Reuses the existing least-privilege
+    // Android Photo Picker (each picked URI is read with an explicit grant; no
+    // broad storage permission is requested). Picking is strictly user-triggered;
+    // nothing is uploaded here. The picked content URIs are held in memory only
+    // as opaque references (see ChatAttachmentPolicy) and are never written into
+    // logs or the model context.
+    val remainingSlots = (com.clawmate.app.chat.model.CHAT_IMAGE_ATTACHMENT_MAX_COUNT -
+        state.pendingAttachments.size).coerceAtLeast(0)
+    val pickImages = rememberPhotoPicker(
+        maxSelectNumber = remainingSlots.coerceAtLeast(1),
+        onResult = { result ->
+            when (result) {
+                is PickResult.Picked -> vm.addPendingAttachments(
+                    uris = result.uris.map { it.toString() },
+                    source = AttachmentSource.ALBUM,
+                )
+                is PickResult.Cancelled -> Unit // no-op; composer unchanged
+                is PickResult.Unavailable -> vm.showAttachmentNote(result.reason.ifEmpty { "系统相册选择器不可用。" })
+            }
+        },
+    )
 
     // Auto-scroll to the newest message while streaming.
     LaunchedEffect(state.messages.size, state.isSending) {
@@ -164,6 +192,7 @@ fun ChatScreen(context: android.content.Context) {
             VoiceStatusBanner(voice.session)
 
             if (state.isConfigured) {
+                AttachmentNoteBanner(state.attachmentNote)
                 InputBar(
                     value = state.inputText,
                     onChange = vm::onInputChange,
@@ -173,6 +202,11 @@ fun ChatScreen(context: android.content.Context) {
                         if (voice.asrRecordPermissionGranted) vm.beginVoiceInput()
                         else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     },
+                    pendingAttachments = state.pendingAttachments,
+                    onAttachClicked = {
+                        if (!state.isSending && remainingSlots > 0) pickImages()
+                    },
+                    onRemoveAttachment = vm::removePendingAttachment,
                 )
             } else {
                 MissingConfigPane()
@@ -482,35 +516,105 @@ private fun InputBar(
     onSend: () -> Unit,
     sending: Boolean,
     onMicClicked: () -> Unit,
+    pendingAttachments: List<PendingChatAttachment>,
+    onAttachClicked: () -> Unit,
+    onRemoveAttachment: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Selected image attachments (in-memory projection). Each shows only its
+        // source label — never the underlying content URI or any path.
+        if (pendingAttachments.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pendingAttachments.forEach { attachment ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = attachment.displayName,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                            if (attachment.state == PendingAttachmentState.UPLOAD_UNSUPPORTED) {
+                                Text(
+                                    text = "未上传",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                            }
+                            IconButton(
+                                onClick = { onRemoveAttachment(attachment.id) },
+                                enabled = !sending,
+                                modifier = Modifier.size(24.dp),
+                            ) {
+                                Icon(Icons.Filled.Close, contentDescription = "移除图片", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onChange,
+                enabled = !sending,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("输入消息…") },
+                maxLines = 4,
+            )
+            // Attach image(s): opens the system photo picker (user-triggered,
+            // least-privilege; no automatic upload). Kept selectable even for a
+            // pure-image message so `发送` can surface the honest unsupported state.
+            IconButton(
+                onClick = onAttachClicked,
+                enabled = !sending,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "添加图片")
+            }
+            // Voice input (on-device ASR). First tap requests RECORD_AUDIO; once
+            // granted it starts the recognizer. No mic is opened until granted.
+            IconButton(
+                onClick = onMicClicked,
+                enabled = !sending,
+            ) {
+                Icon(Icons.Filled.Mic, contentDescription = "语音输入")
+            }
+            Button(
+                onClick = onSend,
+                enabled = (value.isNotBlank() || pendingAttachments.isNotEmpty()) && !sending,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+            }
+        }
+    }
+}
+
+/** Honest, dismissible note about attachment status (e.g. unsupported upload / picker unavailable). */
+@Composable
+private fun AttachmentNoteBanner(message: String?) {
+    if (message.isNullOrBlank()) return
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+        shape = MaterialTheme.shapes.small,
     ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onChange,
-            enabled = !sending,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text("输入消息…") },
-            maxLines = 4,
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
-        // Voice input (on-device ASR). First tap requests RECORD_AUDIO; once
-        // granted it starts the recognizer. No mic is opened until granted.
-        IconButton(
-            onClick = onMicClicked,
-            enabled = !sending,
-        ) {
-            Icon(Icons.Filled.Mic, contentDescription = "语音输入")
-        }
-        Button(
-            onClick = onSend,
-            enabled = value.isNotBlank() && !sending,
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
-        }
     }
 }
 

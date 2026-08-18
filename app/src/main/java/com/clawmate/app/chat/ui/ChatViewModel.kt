@@ -4,10 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clawmate.app.chat.cloud.ChatErrorKind
 import com.clawmate.app.chat.cloud.ChatException
+import com.clawmate.app.chat.model.AttachmentSource
+import com.clawmate.app.chat.model.AttachmentUploadCapability
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageKind
 import com.clawmate.app.chat.model.ChatMessageRole
 import com.clawmate.app.chat.model.ChatSession
+import com.clawmate.app.chat.model.PendingChatAttachment
+import com.clawmate.app.chat.model.chatAttachmentSendPlan
+import com.clawmate.app.chat.model.toPendingAttachments
 import com.clawmate.app.chat.data.ChatRepository
 import com.clawmate.app.chat.data.ChatSendEvent
 import com.clawmate.app.chat.voice.ChatVoiceController
@@ -38,6 +43,18 @@ data class ChatUiState(
     val sessions: List<ChatSession> = emptyList(),
     /** Whether the session list / drawer is currently open. */
     val drawerOpen: Boolean = false,
+    /**
+     * Pending image attachments for the current composer turn (in-memory / UI
+     * projection only — never persisted to Room, and never written into the
+     * model context or cloud wire; see ChatAttachmentPolicy).
+     */
+    val pendingAttachments: List<PendingChatAttachment> = emptyList(),
+    /**
+     * Honest user-facing note about a just-attempted send. When the user sends
+     * with images but no real upload API exists, this carries the
+     * unsupported/local-only status instead of a fabricated network success.
+     */
+    val attachmentNote: String? = null,
 )
 
 /**
@@ -159,6 +176,8 @@ class ChatViewModel(
                     inputText = "",
                     error = null,
                     activeToolTrace = null,
+                    pendingAttachments = emptyList(),
+                    attachmentNote = null,
                 )
             }
             refreshSessions()
@@ -179,6 +198,8 @@ class ChatViewModel(
                         inputText = "",
                         error = null,
                         activeToolTrace = null,
+                        pendingAttachments = emptyList(),
+                        attachmentNote = null,
                     )
                 }
             }
@@ -212,6 +233,8 @@ class ChatViewModel(
                             messages = session.messages,
                             error = null,
                             activeToolTrace = null,
+                            pendingAttachments = emptyList(),
+                            attachmentNote = null,
                         )
                     }
                     refreshSessions()
@@ -223,6 +246,8 @@ class ChatViewModel(
                             messages = emptyList(),
                             error = null,
                             activeToolTrace = null,
+                            pendingAttachments = emptyList(),
+                            attachmentNote = null,
                         )
                     }
                     refreshSessions()
@@ -242,14 +267,106 @@ class ChatViewModel(
         _state.update { it.copy(inputText = text) }
     }
 
+    // ------------------------------------------------------------------
+    // Phase 45 — chat image attachment selection (in-memory/UI projection).
+    // ------------------------------------------------------------------
+
+    /**
+     * Adds normalized image attachments selected by the user (content URIs held
+     * as opaque references only). User-tap triggered by the UI's attach entry;
+     * nothing is uploaded here. Empty / normalised-to-empty results are no-ops.
+     */
+    fun addPendingAttachments(uris: List<String>, source: AttachmentSource) {
+        val existing = _state.value.pendingAttachments
+        val additions = toPendingAttachments(
+            ids = uris.indices.map { "pending-${System.nanoTime()}-$it" },
+            uris = uris,
+            source = source,
+        ).filter { newA ->
+            existing.none { (it.reference.toString() == newA.reference.toString()) }
+        }
+        if (additions.isEmpty()) return
+        _state.update {
+            it.copy(
+                pendingAttachments = (it.pendingAttachments + additions)
+                    .take(com.clawmate.app.chat.model.CHAT_IMAGE_ATTACHMENT_MAX_COUNT),
+                attachmentNote = null,
+            )
+        }
+    }
+
+    /** Removes one pending attachment by id (user dismisses a selected image). */
+    fun removePendingAttachment(id: String) {
+        _state.update {
+            it.copy(
+                pendingAttachments = it.pendingAttachments.filterNot { a -> a.id == id },
+                attachmentNote = null,
+            )
+        }
+    }
+
+    /** Clears all pending attachments (e.g. when starting/selecting a session). */
+    fun clearPendingAttachments() {
+        _state.update { it.copy(pendingAttachments = emptyList(), attachmentNote = null) }
+    }
+
+    /** Dismisses the attachment send-status note. */
+    fun clearAttachmentNote() {
+        _state.update { it.copy(attachmentNote = null) }
+    }
+
+    /** Surfaces an honest note (e.g. photo-picker unavailable) without a send. */
+    fun showAttachmentNote(message: String) {
+        _state.update { it.copy(attachmentNote = message) }
+    }
+
     /**
      * Sends the current input through [ChatRepository.sendMessage], streaming
      * the assistant reply into [ChatUiState.messages] as it arrives.
+     *
+     * Phase 45 — the send path first distinguishes plain-text from image
+     * attachment sends (ChatAttachmentPolicy). When the user sends with images
+     * but the app has no real upload / multimodal attachment API
+     * ([AttachmentUploadCapability.NONE]), the send is NOT performed over the
+     * network: a typed local-only/unsupported note is surfaced and the images
+     * stay pending — no fake network success. Plain-text sends are unchanged.
      */
     fun send() {
         val text = _state.value.inputText.trim()
-        if (text.isEmpty() || _state.value.isSending) return
+        val attachments = _state.value.pendingAttachments
+        val plan = chatAttachmentSendPlan(
+            text = text,
+            attachments = attachments,
+            capability = AttachmentUploadCapability.NONE,
+        )
 
+        // Plain text with no images -> existing behavior unchanged.
+        if (plan is com.clawmate.app.chat.model.AttachmentSendPlan.TextOnly) {
+            if (text.isEmpty() || _state.value.isSending) return
+            sendText(text)
+            return
+        }
+
+        // Image send with no upload API -> honest local-only/unsupported note.
+        if (plan is com.clawmate.app.chat.model.AttachmentSendPlan.LocalOnlyUnsupported) {
+            if (_state.value.isSending) return
+            _state.update {
+                it.copy(
+                    pendingAttachments = plan.attachments,
+                    attachmentNote = "图片附件上传尚未接入云端多模态接口，本次发送保持本地待发送状态。若想继续对话，请先移除图片。",
+                )
+            }
+            return
+        }
+
+        // Forward-looking: a real upload API. Not reachable with NONE (today).
+        // Defensive: fall back to the plain-text send so a future flip that
+        // cannot attach images still never fabricates an image upload.
+        if (text.isEmpty() || _state.value.isSending) return
+        sendText(text)
+    }
+
+    private fun sendText(text: String) {
         sendingJob?.cancel()
         sendingJob = viewModelScope.launch {
             _state.update { it.copy(isSending = true, error = null, agentRunning = true) }
