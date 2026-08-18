@@ -791,6 +791,21 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
      the `PeriodicTriggerAdapter`/`SchedulingPolicy` contract stays the replaceable
      seam and no `Worker`/`PeriodicWorkRequest` was fabricated. All model/background
      paths remain explicit-action-only and default-disabled.
+- **Phase 39 (this phase):** Closes the last Phase-38 functional gap by folding the
+  persisted batch event-enrichment fields into the **Home planner's actual input
+  chain**, so it consumes the enriched `IndexedEvent` keywords/domains/todo (not just
+  making them query-visible). `DailyLogEnrichmentResolver` bridges a raw
+  `DailyLogEntry.sourceRef` → overlaid `IndexedEvent` (via `ProfileIndexBuilder
+  .loadEvents`, which already runs the Phase-38 overlay), producing bounded planner
+  enrich fields; `GalleryBackedHomeRecommendationRepository` overlays them onto the
+  daily-log planner events by the real sourceRef (the plan's `eventId`) before the
+  model call, using the existing `HomeRecommendationPlanner` shape. Old behaviour is
+  preserved with no artifact / corrupt artifact / unmatched or blank-fields event; a
+  model-produced unknown id can never reach Home (strict real-id lookup). The model
+  boundary is unchanged: enrichment is persisted only by an explicit Settings action
+  and Home merely reads the artifact on the explicit「生成推荐」button — never on
+  launch / recomposition / background. WorkManager remains **not ported** (offline
+  cache still lacks `androidx.work` + `lifecycle-service`); no scheduler was faked.
 - **Phase 37 (this phase):** Ports the Harmony **fact-batching** path
   (`DataPipelineModelClient.splitEntriesIntoFacts` / `splitEntryIntoFacts`) onto an
   explicit Android seam and pins the periodic-schedule host contract (see §23).
@@ -2621,3 +2636,79 @@ platform 34, Gradle 8.9):
   boundaries (the genuine read seams); folding them into the raw daily-log →
   Home-planner mapping (which operates on `DailyLogEntry`, not indexed events) is a
   further wiring step not required by this phase.
+
+---
+
+## 25. Phase 39 — Home planner consumes the persisted batch event-enrichment fields
+
+**Goal.** Close the Phase-38 remainder: the persisted `BatchEventEnrichmentStore`
+fields were already read by `DailyLogLocalIndex` / `ProfileIndexBuilder`, but the Home
+recommendation planner still mapped raw `DailyLogEntry`s (no enriched keywords /
+domains / todo). This phase wires the enriched `IndexedEvent` fields into the Home
+planner's actual input chain so they feed recommendation / todo / plan generation.
+
+**Home consumption chain (read-only, explicit user action only).**
+
+- `HomeRecommendationFactory.realRepository(filesDir)` builds the repository with a
+  `dailyLogEnrichment` resolver bound to `baseDir`.
+- `GalleryBackedHomeRecommendationRepository.generate(photoItems, dailyLogEntries)`
+  maps each `DailyLogEntry` to a bounded planner event via `DailyLogPlannerEventMapper`
+  (raw, unchanged), then overlays the persisted enrichment via
+  `DailyLogPlannerEventMapper.applyEnrichment`.
+- `DailyLogEnrichmentResolver.resolveBySourceRef(entries)` loads the already-overlaid
+  indexed events through the existing `ProfileIndexBuilder.loadEvents()` boundary (which
+  runs the Phase-38 `BatchEventEnrichmentOverlay`), indexes `sourceRef → IndexedEvent`,
+  and produces bounded `DailyLogPlannerEnrichment` (keywords/domains/todo) keyed by the
+  real `sourceRef` — only when a real indexed event lists that `sourceRef` and carries
+  non-blank enrich fields.
+- The enriched keywords/domains/todo flow into the existing `HomeRecommendationPlanner`
+  wire shape (`keywords`, `domains`, `todo_type`, `todo_deadline`, `todo_text`), matching
+  Harmony `HomeRecommendationService` planner-event construction from enriched
+  `IndexedEvent` fields.
+
+**Old-behaviour / safety invariants preserved.**
+
+- No artifact, corrupt artifact, unmatched `sourceRef`, or blank enrich fields ⇒ the
+  entry maps with the raw daily-log mapping unchanged (old behaviour).
+- Strict real-id lookup by `sourceRef == planner eventId` (the plan's `eventId`); a
+  model-produced unknown id can never reach Home.
+- Model boundary unchanged: enrichment is persisted only by an explicit Settings action;
+  Home reads the already-written artifact only when the user taps「生成推荐」— never on
+  launch / recomposition / background, and never triggers a model.
+
+**Focused tests added (all offline over temp dirs):**
+
+- `DailyLogEnrichmentResolverTest` — matching entry resolves keywords/domains/todo;
+  no-match / empty / blank-fields yields nothing; end-to-end via a real deterministic
+  index + persisted artifact.
+- `HomeRecommendationEnrichmentIntegrationTest` — planner input carries enriched fields
+  when artifact present; raw mapping (old behaviour) with no artifact; unknown-id
+  enrichment cannot alter a planner event; `applyEnrichment` replaces raw keywords by
+  real event id.
+
+**Files changed.**
+
+- New `datamanager/DailyLogEnrichmentResolver.kt`.
+- `datamanager/DailyLogPlannerEventMapper.kt` — `applyEnrichment`.
+- `home/recommendation/HomeRecommendationRepository.kt` — `dailyLogEnrichment` seam +
+  overlay in `generate`.
+- `home/recommendation/HomeRecommendationFactory.kt` — `realRepository(baseDir)`.
+- `home/recommendation/HomeRecommendationTypes.kt` — `MAX_EVENT_DOMAINS`.
+- `ui/ClawMateRoot.kt` — pass `context.filesDir` to `realRepository`.
+- Tests above.
+
+**WorkManager conclusion.** Re-verified this phase: `androidx.work` and its transitive
+`lifecycle-service` remain **absent** from the offline Gradle cache (`sqlite-framework`
+`2.4.0` and `annotation-experimental` are cached, but `androidx.work` + `lifecycle-service`
+are not). Per the offline/no-network rule no dependency was downloaded and no
+`Worker` / `PeriodicWorkRequest` was fabricated; `PeriodicTriggerAdapter` / `SchedulingPolicy`
+remain the replaceable contract and all model/background paths stay explicit-action-only.
+
+**Remaining risks / next steps.**
+
+- Real Android `WorkManager` periodic worker (blocked on offline cache gap).
+- Entities from enrichment are persisted and overlaid but are not in the planner wire
+  shape (Harmony uses entities downstream for resolution); current planner input uses
+  keywords/domains/todo only, which is what Phase-39 verifies.
+- ENF enrich overlay is read lazily per explicit generate call (low traffic; fine for the
+  low-memory single-thread profile).

@@ -59,6 +59,7 @@ class GalleryBackedHomeRecommendationRepository internal constructor(
     private val configLoad: () -> HomeRecommendationConfig?,
     private val plannerFactory: (HomeRecommendationConfig) -> HomeRecommendationPlanner,
     private val currentDateProvider: () -> String,
+    private val dailyLogEnrichment: (List<DailyLogEntry>) -> Map<String, com.clawmate.app.datamanager.DailyLogPlannerEnrichment> = { emptyMap() },
 ) : HomeRecommendationRepository {
 
     override fun isConfigured(): Boolean = configLoad() != null
@@ -74,8 +75,17 @@ class GalleryBackedHomeRecommendationRepository internal constructor(
         if (config == null) {
             return HomeRecommendationGenerationResult(state = HomeRecommendationGenerationState.NotConfigured)
         }
-        val events = GalleryPlannerEventMapper.toPlannerEvents(photoItems) +
-            DailyLogPlannerEventMapper.toPlannerEvents(dailyLogEntries)
+        val galleryEvents = GalleryPlannerEventMapper.toPlannerEvents(photoItems)
+        val dailyLogEvents = DailyLogPlannerEventMapper.toPlannerEvents(dailyLogEntries)
+        // Phase-39 — fold the persisted batch event-enrichment fields into the
+        // daily-log planner input via the existing index/read path, by real
+        // eventId (= daily-log sourceRef) only. No artifact / no match -> unchanged
+        // events (old behaviour). Enrichment is read-only and never triggers a model.
+        val enrichedDailyLogEvents = DailyLogPlannerEventMapper.applyEnrichment(
+            dailyLogEvents,
+            dailyLogEnrichment(dailyLogEntries),
+        )
+        val events = galleryEvents + enrichedDailyLogEvents
         if (events.isEmpty()) {
             return HomeRecommendationGenerationResult(state = HomeRecommendationGenerationState.NoData)
         }
@@ -125,9 +135,11 @@ internal fun buildGalleryBackedRepository(
     configLoad: () -> HomeRecommendationConfig?,
     plannerFactory: (HomeRecommendationConfig) -> HomeRecommendationPlanner,
     currentDateProvider: () -> String,
+    dailyLogEnrichment: (List<DailyLogEntry>) -> Map<String, com.clawmate.app.datamanager.DailyLogPlannerEnrichment> = { emptyMap() },
 ): HomeRecommendationRepository =
     GalleryBackedHomeRecommendationRepository(
         configLoad = configLoad,
         plannerFactory = plannerFactory,
         currentDateProvider = currentDateProvider,
+        dailyLogEnrichment = dailyLogEnrichment,
     )

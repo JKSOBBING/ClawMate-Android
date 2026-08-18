@@ -28,13 +28,27 @@ object HomeRecommendationFactory {
      * [EndpointConfig] on each [HomeRecommendationRepository.generate] call, so a
      * freshly-configured backend is honoured without restart; a
      * not-yet-configured backend yields `NotConfigured` with zero network I/O.
+     *
+     * With a [baseDir] (the app-private `filesDir`), the daily-log planner input
+     * also folds in the Phase-38 persisted batch event-enrichment fields through
+     * the existing index read path ([DailyLogEnrichmentResolver]); with no
+     * `baseDir`, `realRepository()` behaves exactly as before (no enrichment
+     * overlay) for callers/tests that do not pass one.
      */
-    fun realRepository(): HomeRecommendationRepository {
+    fun realRepository(baseDir: java.io.File? = null): HomeRecommendationRepository {
         val currentDateProvider = { java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.format(LocalDate.now()) }
+        val dailyLogEnrichment: (List<com.clawmate.app.datamanager.DailyLogEntry>) -> Map<String, com.clawmate.app.datamanager.DailyLogPlannerEnrichment> =
+            if (baseDir == null) {
+                { emptyMap() }
+            } else {
+                val resolver = com.clawmate.app.datamanager.DailyLogEnrichmentResolver(baseDir)
+                ({ entries -> resolver.resolveBySourceRef(entries) })
+            }
         return buildGalleryBackedRepository(
             configLoad = { HomeRecommendationConfig.fromEndpointConfig() },
             plannerFactory = { config -> HomeRecommendationPlanner(buildChatClient(config), config) },
             currentDateProvider = currentDateProvider,
+            dailyLogEnrichment = dailyLogEnrichment,
         )
     }
 

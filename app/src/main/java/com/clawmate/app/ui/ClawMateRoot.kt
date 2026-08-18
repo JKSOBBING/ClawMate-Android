@@ -97,7 +97,7 @@ fun ClawMateRoot(
     // converts the app-private Room gallery items into bounded planner events. It
     // is gated so zero network I/O happens when the Planner backend is not
     // configured or there is no real gallery data. Never invoked on launch.
-    val recommendationRepository = HomeRecommendationFactory.realRepository()
+    val recommendationRepository = HomeRecommendationFactory.realRepository(context.filesDir)
     val galleryItemsSource: suspend () -> List<GalleryPhotoItem> = {
         runCatching {
             GalleryComponent.getRepository(context).observeItems()

@@ -70,4 +70,36 @@ object DailyLogPlannerEventMapper {
         if (v.length <= maxLength) return v
         return v.substring(0, maxOf(0, maxLength - 3)) + "..."
     }
+
+    /**
+     * Phase-39 — overlay the persisted batch event-enrichment fields onto already
+     * built daily-log planner events. Each daily-log planner event carries
+     * `eventId == entry.sourceRef`, so [enrichmentBySourceRef] (keyed by the same
+     * real `sourceRef`, produced by [DailyLogEnrichmentResolver]) is looked up
+     * strictly by that real id. Only the planner input fields (keywords / domains /
+     * todo_type / todo_deadline / todo_text) that a matching enriched event
+     * actually provides are copied; an event with no enrichment (no artifact /
+     * unknown id / blank fields) is returned unchanged — old behaviour, and a
+     * model-produced unknown id can never be injected into Home.
+     */
+    fun applyEnrichment(
+        events: List<HomeRecommendationPlannerEvent>,
+        enrichmentBySourceRef: Map<String, DailyLogPlannerEnrichment>,
+    ): List<HomeRecommendationPlannerEvent> {
+        if (enrichmentBySourceRef.isEmpty()) return events
+        return events.map { event ->
+            val enrichment = enrichmentBySourceRef[event.eventId] ?: return@map event
+            if (enrichment.isEmpty) {
+                event
+            } else {
+                event.copy(
+                    keywords = enrichment.keywords,
+                    domains = enrichment.domains,
+                    todoType = enrichment.todoType,
+                    todoDeadline = enrichment.todoDeadline,
+                    todoText = enrichment.todoText,
+                )
+            }
+        }
+    }
 }

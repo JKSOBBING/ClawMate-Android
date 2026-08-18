@@ -67,6 +67,9 @@ object HomeRecommendationBounds {
     /** Max number of real keywords/tags copied into a single event. */
     const val MAX_EVENT_KEYWORDS: Int = 8
 
+    /** Max number of real domains copied into a single event (mirrors the planner's `domains.take(4)`). */
+    const val MAX_EVENT_DOMAINS: Int = 4
+
     /**
      * Cap on the number of recommendations admitted from one model response.
      * Harmony lets the model decide, but on Android we bound the count so a
