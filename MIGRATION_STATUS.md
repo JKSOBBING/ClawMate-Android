@@ -2773,3 +2773,61 @@ never fabricates VLM/screenshot content; negative cases are exercised in tests.
 **WorkManager conclusion.** Unchanged and still out of scope: `androidx.work` remains absent
 from the offline cache; no `Worker`/`PeriodicWorkRequest` was fabricated and no background or
 periodic cadence was added in this phase.
+
+## 27. Phase 42 — reachable, explicit Gallery scan/sync entry (P0/P1, work package B)
+
+**Goal.** Close the Phase-40 audit gap (D3): the Android `MediaStoreGalleryMediaSource` +
+`GalleryBackgroundCoordinator` + `GallerySyncGate`/`GallerySyncPolicy` pipeline already
+existed but was **never constructed/interjected in production** — nothing wired the real
+source, the coordinator, or the Room `GalleryRepository` into a runtime caller, and there was
+no permission request or explicit scan trigger. This phase makes that seam **reachable as an
+explicit user flow** without adding WorkManager / a second scanner / a new database.
+
+**Harmony mapping.** `GalleryPage.ets` (`startAutoAnalyze`) requests `READ_IMAGEVIDEO` on the
+explicit toolbar "自动分析" action, then `GalleryAutoScanner.scanAllImages` → `runScanSession`.
+On Android the equivalent is now the Gallery screen「同步图库」button, which requests the media
+permission by SDK level, then runs the serial, bounded `GalleryBackgroundCoordinator`
+
+**What was added (real, explicit-only behaviours).**
+
+- **Production wiring** in `GalleryComponent` — `mediaPermission(context)` (real
+  `AndroidGalleryMediaPermission`), `mediaSource(context)` (real
+  `MediaStoreGalleryMediaSource`), `scanGateProvider(context)` (live opt-in + permission gate),
+  and `scanCoordinator(context)` (the **process singleton** `GalleryBackgroundCoordinator` with
+  the real MediaStore source and the existing Room repository injected). Constructing it does
+  **not** scan.
+- **`GallerySyncOptinRegistry`** — mirrors the persisted Settings opt-in
+  (`galleryBackgroundSyncEnabled`) onto a runtime flag at Settings save, matching the overlay
+  opt-in pattern. Until the user explicitly opts in + saves, the gate is NOT_CONFIGURED.
+- **`GalleryScanViewModel` + `GalleryScanUiState`** — the explicit `scanNow()` action: consults
+  the coordinator's honest scheduling decision (NOT_CONFIGURED / BLOCKED / Coalesced / Run) and
+  only starts a real scan on `Run`; surfaces each real `GallerySyncState` (Success/Partial/
+  Error) without ever claiming a "cloud memory sync".
+- **Gallery screen「同步图库」UI** — an explicit button that requests
+  `READ_MEDIA_IMAGES` (API 33+) / `READ_EXTERNAL_STORAGE` (API ≤32) only on tap, then runs. A
+  denied/non-granted request shows an honest BLOCKED state and never scans.
+
+**Permission & explicit-entry guarantees.** No scan on `onCreate`, launch, recomposition or
+Gallery-screen init (verified by an architecture regression test). The manifest already declared
+both media permissions; they are never auto-requested. Photo-Picker least-privilege import is
+unchanged. The optional cloud memory-sync step is **not** auto-invoked this phase — the
+coordinator's cloud adapter stays null so it reports `SKIPPED_NOT_CONFIGURED` and sends no bytes;
+a configured cloud path remains covered by the existing coordinator cloud tests.
+
+**Focused tests added.** `GalleryScanViewModelTest` (6: permission-not-granted no-scan,
+not-opted-in no-scan, authorized action writes to the real repository, idempotent re-run no
+duplicates, cancel yields honest Partial, scan-limit clamp) and
+`GalleryScanNoAutoEntryTest` (4: construction does not scan, opt-in registry defaults off, &
+source-level Application/Component no-auto-entry checks). Total suite: **1019 tests, 0
+failures, 0 errors** (Phase-41 baseline 984 → +10 new).
+
+**Verification commands (ran offline via the system Gradle 8.9 under a workspace-local
+`GRADLE_USER_HOME`, because the wrapper's `/root/.gradle` lock write is blocked by the file
+sandbox).** `:app:testDebugUnitTest --offline` BUILD SUCCESSFUL (1019/0/0);
+`:app:assembleDebug --offline` BUILD SUCCESSFUL; `git diff --check` clean. APK SHA256
+`98d0562bc768cdc40f6bc4cb5d61ef7e0a4e2e045f8d46be82dfe698c70857a1`.
+
+**Remaining risk / honest gaps.** WorkManager/periodic scheduling remains out of scope; the cloud
+memory-sync path is not auto-reachable by design this phase (explicit-config boundary only);
+the runtime opt-in flag is only synced on Settings save, so an opt-in changed but not saved will
+not arm the gate (matching the "explicit opt-in" contract).

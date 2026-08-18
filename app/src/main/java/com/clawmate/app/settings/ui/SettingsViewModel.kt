@@ -303,6 +303,13 @@ class SettingsViewModel(
                 }
             // Push normalized cloud endpoint into runtime config for the chat/gallery.
             runCatching { EndpointBridge.applyToRuntime(clean) }
+            // Phase 42 — mirror the explicit gallery-background-sync opt-in onto
+            // the runtime gate flag. It is only ever set by an explicit Settings
+            // save; nothing starts a scan just by carrying this value.
+            runCatching {
+                com.clawmate.app.gallery.background.GallerySyncOptinRegistry
+                    .setOptIn(clean.galleryBackgroundSyncEnabled)
+            }
 
             com.clawmate.app.log.AppLogger.i("Settings", "设置已保存")
             _state.update {

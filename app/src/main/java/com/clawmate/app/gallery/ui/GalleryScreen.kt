@@ -1,5 +1,9 @@
 package com.clawmate.app.gallery.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,16 +17,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,10 +44,15 @@ import androidx.compose.foundation.layout.size
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.analysis.CapabilityState
+import com.clawmate.app.gallery.background.GalleryScanViewModel
+import com.clawmate.app.gallery.background.GallerySyncGateStatus
+import com.clawmate.app.gallery.background.GalleryScanUiState
+import com.clawmate.app.gallery.background.GallerySyncOptinRegistry
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.photo.rememberPhotoPicker
 import com.clawmate.app.gallery.ui.insights.GalleryInsightsViewModel
 import com.clawmate.app.gallery.ui.insights.MonthlyInsightsPanel
+import com.clawmate.app.settings.SettingsComponent
 
 /**
  * Gallery / Collection screen wired into the 汇总 tab of the shell.
@@ -91,6 +104,39 @@ fun GalleryScreen() {
 
     var searchQuery by remember { mutableStateOf("") }
 
+    // Phase 42 — explicit "扫描/同步图库" entry. The coordinator is the
+    // production singleton built in GalleryComponent with the real MediaStore
+    // source and the existing Room repository. Constructing it triggers no scan;
+    // only the explicit button click below dispatches scanNow().
+    val scanCoordinator = remember { GalleryComponent.scanCoordinator(context) }
+    val scanGateProvider = remember { GalleryComponent.scanGateProvider(context) }
+    val scanVm: GalleryScanViewModel = viewModel(
+        factory = GalleryScanViewModel.Factory(scanCoordinator, scanGateProvider),
+    )
+    val scanState by scanVm.state.collectAsState()
+
+    // Restore the explicitly persisted opt-in after process restart. This is a
+    // read-only gate refresh; it never starts a scan or requests permission.
+    LaunchedEffect(Unit) {
+        val optedIn = runCatching {
+            SettingsComponent.repository(context).snapshot().galleryBackgroundSyncEnabled
+        }.getOrDefault(false)
+        GallerySyncOptinRegistry.setOptIn(optedIn)
+        scanVm.refreshGate()
+    }
+
+    // Runtime media-read permission, requested only when the user taps the
+    // explicit scan button. On grant we dispatch scanNow(); on denial we surface
+    // an honest BLOCKED state and never scan.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        scanVm.refreshGate()
+        if (granted) {
+            scanVm.scanNow()
+        }
+    }
+
     val launchPicker = rememberPhotoPicker(maxSelectNumber = 9) { result ->
         vm.onPickResult(context, result)
     }
@@ -131,6 +177,29 @@ fun GalleryScreen() {
             Text(
                 "从系统相册选择图片，保存为图库条目并按集合分组。",
                 style = MaterialTheme.typography.bodyMedium,
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Phase 42 — explicit scan/sync entry. Renders an honest status
+            // derived from the live opt-in + permission gate, and only ever scans
+            // after the user taps the button (which requests the runtime
+            // media-read permission first).
+            GalleryScanSection(
+                state = scanState,
+                onScan = {
+                    when (val g = scanGateProvider().status) {
+                        GallerySyncGateStatus.READY -> scanVm.scanNow()
+                        GallerySyncGateStatus.NOT_CONFIGURED ->
+                            // Not opted in: honest notice, no scan. The user must
+                            // enable it in Settings first.
+                            scanVm.refreshGate()
+                        GallerySyncGateStatus.BLOCKED ->
+                            // Opted in but permission missing → request it now.
+                            permissionLauncher.launch(mediaReadPermissionName())
+                    }
+                },
+                onCancel = { scanVm.cancelActive() },
             )
 
             Spacer(Modifier.height(8.dp))
@@ -309,3 +378,93 @@ private fun filterByQuery(items: List<GalleryPhotoItem>, query: String): List<Ga
         .search(q, items)
         .map { it.item }
 }
+
+/** The runtime media-read permission name for the current SDK level. */
+private fun mediaReadPermissionName(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+/**
+ * Explicit scan/sync entry + honest status surface.
+ *
+ * The action: the user taps 「同步图库」. If the live gate is READY we scan now;
+ * if BLOCKED (opted in, permission missing) the parent launches the runtime
+ * permission request; if NOT_CONFIGURED (not opted in) we show the honest
+ * require-settings notice. No scan is ever triggered by construction / load.
+ * Results come from the coordinator's real state vocabulary.
+ */
+@Composable
+private fun GalleryScanSection(
+    state: GalleryScanUiState,
+    onScan: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("扫描 / 同步图库", style = MaterialTheme.typography.titleSmall)
+                when (state) {
+                    is GalleryScanUiState.Running -> CircularProgressIndicator(Modifier.size(20.dp))
+                    else -> Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(20.dp))
+                }
+            }
+            when (state) {
+                is GalleryScanUiState.Idle -> {
+                    Text(
+                        when (state.gate.status) {
+                            GallerySyncGateStatus.NOT_CONFIGURED ->
+                                "未启用后台图库同步 — 请在设置中开启「后台图库扫描/同步」后再触发。"
+                            GallerySyncGateStatus.BLOCKED ->
+                                "已开启，但未授予图库读取权限 — 点击「同步图库」请求权限。"
+                            GallerySyncGateStatus.READY ->
+                                "已就绪 — 可从系统相册扫描并同步到本地图库。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                is GalleryScanUiState.Running -> Text(
+                    "正在扫描并同步…",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                is GalleryScanUiState.Succeeded -> Text(
+                    "同步完成：候选 ${state.summary.candidateCount}，本地入库 ${state.summary.localStored}，云同步 ${cloudLabel(state.summary.cloudSync)}。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                is GalleryScanUiState.Partial -> Text(
+                    "部分完成：入库 ${state.summary.localStored}，跳过 ${state.summary.skippedCount}${state.summary.skippedReason?.let { "（$it）" } ?: ""}。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                is GalleryScanUiState.Failed -> Text(
+                    state.reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            when (state) {
+                is GalleryScanUiState.Running -> OutlinedButton(onClick = onCancel) {
+                    Text("取消同步")
+                }
+                else -> Button(onClick = onScan) {
+                    Text("同步图库")
+                }
+            }
+        }
+    }
+}
+
+/** Neutral label for the optional cloud step; never claims a memory sync. */
+private fun cloudLabel(status: com.clawmate.app.gallery.background.GalleryCloudSyncStatus): String =
+    when (status) {
+        com.clawmate.app.gallery.background.GalleryCloudSyncStatus.RUN -> "已运行"
+        com.clawmate.app.gallery.background.GalleryCloudSyncStatus.SKIPPED_NOT_CONFIGURED -> "未配置（无请求）"
+        com.clawmate.app.gallery.background.GalleryCloudSyncStatus.FAILED -> "失败"
+    }

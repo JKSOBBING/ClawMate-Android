@@ -5,6 +5,13 @@ import com.clawmate.app.gallery.analysis.CloudVisionAnalyzer
 import com.clawmate.app.gallery.analysis.OcrEngine
 import com.clawmate.app.gallery.analysis.ReverseGeocoder
 import com.clawmate.app.gallery.analysis.UnconfiguredCapabilities
+import com.clawmate.app.gallery.background.AndroidGalleryMediaPermission
+import com.clawmate.app.gallery.background.GalleryBackgroundCoordinator
+import com.clawmate.app.gallery.background.GalleryMediaPermission
+import com.clawmate.app.gallery.background.GalleryMediaSource
+import com.clawmate.app.gallery.background.GallerySyncGate
+import com.clawmate.app.gallery.background.GallerySyncPolicy
+import com.clawmate.app.gallery.background.MediaStoreGalleryMediaSource
 import com.clawmate.app.gallery.data.DefaultGalleryRepository
 import com.clawmate.app.gallery.data.GalleryDatabase
 import com.clawmate.app.gallery.data.GalleryRepository
@@ -35,6 +42,9 @@ object GalleryComponent {
     @Volatile private var database: GalleryDatabase? = null
 
     @Volatile private var repository: GalleryRepository? = null
+
+    /** Serial scan/sync coordinator singleton (Phase 42 explicit entry). */
+    @Volatile private var scanCoordinator: GalleryBackgroundCoordinator? = null
 
     fun getRepository(context: Context): GalleryRepository {
         repository?.let { return it }
@@ -89,6 +99,78 @@ object GalleryComponent {
         }
     }
 
+    // ---------------------------------------------------------------
+    // Phase 42 (work package B) — production-reachable, explicit gallery
+    // scan/sync boundary.
+    //
+    // The [GalleryBackgroundCoordinator] + [MediaStoreGalleryMediaSource]
+    // pipeline already existed but was never wired into a real Android caller:
+    // nothing constructed/interjected them in production. These methods are the
+    // single production construction point — they build the *real* MediaStore
+    // source, the *live* Android runtime permission detector, and the *serial*
+    // coordinator over the existing Room [GalleryRepository], and hand back the
+    // reachable seam. They are deliberately *not* invoked on app start /
+    // onCreate / recomposition — only the explicit "扫描图库" user action calls
+    // [GalleryBackgroundCoordinator.runOnce].
+    // ---------------------------------------------------------------
+
+    /** Real Android runtime photo/library permission detector (never requests). */
+    fun mediaPermission(context: Context): GalleryMediaPermission =
+        AndroidGalleryMediaPermission(context)
+
+    /**
+     * Production [GalleryMediaSource] over `MediaStore`. Constructed here so the
+     * coordinator in [scanCoordinator] receives the real source; it only queries
+     * the media library after the gate is READY and the local source also
+     * re-verifies the runtime grant before scanning (defense in depth).
+     */
+    fun mediaSource(context: Context): GalleryMediaSource =
+        MediaStoreGalleryMediaSource(context, mediaPermission(context))
+
+    /**
+     * A live [GallerySyncGate] builder for a context. Reads the *persisted*
+     * explicit opt-in ([AppSettings.galleryBackgroundSyncEnabled], default false)
+     * plus the *live* observed media-read grant. Never scans by itself — it only
+     * derives one honest status for the gate.
+     */
+    fun scanGateProvider(context: Context): () -> GallerySyncGate = {
+        // The explicit opt-in is mirrored onto [GallerySyncOptinRegistry] from the
+        // persisted setting at Settings-save time (see SettingsViewModel.save).
+        // Reading the flag here is synchronous and honest: until the user
+        // explicitly opts in (and saves), the gate stays NOT_CONFIGURED.
+        GallerySyncGate(
+            optedIn = com.clawmate.app.gallery.background.GallerySyncOptinRegistry.optedIn,
+            photoAccessGranted = mediaPermission(context).isPhotoAccessGranted(),
+        )
+    }
+
+    /**
+     * The singleton serial [GalleryBackgroundCoordinator] for the app process,
+     * with the real [MediaStoreGalleryMediaSource] and the existing Room
+     * [GalleryRepository] injected. Constructing it triggers **no** scan —
+     * [GalleryBackgroundCoordinator.runOnce] only runs from an explicit user
+     * action after [GallerySyncPolicy.decideRun] reports [GallerySyncPolicy.Run].
+     */
+    fun scanCoordinator(context: Context): GalleryBackgroundCoordinator {
+        scanCoordinator?.let { return it }
+        synchronized(this) {
+            scanCoordinator?.let { return it }
+            val coordinator = GalleryBackgroundCoordinator(
+                gate = scanGateProvider(context),
+                mediaSource = mediaSource(context),
+                repository = getRepository(context),
+                scanLimit = GallerySyncPolicy.DEFAULT_SCAN_LIMIT,
+                // cloudAdapterProvider stays null (default): the optional cloud
+                // memory-sync step is deliberately NOT auto-invoked this phase.
+                // The coordinator then honestly reports
+                // SKIPPED_NOT_CONFIGURED and sends no bytes. A configured cloud
+                // path remains covered by the existing coordinator cloud tests.
+            )
+            scanCoordinator = coordinator
+            return coordinator
+        }
+    }
+
     /** Build the adapter from an [AppSettings] snapshot, reusing the Planner chat
      * backend and a shared OkHttp client. Never adds credentials. */
     fun buildCloudAdapter(
@@ -120,6 +202,7 @@ object GalleryComponent {
         synchronized(this) {
             database = null
             repository = null
+            scanCoordinator = null
         }
     }
 }
