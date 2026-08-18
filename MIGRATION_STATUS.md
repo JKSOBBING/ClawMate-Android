@@ -761,6 +761,36 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 
 ## 8. Changelog
 
+- **Phase 38 (this phase):** Genuinely wires the Phase-37 fact-splitting downstream
+  into the **existing** model-aware consolidation engine and persists outputs /
+  index / profile; persists the Phase-36 batch event-enrichment result into a
+  versioned atomic artifact with a real read boundary (see §24).
+  1. **Fact-split → persisted model consolidation.** A downstream coordinator
+     (`FactSplitConsolidationCoordinator`) consumes the Phase-37
+     `FactSplitRunner` candidate facts (keyed by real `source_ref`) into a new
+     `CloudConsolidationRepository.consolidateWithSplitFacts` resume-method that
+     reuses the exact same engine + persistence as `consolidate` (grouping,
+     `ModelConsolidationApplier`, per-group state/markdown/state-index, index +
+     profile rebuild). Wired to a discoverable explicit Settings action「事实拆分→
+     模型整合并持久化」. Default disabled / zero network; MODEL/LOCAL_ONLY/FALLBACK/
+     EMPTY states; a missing real-ref falls back to the deterministic heuristic split
+     (never dropped); model failure preserves the prior valid persisted state; serial /
+     cancellable / idempotent.
+  2. **Persisted batch event-enrichment.** `BatchEventEnrichmentStore` writes the
+     Phase-36 enabler keys (keywords/domains/entities/todo/enrichment_method) into a
+     versioned, atomically-written `indexes/events/event-enrichment.json` artifact,
+     strictly by real `event_id`, **only** on an explicit MODEL success (LOCAL_ONLY /
+     FALLBACK / EMPTY never write; old artifact preserved). `IndexedEvent` gained
+     optional enrich fields with empty defaults (old JSON still decodes). A read-side
+     overlay (`BatchEventEnrichmentOverlay`) is wired into `DailyLogLocalIndex.query`
+     and `ProfileIndexBuilder.loadEvents`, so the event-query / profile boundaries read
+     the persisted fields after an explicit action and keep old behaviour with no
+     artifact. Never writes a URI / path / token / secret; no auto model trigger.
+  3. **WorkManager still absent — dependency unchanged.** `androidx.work` +
+     transitives remain absent from the offline Gradle cache (re-verified this phase);
+     the `PeriodicTriggerAdapter`/`SchedulingPolicy` contract stays the replaceable
+     seam and no `Worker`/`PeriodicWorkRequest` was fabricated. All model/background
+     paths remain explicit-action-only and default-disabled.
 - **Phase 37 (this phase):** Ports the Harmony **fact-batching** path
   (`DataPipelineModelClient.splitEntriesIntoFacts` / `splitEntryIntoFacts`) onto an
   explicit Android seam and pins the periodic-schedule host contract (see §23).
@@ -2504,3 +2534,90 @@ platform 34, Gradle 8.9):
   keyed by `source_ref`; feeding them into consolidation / a persisted fact store is
   a caller decision not yet wired.
 - **Profile/entity enrichment** already covered by Phases 32/35/36 (not re-ported).
+
+## 24. Phase 38 — downstream fact-split persistence + persisted batch event enrichment
+
+**What was delivered** (all under `app/src/main/java/com/clawmate/app/`):
+
+**Fact-split → persisted model consolidation (Task 1):**
+
+- `datamanager/CloudConsolidationRepository.kt` — added
+  `consolidateWithSplitFacts(explicitAction, modelConfig, modelClientProvider,
+  splitFacts, isCancelled)` that reuses the **same** engine + persistence path as
+  `consolidate` (grouping by month/file, `ModelConsolidationApplier.applyPending`,
+  per-group state.json + markdown + state-index, `ConsolidationEngine.summarize`),
+  but feeds the fact split from a caller-provided map keyed by real `source_ref`.
+  A real entry whose `source_ref` is missing from the map falls back to the
+  deterministic heuristic split (never dropped). The model/group loop was
+  refactored into a shared `runModelGroups` so there is **no second consolidation
+  engine**.
+- `datamanager/FactSplitConsolidationCoordinator.kt` — the explicit seam that runs
+  the Phase-37 `FactSplitRunner` (MODEL/LOCAL_ONLY/FALLBACK/EMPTY), converts the
+  candidate facts into `CandidateFact`s, calls `consolidateWithSplitFacts`, then
+  rebuilds the event index + profile from the freshly-persisted states. Returns a
+  typed `CoordinatorResult` (MODEL / FALLBACK / LOCAL_ONLY / EMPTY + the persisted
+  `ModelConsolidationResult`). Never runs from Application / Home / recomposition /
+  a constructor — only an explicit caller.
+- `datamanager/ConsolidationModelClientFactory.kt` — `factSplitConsolidation(baseDir)`
+  production composition.
+- `settings/ui/SettingsViewModel.kt` + `SettingsFactory` + `SettingsUiState` +
+  `SettingsSections.kt` — injected coordinator + an explicit「事实拆分→模型整合并
+  持久化」Settings action that persists outputs/index/profile on an explicit click.
+
+**Persisted batch event-enrichment (Task 2):**
+
+- `datamanager/BatchEventEnrichmentStore.kt` — versioned (`datamanager-event-
+  enrichment-local-v1`), atomic, size-bounded artifact at
+  `indexes/events/event-enrichment.json` holding per-event
+  `PersistedEnrichedFields` (keywords/domains/entities/todo/enrichment_method) by
+  real `event_id`. `canPersist` admits only a MODEL result; `write` persists only
+  on an explicit MODEL success and never writes a URI/path/token/secret.
+- `datamanager/BatchEventEnrichmentOverlay.kt` — pure read-side overlay that merges
+  the persisted fields onto `IndexedEvent`s by real event id; unknown / absent ids
+  keep the event unchanged (old behaviour).
+- `datamanager/LocalConsolidationTypes.kt` — `IndexedEvent` gained the optional
+  enrich fields (keywords/domains/todo/enrichment_method) with empty defaults so
+  old Phase-30/33 JSON still decodes to an un-enriched event.
+- `datamanager/DailyLogLocalIndex.kt` + `ProfileIndexBuilder.kt` — the event-query
+  and profile read boundaries now overlay the persisted enrich fields after an
+  explicit persisted MODEL success (absent artifact ⇒ old behaviour).
+- `settings/ui/SettingsViewModel.kt` — `runBatchEventEnrichment` now persists the
+  MODEL result through `BatchEventEnrichmentStore`.
+
+**Safety & honesty invariants**
+
+- Default disabled / zero network unless an explicit + fully-configured action and
+  real input; nothing auto-runs from Application / Home / recomposition / a
+  repository/VM constructor.
+- Model output always strict-JSON + real-id-whitelisted; a failed / malformed /
+  unknown-id run falls back to the deterministic local result and the prior valid
+  persisted state is preserved.
+- Fact-split = `MODEL` / `FALLBACK` (facts consolidated + persisted) / `LOCAL_ONLY` /
+  `EMPTY` (nothing written). Batch enrich = `MODEL` (persisted) / `LOCAL_ONLY` /
+  `FALLBACK` / `EMPTY` (never written).
+- No URI / path / token / secret in any artifact; serial / cancellable /
+  idempotent.
+
+**Verification (Phase 38)**
+
+1. Focused new tests `FactSplitConsolidationTest`, `BatchEventEnrichmentStoreTest`,
+   plus `SettingsSchedulingEnrichTest` additions — green (serial offline).
+2. Full suite `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`, **124 test classes /
+   984 tests, 0 failures, 0 errors, 0 skipped** (Phase-37 baseline 121 / 951).
+3. `:app:assembleDebug` — `BUILD SUCCESSFUL`; APK debug SHA256
+   `866b18424be84e3aad7fb2be579bd0050d9f1474b31c0cf92faadfc83c3d6669`.
+4. `git diff --check` — clean.
+
+**Remaining (honestly not ported)**
+
+- **Real Android `WorkManager` `Worker` / `PeriodicWorkRequest`** — `androidx.work`
+  and transitives remain absent from the offline Gradle cache (re-verified this
+  phase), so no periodic worker was fabricated. The `PeriodicTriggerAdapter` /
+  `SchedulingPolicy` remain the replaceable contract; the explicit Settings-driven
+  schedule host is unchanged.
+- **Automated background cadence** — still explicit-action-driven; no system timer.
+- **`enrichedFields` surface consumed by the Home planner request directly** — the
+  persisted enrich fields are currently read by the event-query / profile
+  boundaries (the genuine read seams); folding them into the raw daily-log →
+  Home-planner mapping (which operates on `DailyLogEntry`, not indexed events) is a
+  further wiring step not required by this phase.

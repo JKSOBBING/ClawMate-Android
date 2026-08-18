@@ -99,6 +99,22 @@ class SettingsViewModel(
     private val entityEnrichmentRunner: com.clawmate.app.datamanager.EntityEnrichmentRunner? = null,
     private val entityPersistence: com.clawmate.app.datamanager.EntityEnrichmentPersistence? = null,
     private val factSplitRunner: com.clawmate.app.datamanager.FactSplitRunner? = null,
+    /**
+     * Phase 38 — the explicit downstream coordinator that consumes the Phase-37
+     * fact split into the existing model-aware [com.clawmate.app.datamanager.CloudConsolidationRepository]
+     * and persists consolidated outputs / index / profile. Absent in device-free
+     * construction (tests), where the action reports an honest not-injected state
+     * without touching disk or the network.
+     */
+    private val factSplitConsolidation: com.clawmate.app.datamanager.FactSplitConsolidationCoordinator? = null,
+    /**
+     * Phase 38 — persists the Phase-36 batch event-enrichment result into a
+     * versioned, atomic, app-private artifact **only on an explicit MODEL
+     * success**, so the persisted keywords/domains/entities/todo are readable by
+     * the event query / profile boundaries. Absent in device-free construction
+     * (tests), where the action reports an honest not-injected state.
+     */
+    private val batchEnrichmentStore: com.clawmate.app.datamanager.BatchEventEnrichmentStore? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -759,9 +775,11 @@ class SettingsViewModel(
      * Explicitly run the Phase-36 generic batch event-enrichment seam (keyword /
      * domain / entity / todo over real indexed events). Only ever from a
      * Settings/Data-Manager click; zero network unless configured + explicit
-     * action + real events. The result is a new typed surface keyed by real event
-     * id and **never auto-persisted** — the caller decides how to apply it. A
-     * LOCAL_ONLY / FALLBACK result carries the deterministic local enrich.
+     * action + real events. On an explicit MODEL success the typed enrich fields
+     * are **persisted** (through [com.clawmate.app.datamanager.BatchEventEnrichmentStore])
+     * so the event-query / profile readers consume them; a LOCAL_ONLY / FALLBACK
+     * result carries the deterministic local enrich and is never written (the old
+     * artifact is preserved).
      */
     fun runBatchEventEnrichment() {
         val enricher = batchEnricher ?: run {
@@ -788,10 +806,19 @@ class SettingsViewModel(
             val sample = sampled?.let {
                 "样例：事件 ${it.eventId} → 关键词=${it.keywords.size} 领域=${it.domains} 实体=${it.entities.size} 待办=${it.todoType}"
             }.orEmpty()
+            // Phase-38 — persist only an explicit MODEL success; LOCAL_ONLY /
+            // FALLBACK / EMPTY are never written (old artifact preserved).
+            val store = batchEnrichmentStore
+            val persistNote = if (store != null && store.canPersist(result)) {
+                if (store.write(result)) "（已写入事件增强索引，事件查询/画像可读取）"
+                else "（写入失败，旧索引保持不变）"
+            } else {
+                "（未写入：仅 MODEL 成功才持久化，旧的保持不变）"
+            }
             _state.update {
                 it.copy(
                     enrichBusy = false,
-                    batchEnrichResultMessage = "批量增强状态=${result.status.token}，事件=${result.eventCount}，采纳=${result.admittedEventCount} $sample",
+                    batchEnrichResultMessage = "批量增强状态=${result.status.token}，事件=${result.eventCount}，采纳=${result.admittedEventCount} $sample $persistNote",
                 )
             }
         }
@@ -839,6 +866,64 @@ class SettingsViewModel(
                 it.copy(
                     enrichBusy = false,
                     factSplitResultMessage = "事实拆分状态=${result.status.token}，来源=${result.sourceCount}，事实=${result.totalFacts}（结果仅返回，未自动写入） $sample",
+                )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 38 — explicit fact-split → persisted model consolidation
+    // (consumes the Phase-37 fact split downstream into the existing
+    // model-aware CloudConsolidationRepository and persists outputs /
+    // index / profile; never returns a Map alone).
+    // ------------------------------------------------------------------
+
+    /**
+     * Explicitly run the Phase-38 downstream coordinator: the Phase-37 fact
+     * split is consumed into the existing model-aware consolidation engine and
+     * the consolidated outputs / index / profile are **persisted**. Only ever
+     * from a Settings/Data-Manager click. Zero network unless the action is
+     * explicit + the model is fully configured + real daily-log entries exist;
+     * when the model gate is refused the run reports LOCAL_ONLY / EMPTY without
+     * writing anything and the prior persisted state is preserved. On a MODEL /
+     * FALLBACK fact split the deterministic-safe facts are consolidated and
+     * persisted through [com.clawmate.app.datamanager.ModelConsolidationApplier].
+     */
+    fun runFactSplitAndConsolidate() {
+        val coordinator = factSplitConsolidation ?: run {
+            _state.update { it.copy(enrichBusy = false, factSplitConsolidationMessage = "未注入整合协调器 — 未执行") }
+            return
+        }
+        if (_state.value.enrichBusy) return
+        _state.update { it.copy(enrichBusy = true, factSplitConsolidationMessage = null) }
+        viewModelScope.launch {
+            val config = com.clawmate.app.datamanager.ConsolidationModelConfig.fromEndpointConfig()
+            val result = runCatching {
+                coordinator.run(
+                    mode = com.clawmate.app.datamanager.FactSplitRunner.SplitMode.ModelRequested(
+                        explicitAction = true,
+                        config = config,
+                    ),
+                    clientProvider = { cfg -> com.clawmate.app.datamanager.ConsolidationModelClientFactory.client(cfg) },
+                )
+            }.getOrElse { e ->
+                _state.update {
+                    it.copy(enrichBusy = false, factSplitConsolidationMessage = "事实拆分→整合失败：${e.message}")
+                }
+                return@launch
+            }
+            val cons = result.consolidation
+            val persisted = if (result.persisted && cons != null) {
+                "已持久化 outputs/索引/画像：记录 ${cons.totalRecordsBefore}→${cons.totalRecordsAfter}，创建=${cons.factsCreated} 合并=${cons.factsMerged}"
+            } else if (cons == null) {
+                "（未运行整合：无真实条目/模型门禁拒绝，未写入）"
+            } else {
+                "（整合失败，旧状态保留：${cons.error ?: "n/a"}）"
+            }
+            _state.update {
+                it.copy(
+                    enrichBusy = false,
+                    factSplitConsolidationMessage = "事实拆分=${result.factSplit.status.token}，整合=${result.status.token}，来源=${result.factSplit.sourceCount}，事实=${result.factSplit.totalFacts}；$persisted",
                 )
             }
         }

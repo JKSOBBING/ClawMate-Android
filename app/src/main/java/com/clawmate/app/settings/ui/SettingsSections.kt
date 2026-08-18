@@ -681,7 +681,7 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
             Text(m, fontSize = 12.sp, color = SettingsThemeColors.SecondaryText, modifier = Modifier.padding(top = 6.dp))
         }
         Text(
-            "仅在显式点击时运行：模型对真实事件 id 做白名单匹配，返回新的类型化增强结果（按真实 event_id 键控），不会自动写入任何索引；失败/畸形/未知 id 回退到确定性本地规则增强。",
+            "仅在显式点击时运行：模型对真实事件 id 做白名单匹配，把增强结果持久化到版本化索引（关键词/领域/实体/待办/方法），事件查询与画像边界可读取；失败/畸形/未知 id 回退到确定性本地规则增强且不写入（旧索引保持不变），不携带 URI/密钥。",
             fontSize = 11.sp,
             color = SettingsThemeColors.SecondaryText,
             modifier = Modifier.padding(top = 6.dp),
@@ -711,6 +711,26 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
         }
         Text(
             "仅在显式点击时运行：模型对每个真实 source_ref 做白名单匹配，按 batch/chars/count 限制返回候选事实（summary / normalized_fact / event_date / tags / model_notes / dedup_text）；失败/畸形/越界回退到确定性本地拆分，绝不伪造事实。结果按真实 source_ref 键控返回，调用方自行决定是否持久化。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        // Phase 38 — the downstream persisted consolidation of the fact split.
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "事实拆分→模型整合并持久化",
+                    kind = SettingsActionKind.Primary,
+                    enabled = !state.enrichBusy,
+                    onClick = { vm.runFactSplitAndConsolidate() },
+                ),
+            ),
+        )
+        state.factSplitConsolidationMessage?.let { m ->
+            Text(m, fontSize = 12.sp, color = SettingsThemeColors.SecondaryText, modifier = Modifier.padding(top = 6.dp))
+        }
+        Text(
+            "显式点击后，事实拆分结果会送入已有的模型感知整合引擎（CloudConsolidationRepository + ModelConsolidationApplier），把真实 daily-log 拆成的事实去重并持久化到 outputs/索引/画像；未配置或零真实条目时不写入，旧状态保持不变。不在启动/Home/重组合自动运行。",
             fontSize = 11.sp,
             color = SettingsThemeColors.SecondaryText,
             modifier = Modifier.padding(top = 6.dp),

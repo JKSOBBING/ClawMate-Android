@@ -65,18 +65,24 @@ class ProfileIndexBuilder(
     /** Load the bounded real event index from persisted month partitions (tolerant). */
     fun loadEvents(): List<IndexedEvent> {
         val dir = DataManagerPaths.eventsDir(baseDir)
-        if (!dir.isDirectory) return emptyList()
-        val result = ArrayList<IndexedEvent>()
-        dir.listFiles()
-            ?.filter { it.isFile && it.name.endsWith(".json") && it.name != DataManagerPaths.PARTITION_INDEX_FILE_NAME }
-            ?.sortedBy { it.name }
-            ?.forEach { file ->
-                val partition = store.readJson(file) { LocalConsolidationCodec.decodePartition(it) }
-                if (partition != null && partition.events.isNotEmpty()) {
-                    result += partition.events.filter { ConsolidationText.isIsoDate(it.eventDate) }
+        val base = if (!dir.isDirectory) {
+            emptyList()
+        } else {
+            val result = ArrayList<IndexedEvent>()
+            dir.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".json") && it.name != DataManagerPaths.PARTITION_INDEX_FILE_NAME }
+                ?.sortedBy { it.name }
+                ?.forEach { file ->
+                    val partition = store.readJson(file) { LocalConsolidationCodec.decodePartition(it) }
+                    if (partition != null && partition.events.isNotEmpty()) {
+                        result += partition.events.filter { ConsolidationText.isIsoDate(it.eventDate) }
+                    }
                 }
-            }
-        return result
+            result
+        }
+        // Phase-38 — overlay persisted batch event-enrichment fields (absent →
+        // unchanged = default behaviour).
+        return BatchEventEnrichmentOverlay.overlay(base, BatchEventEnrichmentStore(baseDir).load())
     }
 
     /**

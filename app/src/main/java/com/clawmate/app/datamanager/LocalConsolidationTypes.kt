@@ -112,7 +112,13 @@ object LocalConsolidationTypes {
         val updatedAt: String,
     )
 
-    /** A bounded, local index event (mirrors the relevant subset of Harmony `IndexedEvent`). */
+    /**
+     * A bounded, local index event (mirrors the relevant subset of Harmony `IndexedEvent`).
+     * Phase-38 adds optional **batch event-enrichment fields** (keywords / domains /
+     * todo / enrichment-method) with empty defaults so old Phase-30/33 artifacts
+     * (which lack these keys) still decode to an un-enriched event — i.e. the
+     * readers keep their pre-enrichment behaviour when no enrichment artifact exists.
+     */
     @Serializable
     data class IndexedEvent(
         @SerialName("event_id") val eventId: String = "",
@@ -127,6 +133,14 @@ object LocalConsolidationTypes {
         @SerialName("sources") val sources: List<String> = listOf("DailyLog"),
         @SerialName("workflow_scene_ids") val workflowSceneIds: List<Int> = emptyList(),
         @SerialName("entity_mentions") val entityMentions: List<EntityMention> = emptyList(),
+        // ---- Phase-38 batch event-enrichment fields (optional; empty default) ----
+        @SerialName("keywords") val keywords: List<String> = emptyList(),
+        @SerialName("domains") val domains: List<String> = emptyList(),
+        @SerialName("todo_type") val todoType: String = "",
+        @SerialName("todo_deadline") val todoDeadline: String = "",
+        @SerialName("todo_text") val todoText: String = "",
+        @SerialName("todo_agent_task") val todoAgentTask: String = "",
+        @SerialName("enrichment_method") val enrichmentMethod: String = "",
     )
 
     /** Month-partitioned index artifact (mirrors Harmony `EventPartition`). */

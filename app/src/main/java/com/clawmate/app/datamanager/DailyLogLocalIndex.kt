@@ -21,6 +21,15 @@ class DailyLogLocalIndex(
     private val store: AtomicJsonStore = AtomicJsonStore(),
 ) {
 
+    /**
+     * Phase-38 — persisted batch event-enrichment overlay: once an explicit
+     * enrichment action has written the versioned artifact, event-query readers
+     * see the persisted keywords/domains/entities/todo/enrichment-method fields
+     * (looked up by real event id). Absent / corrupt artifact ⇒ no overlay (old
+     * behaviour).
+     */
+    private val enrichmentStore: BatchEventEnrichmentStore = BatchEventEnrichmentStore(baseDir)
+
     /** Enumerate known partitions from the partition-index (falls back to month dir). */
     private fun partitionNames(): List<String> {
         val indexFile = DataManagerPaths.partitionIndex(baseDir)
@@ -64,18 +73,23 @@ class DailyLogLocalIndex(
             compareByDescending<IndexedEvent> { it.eventDate }
                 .thenByDescending { it.eventId },
         )
+        // Phase-38 — overlay persisted batch event-enrichment fields (absent →
+        // events unchanged = old behaviour).
+        val overlaid = BatchEventEnrichmentOverlay.overlay(matched, enrichmentStore.load())
         val limit = if (options.limit > 0) options.limit else DEFAULT_QUERY_LIMIT
-        val selected = matched.take(limit)
+        val selected = overlaid.take(limit)
         return QueryResult(
-            totalEvents = matched.size,
+            totalEvents = overlaid.size,
             events = selected,
-            eventsTruncated = matched.size > selected.size,
+            eventsTruncated = overlaid.size > selected.size,
         )
     }
 
     private fun matchesKeyword(event: IndexedEvent, keyword: String): Boolean {
         val field = ConsolidationText.normalizeFreeText(
-            "${event.summary} ${event.normalizedFact} ${event.tags.joinToString(" ")} ${event.sourceRefs.joinToString(" ")}",
+            "${event.summary} ${event.normalizedFact} ${event.tags.joinToString(" ")} " +
+                "${event.keywords.joinToString(" ")} ${event.domains.joinToString(" ")} " +
+                "${event.sourceRefs.joinToString(" ")}",
         ).lowercase()
         return field.contains(keyword.trim().lowercase())
     }

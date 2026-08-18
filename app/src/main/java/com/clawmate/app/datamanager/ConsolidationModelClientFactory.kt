@@ -52,4 +52,18 @@ object ConsolidationModelClientFactory {
 
     /** A repository over [baseDir] whose production model client derives from config. */
     fun repository(baseDir: File): CloudConsolidationRepository = CloudConsolidationRepository(baseDir)
+
+    /**
+     * Phase-38 — the explicit downstream coordinator that consumes the Phase-37
+     * [FactSplitRunner] candidate facts into this model-aware repository and
+     * persists outputs/index/profile. Production wiring: a Settings action
+     * builds this coordinator over `filesDir` and calls [FactSplitConsolidationCoordinator.run]
+     * on an explicit click.
+     */
+    fun factSplitConsolidation(baseDir: File): FactSplitConsolidationCoordinator =
+        FactSplitConsolidationCoordinator(
+            baseDir = baseDir,
+            factSplitRunner = FactSplitRunner(baseDir),
+            repository = CloudConsolidationRepository(baseDir),
+        )
 }

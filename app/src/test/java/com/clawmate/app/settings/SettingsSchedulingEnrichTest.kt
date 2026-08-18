@@ -178,4 +178,60 @@ class SettingsSchedulingEnrichTest {
             com.clawmate.app.settings.domain.SettingsKeys.PERIODIC_LOCAL_CONSOLIDATION_ENABLED,
         )
     }
+
+    // ---- 5. Phase 38 — fact-split → persisted consolidation + batch-enrich persistence ----
+
+    @Test
+    fun `fact split consolidation without a coordinator reports a guarded outcome`() = runTest {
+        val vm = SettingsViewModel(repo(), "1.0.0", 1L)
+        vm.runFactSplitAndConsolidate()
+        val state = vm.state.value
+        assertTrue(state.factSplitConsolidationMessage != null)
+        assertTrue(state.factSplitConsolidationMessage!!.contains("未注入"))
+    }
+
+    @Test
+    fun `batch enrichment persists only on an explicit MODEL success`() = runTest {
+        val base = tempBase()
+        // Seed a real indexed event via the local pipeline.
+        com.clawmate.app.datamanager.DailyLogWorkspace.writeDocument(
+            base, "2026-08-01", "a.logs.md", listOf("买了咖啡花了 25 元"),
+        )
+        com.clawmate.app.datamanager.ConsolidationRepository(base).consolidateNow()
+        val stateFile = com.clawmate.app.datamanager.DataManagerPaths.outputState(base, "2026-08", "a.logs.md")
+        com.clawmate.app.datamanager.IndexService(base).rebuild(
+            listOf(com.clawmate.app.datamanager.LocalConsolidationCodec.decodeState(stateFile.readText())),
+        )
+        val eventId = com.clawmate.app.datamanager.DailyLogLocalIndex(base)
+            .query(com.clawmate.app.datamanager.LocalConsolidationTypes.QueryOptions(month = "2026-08"))
+            .events.first().eventId
+
+        val store = com.clawmate.app.datamanager.BatchEventEnrichmentStore(base)
+        // A non-MODEL path must not write: run local-only (device-free enricher with no config)
+        // would need real model; here we directly prove the store refuses non-MODEL.
+        val nonModel = com.clawmate.app.datamanager.BatchEventEnrichTypes.EnrichmentResult(
+            status = com.clawmate.app.datamanager.BatchEventEnrichTypes.EnrichmentStatus.LOCAL_ONLY,
+            eventCount = 0,
+            admittedEventCount = 0,
+        )
+        assertFalse(store.write(nonModel))
+
+        // An explicit MODEL success writes the artifact.
+        val model = com.clawmate.app.datamanager.BatchEventEnrichTypes.EnrichmentResult(
+            status = com.clawmate.app.datamanager.BatchEventEnrichTypes.EnrichmentStatus.MODEL,
+            eventCount = 1,
+            admittedEventCount = 1,
+            generatedAt = "2026-08-03T10:00:00",
+            enrichedFields = mapOf(
+                eventId to com.clawmate.app.datamanager.BatchEventEnrichTypes.EnrichedEventFields(
+                    eventId = eventId,
+                    keywords = listOf("咖啡"),
+                    domains = listOf("eat"),
+                    enrichmentMethod = "model_batch",
+                ),
+            ),
+        )
+        assertTrue(store.write(model))
+        assertTrue(com.clawmate.app.datamanager.DataManagerPaths.eventEnrichment(base).exists())
+    }
 }

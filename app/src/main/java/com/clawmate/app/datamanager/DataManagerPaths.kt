@@ -33,6 +33,9 @@ object DataManagerPaths {
     const val INDEXES_ROOT_RELATIVE: String = "$CONSOLIDATION_ROOT_RELATIVE/indexes"
     const val EVENTS_DIR_RELATIVE: String = "$INDEXES_ROOT_RELATIVE/events"
     const val TEMPORAL_DIR_RELATIVE: String = "$INDEXES_ROOT_RELATIVE/temporal"
+    /** Phase-38 batch event-enrichment artifact: `indexes/events/enrichment.json`. */
+    const val EVENT_ENRICHMENT_DIR_RELATIVE: String = EVENTS_DIR_RELATIVE
+    const val EVENT_ENRICHMENT_FILE_NAME: String = "event-enrichment.json"
 
     const val STATE_INDEX_FILE_NAME: String = "state-index.json"
     const val PARTITION_INDEX_FILE_NAME: String = "partition-index.json"
@@ -78,6 +81,10 @@ object DataManagerPaths {
     fun stateIndex(baseDir: File): File = File(outputsRoot(baseDir), STATE_INDEX_FILE_NAME)
     fun partitionIndex(baseDir: File): File = File(eventsDir(baseDir), PARTITION_INDEX_FILE_NAME)
     fun manifest(baseDir: File): File = File(indexesRoot(baseDir), MANIFEST_FILE_NAME)
+
+    /** Phase-38 batch event-enrichment artifact (versioned, atomically written). */
+    fun eventEnrichment(baseDir: File): File =
+        File(File(baseDir, EVENT_ENRICHMENT_DIR_RELATIVE), EVENT_ENRICHMENT_FILE_NAME)
 
     /** Per-group consolidated-state artifact: `outputs/<month>/<fileName>.md.state.json`. */
     fun outputState(baseDir: File, month: String, fileName: String): File {
