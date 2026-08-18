@@ -12,6 +12,8 @@ import com.clawmate.app.gallery.background.GalleryMediaSource
 import com.clawmate.app.gallery.background.GallerySyncGate
 import com.clawmate.app.gallery.background.GallerySyncPolicy
 import com.clawmate.app.gallery.background.MediaStoreGalleryMediaSource
+import com.clawmate.app.gallery.collection.IndexedEventReader
+import com.clawmate.app.gallery.collection.IndexedEventReaderFactory
 import com.clawmate.app.gallery.data.DefaultGalleryRepository
 import com.clawmate.app.gallery.data.GalleryDatabase
 import com.clawmate.app.gallery.data.GalleryRepository
@@ -74,6 +76,16 @@ object GalleryComponent {
 
     /** Real Android reverse geocoder (platform Geocoder), implicitly injected. */
     fun reverseGeocoder(context: Context): ReverseGeocoder = androidReverseGeocoder(context)
+
+    /**
+     * Phase-44 — production [IndexedEventReader] over the app-private indexed
+     * daily-log events. Reads only the persisted local index partitions (never
+     * creates artifacts, never touches the network / model). It is constructed
+     * here (the single production seam) and consumed exclusively by the 汇总
+     * index-backed collection panel on an explicit user action.
+     */
+    fun indexedEventReader(context: Context): IndexedEventReader =
+        IndexedEventReaderFactory.appPrivate(context.filesDir)
 
     /**
      * Phase 21 — build a config-driven [com.clawmate.app.gallery.cloud.GalleryCloudAdapter]

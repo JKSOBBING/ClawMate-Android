@@ -141,6 +141,23 @@ fun GalleryScreen() {
         vm.onPickResult(context, result)
     }
 
+    // Phase-44 — index-backed 汇总 grouping over the real indexed daily-log
+    // events. Constructing the ViewModel triggers no I/O; reads only happen on
+    // the explicit「同步」action inside [CollectionIndexViewModel.refreshIndex].
+    val indexedReader = remember { GalleryComponent.indexedEventReader(context) }
+    val indexedVm: CollectionIndexViewModel = viewModel(
+        factory = CollectionIndexViewModel.Factory(indexedReader),
+    )
+    val indexedDetail by indexedVm.detail.collectAsState()
+
+    if (indexedDetail != null) {
+        IndexedCollectionGroupDetailScreen(
+            detail = indexedDetail!!,
+            onBack = { indexedVm.closeDetail() },
+        )
+        return
+    }
+
     if (selectedId != null && detail?.itemId == selectedId) {
         val d = detail
         if (d != null) {
@@ -225,6 +242,16 @@ fun GalleryScreen() {
                 onOpenItem = { id -> vm.selectItem(id) },
                 onGenerateSummary = { insight -> insightsVm.generateMonthlySummary(insight) },
                 onEmbed = { insight -> insightsVm.embedSelectedMonth(insight) },
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Phase-44 — index-backed collection grouping (real daily-log events).
+            // Distinct from the photo heuristic grouping; groups are clickable and
+            // open IndexedCollectionGroupDetailScreen full-screen.
+            IndexedCollectionPanel(
+                vm = indexedVm,
+                onOpenGroup = { g -> indexedVm.openGroup(g.groupId) },
             )
 
             Spacer(Modifier.height(8.dp))
