@@ -50,5 +50,8 @@ object ChatComponent {
             dao = dao(context),
             client = client(),
             config = ChatServerConfig.fromEndpointConfig(),
+            settingsRepository = com.clawmate.app.settings.data.DataStoreSettingsRepository(
+                context.applicationContext,
+            ),
         ).also { repository = it }
 }

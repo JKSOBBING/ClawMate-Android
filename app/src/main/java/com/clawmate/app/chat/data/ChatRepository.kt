@@ -33,6 +33,24 @@ interface ChatRepository {
     /** Returns (creating if needed) the persisted active session id. */
     suspend fun ensureActiveSession(): String
 
+    /** The currently tracked active session id, or null when none is set yet. */
+    fun activeSessionId(): String?
+
+    /**
+     * Creates a new, empty session and makes it the active one. The new session
+     * is persisted through the [ChatRepository]'s store (no separate database
+     * is created). Returns the created session.
+     */
+    suspend fun createSession(mode: String? = null): ChatSession
+
+    /**
+     * Switches the active session to [sessionId] and bumps its `updatedAt` so a
+     * later restart recovers this session (most recently selected wins).
+     * Returns the selected session (with its messages), or null if it no
+     * longer exists.
+     */
+    suspend fun selectSession(sessionId: String): ChatSession?
+
     /**
      * Sends a user message and streams the assistant reply. The returned flow
      * emits [ChatSendEvent.UserMessageAccepted], then a series of
@@ -54,6 +72,12 @@ interface ChatRepository {
      */
     suspend fun sendAgentMessage(userText: String): kotlinx.coroutines.flow.Flow<ChatSendEvent>
 
-    /** Deletes a session and all of its messages. */
+    /**
+     * Deletes a session and all of its messages. When [sessionId] is the active
+     * session, the in-memory active marker is cleared so the next send/restore
+     * re-selects the most recently updated remaining session (or creates a new
+     * empty one if none remain). Deleting a non-active session does not change
+     * the active session.
+     */
     suspend fun deleteSession(sessionId: String)
 }

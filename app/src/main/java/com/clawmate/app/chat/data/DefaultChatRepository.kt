@@ -4,7 +4,6 @@ import com.clawmate.app.chat.cloud.ChatClient
 import com.clawmate.app.chat.cloud.ChatCompletionsRequest
 import com.clawmate.app.chat.cloud.ChatException
 import com.clawmate.app.chat.cloud.ChatErrorKind
-import com.clawmate.app.chat.cloud.ChatMessageWire
 import com.clawmate.app.chat.cloud.ChatServerConfig
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageKind
@@ -37,15 +36,27 @@ class DefaultChatRepository(
     private val onSessionTitleChanged: (String) -> Unit = {},
     /** Optional agent loop for [sendAgentMessage]; created lazily when null. */
     private val agentLoop: com.clawmate.app.chat.agent.AgentLoop? = null,
+    /**
+     * Optional typed Settings store (Phase 43). When present, the context
+     * compression [com.clawmate.app.chat.model.ChatContextBudget] is rebuilt from
+     * the user's configured `chatCompressionThresholdPercent` /
+     * `chatRecentRounds` before every request; when absent the Settings-safe
+     * defaults are used. The budget itself is pure and makes no network calls.
+     */
+    private val settingsRepository: com.clawmate.app.settings.data.SettingsRepository? = null,
 ) : ChatRepository {
 
     @Volatile
     private var activeSessionId: String? = null
 
-    private var activeSessionIdSetter: (String) -> Unit = { activeSessionId = it }
+    /** Last timestamp handed out, so adjacent create/select calls never collide. */
+    @Volatile
+    private var lastTimestamp: Long = 0L
+
+    private var activeSessionIdSetter: (String?) -> Unit = { activeSessionId = it }
 
     fun setActiveSessionIdProvider(provider: (String) -> Unit) {
-        activeSessionIdSetter = { id -> activeSessionId = id; provider(id) }
+        activeSessionIdSetter = { id -> activeSessionId = id; if (id != null) provider(id) }
     }
 
     override suspend fun sessions(): List<ChatSession> =
@@ -82,11 +93,15 @@ class DefaultChatRepository(
         updateSessionMeta(sessionId, now())
         emit(ChatSendEvent.UserMessageAccepted(userMessage))
 
-        // 2. Build the model request from the stored history.
+        // 2. Build the model request from the stored history (which already
+        // contains the just-persisted user turn). The context budget applies
+        // deterministic, local-only compression when the thread exceeds the
+        // user-configured threshold.
         val history = dao.messagesFor(sessionId).map(ChatMappers::fromEntity)
+        val buildResult = budget().buildWireContext(systemPrompt(), history)
         val request = ChatCompletionsRequest(
             model = config.modelName,
-            messages = buildWireMessages(history, text),
+            messages = buildResult.messages,
             stream = true,
         )
 
@@ -129,9 +144,11 @@ class DefaultChatRepository(
 
         // Build the agent context from the history stored *before* this turn so the
         // closure includes the whole prior thread exactly once (the loop appends the
-        // new user turn itself).
+        // new user turn itself). Context compression (deterministic, local-only) is
+        // applied here by the budget when the prior thread exceeds the setting.
         val priorHistory = dao.messagesFor(sessionId).map(ChatMappers::fromEntity)
-        val wireHistory = buildWireHistory(priorHistory)
+        val buildResult = budget().buildWireContext(systemPrompt(), priorHistory)
+        val wireHistory = buildResult.messages.toMutableList()
         val loop = agentLoop ?: com.clawmate.app.chat.agent.AgentLoop(
             client = client,
             registry = com.clawmate.app.chat.agent.createDefaultToolRegistry(),
@@ -207,8 +224,50 @@ class DefaultChatRepository(
     }
 
     override suspend fun deleteSession(sessionId: String) {
+        val wasActive = activeSessionId == sessionId
         dao.deleteMessagesFor(sessionId)
         dao.deleteSession(sessionId)
+        if (wasActive) {
+            // Clear the in-memory active marker so the next send (or restart
+            // restore) re-selects the most recently updated remaining session,
+            // or creates a fresh empty one when nothing remains.
+            activeSessionIdSetter(null)
+        }
+    }
+
+    override fun activeSessionId(): String? = activeSessionId
+
+    /** A persisted session becomes active (used by new/select). */
+    private suspend fun makeActive(sessionId: String) {
+        activeSessionId = sessionId
+        activeSessionIdSetter(sessionId)
+    }
+
+    override suspend fun createSession(mode: String?): ChatSession {
+        val id = "sess-" + UUID.randomUUID()
+        val now = nextNow()
+        val session = createEmptySession(
+            id,
+            now,
+            com.clawmate.app.chat.model.ChatMode.normalize(mode),
+        )
+        dao.upsertSession(ChatMappers.toEntity(session))
+        makeActive(id)
+        return session
+    }
+
+    override suspend fun selectSession(sessionId: String): ChatSession? {
+        if (sessionId.isEmpty()) return null
+        val entity = dao.session(sessionId) ?: return null
+        // Bump updatedAt so the most recently selected session is restored on a
+        // fresh app launch (restart recovery uses the max-updated session).
+        dao.upsertSession(entity.copy(updatedAt = nextNow()))
+        makeActive(sessionId)
+        val messages = dao.messagesFor(sessionId).map(ChatMappers::fromEntity)
+        return ChatMappers.fromEntity(
+            dao.session(sessionId) ?: entity,
+            messages,
+        )
     }
 
     /** Returns (creating if needed) a persisted session to serve as the active one. */
@@ -216,23 +275,28 @@ class DefaultChatRepository(
         activeSessionId?.let { return it }
         val existing = dao.observeSessions().maxByOrNull { it.updatedAt }?.id
         if (existing != null) {
+            // Restart recovery: pick the most recently (selected/updated) session.
             activeSessionId = existing
+            activeSessionIdSetter(existing)
             return existing
         }
-        val id = "sess-" + UUID.randomUUID()
-        val now = now()
-        dao.upsertSession(
-            ChatMappers.toEntity(createEmptySession(id, now)),
-        )
-        activeSessionId = id
-        activeSessionIdSetter(id)
-        return id
+        return createSession().id
     }
 
-    private fun createEmptySession(id: String, now: Long) =
-        com.clawmate.app.chat.model.createEmptyChatSession(id, com.clawmate.app.chat.model.ChatMode.CLOUD_AGENT, now)
+    private fun createEmptySession(
+        id: String,
+        now: Long,
+        mode: String = com.clawmate.app.chat.model.ChatMode.CLOUD_AGENT,
+    ) = com.clawmate.app.chat.model.createEmptyChatSession(id, mode, now)
 
     private fun now() = System.currentTimeMillis()
+
+    /** A monotonically increasing timestamp so create/select ordering is stable. */
+    private fun nextNow(): Long {
+        val ts = maxOf(now(), lastTimestamp + 1L)
+        lastTimestamp = ts
+        return ts
+    }
 
     /** First user message becomes the session title unless the user renamed it. */
     private suspend fun updateSessionMeta(sessionId: String, ts: Long) {
@@ -248,38 +312,22 @@ class DefaultChatRepository(
         onSessionTitleChanged(title)
     }
 
-    private fun buildWireMessages(history: List<ChatMessage>, pendingUserText: String): List<ChatMessageWire> {
-        val context = buildWireHistory(history)
-        context += ChatMessageWire(ChatMessageRole.USER.wire, pendingUserText)
-        return context
+    /**
+     * Resolves the context-compression budget for the next request. When a
+     * Settings store is injected this reads the user's configured threshold /
+     * recent-rounds (clamped to the same bounds the Settings normalizers
+     * enforce); otherwise the Settings-safe defaults are used. The budget is a
+     * pure value object and never touches the network.
+     */
+    private suspend fun budget(): com.clawmate.app.chat.model.ChatContextBudget {
+        val settings = settingsRepository?.snapshot()
+            ?: com.clawmate.app.settings.domain.AppSettings.defaults()
+        return com.clawmate.app.chat.model.ChatContextBudget.fromSettings(settings)
     }
 
-    /**
-     * Builds the wire history handed to the agent loop: a system prompt plus the
-     * stored user/assistant messages (task-trace/context notices excluded), so
-     * the ReAct loop sees the full prior context before the new user turn.
-     */
-    private fun buildWireHistory(history: List<ChatMessage>): MutableList<ChatMessageWire> {
-        val context = mutableListOf<ChatMessageWire>()
-        context += ChatMessageWire(ChatMessageRole.SYSTEM.wire, "You are ClawMate, a helpful assistant.")
-        for (message in history) {
-            val content = message.content.trim()
-            if (content.isEmpty()) continue
-            when {
-                message.role == ChatMessageRole.USER ||
-                    message.role == ChatMessageRole.ASSISTANT ||
-                    message.role == ChatMessageRole.SYSTEM -> {
-                    if (message.kind != ChatMessageKind.TASK_TRACE &&
-                        message.kind != ChatMessageKind.CONTEXT_NOTICE
-                    ) {
-                        context += ChatMessageWire(message.role.wire, content)
-                    }
-                }
-                message.kind == ChatMessageKind.TASK_RESULT ->
-                    context += ChatMessageWire(ChatMessageRole.ASSISTANT.wire, content)
-                else -> Unit
-            }
-        }
-        return context
+    private fun systemPrompt(): String = DEFAULT_SYSTEM_PROMPT
+
+    companion object {
+        const val DEFAULT_SYSTEM_PROMPT: String = "You are ClawMate, a helpful assistant."
     }
 }

@@ -321,6 +321,18 @@ messages and cancellation propagation. No scheduling, background work, arbitrary
 command API, or UI redesign was added. See `DSH_PHASE_RESULT.md` for the focused
 test command and results.
 
+> **Phase 43 (chat context budget + multi-session) build verification was
+> actually executed in this worktree** with the same toolchain (JDK 17.0.19,
+> Android SDK platform 34, Gradle 8.9, `--no-daemon --max-workers=1`,
+> `--offline`): the context-compression budget was wired into the real
+> `DefaultChatRepository` request build (plain send + agent loop) and consumed
+> from the user's Settings thresholds; the multi-session Room/UI flow (new /
+> list / drawer / switch / delete / restart restore) landed on the existing DAO
+> (no new database). `:app:testDebugUnitTest` passes **1038 tests / 0 failures**
+> (19 of them new Phase-43 tests: 11 `ChatContextBudgetTest` + 8
+> `MultiSessionRepositoryTest`) and `:app:assembleDebug` produces the APK.
+> Exact commands and results are in `phase43.result.md`.
+
 > **Phase 1 (historical) blocker:** the original authoring machine lacked Java,
 > Android SDK, and Gradle, and the sandbox could not write into
 > `/root/ClawMate-Android`. All phase-1 deliverables were authored as a

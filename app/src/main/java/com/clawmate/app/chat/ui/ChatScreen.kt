@@ -16,20 +16,30 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageRole
+import com.clawmate.app.chat.model.ChatSession
 import com.clawmate.app.chat.voice.VoiceInteractionStatus
 import com.clawmate.app.chat.voice.VoiceSessionSnapshot
 
@@ -70,6 +81,17 @@ fun ChatScreen(context: android.content.Context) {
     val state by vm.state.collectAsState()
     val voice by vm.voiceState.collectAsState()
     val listState = rememberLazyListState()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+    // Keep the ViewModel's drawer flag in sync with the actual drawer state
+    // (including swipe gestures), and open/close the drawer when the flag is
+    // changed programmatically (e.g. after selecting a session or toggling).
+    LaunchedEffect(state.drawerOpen) {
+        if (state.drawerOpen) drawerState.open() else drawerState.close()
+    }
+    LaunchedEffect(drawerState.currentValue) {
+        vm.setDrawerOpen(drawerState.currentValue == DrawerValue.Open)
+    }
 
     // Runtime RECORD_AUDIO permission; requested only when the user taps the mic.
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -87,39 +109,173 @@ fun ChatScreen(context: android.content.Context) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().imePadding()) {
-        MessageList(
-            messages = state.messages,
-            state = state,
-            voice = voice.session,
-            vm = vm,
-            listState = listState,
-        )
-
-        if (state.error != null) {
-            ErrorBanner(
-                message = state.error.orEmpty(),
-                onDismiss = vm::clearError,
-            )
-        }
-
-        VoiceStatusBanner(voice.session)
-
-        if (state.isConfigured) {
-            InputBar(
-                value = state.inputText,
-                onChange = vm::onInputChange,
-                onSend = vm::send,
-                sending = state.isSending,
-                onMicClicked = {
-                    if (voice.asrRecordPermissionGranted) vm.beginVoiceInput()
-                    else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            SessionDrawer(
+                sessions = state.sessions,
+                activeSessionId = state.sessionId,
+                onClose = { vm.setDrawerOpen(false) },
+                onNewSession = { vm.newSession() },
+                onSelect = { id ->
+                    vm.selectSession(id)
+                    vm.setDrawerOpen(false)
                 },
+                onDelete = { id -> vm.deleteSession(id) },
             )
-        } else {
-            MissingConfigPane()
+        },
+    ) {
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+            // Header bar: open the session drawer + current session title.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = {
+                    if (state.drawerOpen) vm.setDrawerOpen(false) else vm.setDrawerOpen(true)
+                }) {
+                    Icon(Icons.Filled.Menu, contentDescription = "历史会话")
+                }
+                Text(
+                    text = state.title.ifEmpty { "新会话" },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            MessageList(
+                messages = state.messages,
+                state = state,
+                voice = voice.session,
+                vm = vm,
+                listState = listState,
+            )
+
+            if (state.error != null) {
+                ErrorBanner(
+                    message = state.error.orEmpty(),
+                    onDismiss = vm::clearError,
+                )
+            }
+
+            VoiceStatusBanner(voice.session)
+
+            if (state.isConfigured) {
+                InputBar(
+                    value = state.inputText,
+                    onChange = vm::onInputChange,
+                    onSend = vm::send,
+                    sending = state.isSending,
+                    onMicClicked = {
+                        if (voice.asrRecordPermissionGranted) vm.beginVoiceInput()
+                        else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                )
+            } else {
+                MissingConfigPane()
+            }
         }
     }
+}
+
+/**
+ * The session list shown in the navigation drawer: a "new session" action plus
+ * every persisted session with a delete action. Selecting a session (or the new
+ * one) is delegated up to [ChatViewModel].
+ */
+@Composable
+private fun SessionDrawer(
+    sessions: List<ChatSession>,
+    activeSessionId: String,
+    onClose: () -> Unit,
+    onNewSession: () -> Unit,
+    onSelect: (String) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    ModalDrawerSheet(modifier = Modifier.fillMaxSize(0.85f)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "历史会话",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = "收起历史会话")
+            }
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(onClick = onNewSession) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Text(" 新会话", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.weight(1f)) {
+            items(sessions, key = { it.id }) { session ->
+                SessionDrawerItem(
+                    session = session,
+                    active = session.id == activeSessionId,
+                    onClick = { onSelect(session.id) },
+                    onDelete = { onDelete(session.id) },
+                )
+            }
+            if (sessions.isEmpty()) {
+                item(key = "__empty__") {
+                    Text(
+                        "暂无会话，点上方新建",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionDrawerItem(
+    session: ChatSession,
+    active: Boolean,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    NavigationDrawerItem(
+        icon = {
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Filled.Delete, contentDescription = "删除会话")
+            }
+        },
+        label = {
+            Column(modifier = Modifier.padding(end = 4.dp)) {
+                Text(
+                    text = session.displayTitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                )
+                Text(
+                    text = "${session.messageCount} 条消息 · ${session.preview}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        },
+        selected = active,
+        onClick = onClick,
+    )
 }
 
 @Composable

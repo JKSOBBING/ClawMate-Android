@@ -7,6 +7,7 @@ import com.clawmate.app.chat.cloud.ChatException
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageKind
 import com.clawmate.app.chat.model.ChatMessageRole
+import com.clawmate.app.chat.model.ChatSession
 import com.clawmate.app.chat.data.ChatRepository
 import com.clawmate.app.chat.data.ChatSendEvent
 import com.clawmate.app.chat.voice.ChatVoiceController
@@ -33,6 +34,10 @@ data class ChatUiState(
     val activeToolTrace: String? = null,
     /** True while the agent loop is running (tool executing / reasoning). */
     val agentRunning: Boolean = false,
+    /** All persisted sessions (most recently updated first) for the list/drawer. */
+    val sessions: List<ChatSession> = emptyList(),
+    /** Whether the session list / drawer is currently open. */
+    val drawerOpen: Boolean = false,
 )
 
 /**
@@ -115,7 +120,7 @@ class ChatViewModel(
     }
 
 
-    /** Loads session history and marks whether the cloud model is configured. */
+    /** Loads the session list and restores the active (most recently selected) session. */
     fun load() {
         viewModelScope.launch {
             val configured = com.clawmate.app.chat.cloud.ChatServerConfig
@@ -123,11 +128,114 @@ class ChatViewModel(
             _state.update { it.copy(isConfigured = configured) }
 
             val sessions = runCatching { repository.sessions() }.getOrDefault(emptyList())
-            val active = sessions.firstOrNull()
+            _state.update { it.copy(sessions = sessions) }
+
+            // Restart recovery: pick the most recently updated (last selected) session.
+            val active = runCatching { repository.session(repository.activeSessionId().orEmpty()) }
+                .getOrNull()
+                ?: sessions.firstOrNull()
             if (active != null) {
-                _state.update { it.copy(sessionId = active.id, title = active.displayTitle, messages = active.messages) }
+                _state.update {
+                    it.copy(sessionId = active.id, title = active.displayTitle, messages = active.messages)
+                }
             }
         }
+    }
+
+    fun setDrawerOpen(open: Boolean) {
+        _state.update { it.copy(drawerOpen = open) }
+    }
+
+    /** Creates a brand-new empty session and switches to it. */
+    fun newSession(mode: String? = null) {
+        if (_state.value.isSending) return
+        viewModelScope.launch {
+            val session = repository.createSession(mode)
+            _state.update {
+                it.copy(
+                    sessionId = session.id,
+                    title = session.displayTitle,
+                    messages = emptyList(),
+                    inputText = "",
+                    error = null,
+                    activeToolTrace = null,
+                )
+            }
+            refreshSessions()
+        }
+    }
+
+    /** Switches to an existing session, restoring its persisted message history. */
+    fun selectSession(sessionId: String) {
+        if (_state.value.isSending) return
+        viewModelScope.launch {
+            val session = repository.selectSession(sessionId)
+            if (session != null) {
+                _state.update {
+                    it.copy(
+                        sessionId = session.id,
+                        title = session.displayTitle,
+                        messages = session.messages,
+                        inputText = "",
+                        error = null,
+                        activeToolTrace = null,
+                    )
+                }
+            }
+            refreshSessions()
+        }
+    }
+
+    /**
+     * Deletes a session. Deleting the currently active session clears its
+     * active marker so the next send restores the most recently updated
+     * remaining session (or starts a fresh empty one). A non-active deletion
+     * leaves the active session untouched. Deleting the current session
+     * switches the UI to the next available session (or an empty new one).
+     */
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            val wasActive = sessionId == _state.value.sessionId
+            repository.deleteSession(sessionId)
+            if (wasActive) {
+                // Select the most recently updated remaining session, or clear the
+                // view to an empty state when none remain (a new one is created on
+                // the next send).
+                val session = runCatching {
+                    repository.session(repository.activeSessionId().orEmpty())
+                }.getOrNull()
+                if (session != null) {
+                    _state.update {
+                        it.copy(
+                            sessionId = session.id,
+                            title = session.displayTitle,
+                            messages = session.messages,
+                            error = null,
+                            activeToolTrace = null,
+                        )
+                    }
+                    refreshSessions()
+                } else {
+                    _state.update {
+                        it.copy(
+                            sessionId = "",
+                            title = "",
+                            messages = emptyList(),
+                            error = null,
+                            activeToolTrace = null,
+                        )
+                    }
+                    refreshSessions()
+                }
+            } else {
+                refreshSessions()
+            }
+        }
+    }
+
+    private suspend fun refreshSessions() {
+        val sessions = runCatching { repository.sessions() }.getOrDefault(_state.value.sessions)
+        _state.update { it.copy(sessions = sessions) }
     }
 
     fun onInputChange(text: String) {
