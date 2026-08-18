@@ -310,6 +310,13 @@ class SettingsViewModel(
                 com.clawmate.app.gallery.background.GallerySyncOptinRegistry
                     .setOptIn(clean.galleryBackgroundSyncEnabled)
             }
+            // Phase 46 — mirror the explicit periodic local-consolidation opt-in so
+            // the OS-fired JobService gates truthfully. Only the persisted value is
+            // mirrored (an explicit save); this never schedules or runs anything.
+            runCatching {
+                com.clawmate.app.datamanager.PeriodicSchedulingRuntimeRegistry
+                    .setOptedIn(clean.periodicLocalConsolidationEnabled)
+            }
 
             com.clawmate.app.log.AppLogger.i("Settings", "设置已保存")
             _state.update {

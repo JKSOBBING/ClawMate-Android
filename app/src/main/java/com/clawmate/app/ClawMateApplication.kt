@@ -22,6 +22,17 @@ class ClawMateApplication : Application() {
         com.clawmate.app.log.LogComponent.repository()
         com.clawmate.app.log.AppLogger.i("App", "ClawMateApplication initialized; phase 14 log viewer ready")
         Log.i(TAG, "ClawMateApplication initialized")
+        // Phase 46 — reconcile the persisted periodic-local-consolidation opt-in
+        // with the OS JobScheduler registration. This is a background, non-blocking
+        // step that only RE-REGISTERS (or cancels) an OS job based on the persisted
+        // opt-in; it never executes consolidation/index/profile work, never touches
+        // the network/model, and does not block app startup.
+        Thread {
+            runCatching {
+                com.clawmate.app.datamanager.PeriodicSchedulingRestoreCoordinator
+                    .reconcile(applicationContext)
+            }
+        }.start()
     }
 
     /**

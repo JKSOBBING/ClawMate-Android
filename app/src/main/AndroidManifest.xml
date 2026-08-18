@@ -160,5 +160,20 @@
             android:name=".overlay.OverlayFloatService"
             android:exported="false"
             android:label="@string/app_name" />
+
+        <!--
+            Phase 46 — OS-scheduled periodic local consolidation.
+            A JobService that JobScheduler fires (its class matches
+            PlatformPeriodicScheduling.jobServiceComponent). It runs ONLY the
+            deterministic local-only LocalConsolidationIndexRunner-backed job, gated
+            by the user's persisted opt-in; it never touches cloud model / chat /
+            GUI / media-scan / TTS. Declared but never started by the app itself —
+            only the framework JobScheduler bound via a persisted JobInfo may invoke
+            it, and only once the user explicitly opts in + schedules.
+        -->
+        <service
+            android:name=".datamanager.PeriodicLocalConsolidationJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

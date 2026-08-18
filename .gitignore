@@ -1,6 +1,7 @@
 # Gradle
 .gradle/
 .gradle-home/
+.ghome/
 build/
 **/build/
 # Local debug-keystore dir used to satisfy offline assembleDebug signing.

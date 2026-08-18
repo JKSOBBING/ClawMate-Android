@@ -2843,3 +2843,60 @@ sandbox).** `:app:testDebugUnitTest --offline` BUILD SUCCESSFUL (1019/0/0);
 memory-sync path is not auto-reachable by design this phase (explicit-config boundary only);
 the runtime opt-in flag is only synced on Settings save, so an opt-in changed but not saved will
 not arm the gate (matching the "explicit opt-in" contract).
+
+## 28. Phase 46 — wire periodic local consolidation to real Android OS scheduling (JobScheduler)
+
+Phase 46 turns the Phase-35/36 in-process scheduling seam into a **genuinely reachable OS
+schedule** without adding any dependency (no `androidx.work` in the offline cache, and adding it
+is forbidden). It does **not** replace the existing in-memory seam (task #5) — it adds a real
+JobScheduler-backed trigger path that reuses the same `LocalConsolidationIndexRunner`-backed
+`LocalOnlyPeriodicJob`.
+
+**Platform choice: JobScheduler.** `minSdk=26` / `compileSdk=34`, framework-only
+`android.app.job.*` (no new artifact). Chosen over AlarmManager+BroadcastReceiver because
+`JobInfo.setPersisted(true)` survives device reboot with no `RECEIVE_BOOT_COMPLETED` receiver and
+no exact-alarm permission, and it batches for battery. Harmonie对照 (`/root/mobiinfra-oh`): the
+Harmony source has **no automatic periodic consolidation scheduler** — consolidation is
+explicitly triggered in `SettingsCenterPage.ets`/Home, and `backgroundTaskManager`
+`DATA_TRANSFER` long-running mode is only taken *while an active agent task is executing*
+(`EntryAbility.onBackground`), stopped on `onForeground`. So this Android periodic schedule is a
+new, explicit, opt-in capability that the Harmony side never auto-fires.
+
+**New platform pieces (all reuse the existing engine, no second consolidation logic):**
+- `platform/JobSchedulerGateway.kt` — thin seam over `JobScheduler` (primitive `schedule(jobId, interval)`/
+  `cancel`/`pendingJobIds`) so JVM tests use a fake and never touch the framework `JobInfo` POJO;
+  `AndroidJobSchedulerGateway` builds the persisted periodic `JobInfo`
+  (`setPersisted` + `setPeriodic` + `NETWORK_TYPE_NONE`).
+- `JobSchedulerTriggerAdapter.kt` — a `PeriodicTriggerAdapter` implementation: keeps decisions in
+  `PeriodicConsolidationScheduler`, and on an *enabled* `LOCAL_ONLY` policy also registers one
+  persisted OS job under the single canonical `JOB_ID` (idempotent replace). A framework rejection
+  returns `Disabled` + records `lastFailure` — it never fakes success. `cancel()` clears both.
+- `PeriodicLocalConsolidationJobService.kt` — the `JobService` (registered in `AndroidManifest`
+  with `BIND_JOB_SERVICE`, `exported=false`): gates on the persisted opt-in (cancels self if off),
+  then runs `LocalOnlyPeriodicJob` serially, records an honest `JobRunOutcome`, and is cooperatively
+  cancellable via `onStopJob`. Never touches `CloudConsolidationRepository`/network/chat/GUI/media/TTS.
+- `PeriodicSchedulingRuntimeRegistry.kt` — the process-level opt-in mirror + honest run-outcome/
+  error store (read synchronously by the background job).
+- `PeriodicSchedulingRestoreCoordinator.kt` + `PlatformPeriodicSchedulingAccess` — restart/boot
+  reconciliation: re-registers the persisted schedule when opt-in true ∧ no OS job; cancels a stale
+  job when opt-in off; **never executes work at startup**.
+- `PeriodicSchedulingBootstrap.kt` / `PeriodicPlatformHostFactory.kt` / `PlatformPeriodicScheduling.kt` —
+  wiring/factory/constant holders.
+
+**Wiring.** `SettingsViewModelFactory.forContext` now builds the host with the real JobScheduler
+adapter (falls back to the in-process seam for device-free); `ClawMateApplication.onCreate`
+runs non-blocking restore reconciliation on a background thread; `SettingsViewModel.save()` mirrors
+the persisted opt-in into `PeriodicSchedulingRuntimeRegistry`.
+
+**Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9, `--no-daemon --max-workers=1`,
+workspace-local `GRADLE_USER_HOME` — the wrapper's `/root/.gradle` lock write is sandbox-blocked).**
+`:app:testDebugUnitTest` BUILD SUCCESSFUL (**1082 tests, 0 failures, 0 errors**, +14 from
+`JobSchedulerTriggerAdapterTest`); `:app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean.
+APK SHA256 `e7683c554f03a74b1415d10796922fc1deaa3c798f7f4f406c25da049df53a52`.
+
+**Remaining honest gaps.** The JobService running path (on-device `onStartJob`/`onStopJob`, the
+framework firing the persisted job after reboot) cannot be exercised in a JVM test; the
+JVM suite covers the decision seam (opt-in gate, schedule/cancel/replace, failure honesty,
+restore reconcile) via fakes and the result file states this boundary explicitly. The debug APK is
+signed with the local debug keystore (workspace `.android/` shadowing the sandbox-read-only
+`/root/.android`).

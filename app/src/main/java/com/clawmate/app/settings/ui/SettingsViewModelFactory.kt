@@ -26,12 +26,26 @@ class SettingsViewModelFactory(
      * NOT_CONFIGURED without touching disk or the network.
      */
     private val filesDir: java.io.File? = null,
+    /**
+     * Phase 46 — an optional [Context] used to wire the real JobScheduler platform
+     * adapter for the explicit periodic schedule. Absent in device-free
+     * construction (the in-process seam is used instead).
+     */
+    private val context: Context? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            val schedulingHost = filesDir?.let {
-                com.clawmate.app.datamanager.PeriodicSchedulingHost(it)
+            // Phase 46 — when a Context is available, prefer the real JobScheduler
+            // platform adapter for the explicit periodic schedule; fall back to the
+            // in-process seam (never removes the JVM seam).
+            val schedulingHost: com.clawmate.app.datamanager.PeriodicSchedulingHost? = when {
+                context != null && filesDir != null ->
+                    com.clawmate.app.datamanager.PeriodicPlatformHostFactory.platformHost(context, filesDir)
+                        ?: com.clawmate.app.datamanager.PeriodicPlatformHostFactory.inProcessHost(filesDir)
+                filesDir != null ->
+                    com.clawmate.app.datamanager.PeriodicPlatformHostFactory.inProcessHost(filesDir)
+                else -> null
             }
             return SettingsViewModel(
                 repository,
@@ -68,6 +82,7 @@ class SettingsViewModelFactory(
             versionCode = versionCode,
             overlayServiceController = AndroidOverlayServiceController(context),
             filesDir = context.filesDir,
+            context = context,
         )
     }
 }
