@@ -3,6 +3,10 @@
 .gradle-home/
 build/
 **/build/
+# Local debug-keystore dir used to satisfy offline assembleDebug signing.
+.android/
+# Scratch patch-generation / verification dir (baseline snapshot + round-trip tree).
+.patchwork/
 # Local configuration override (local.properties).
 local.properties
 

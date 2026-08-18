@@ -60,7 +60,7 @@ object TaskComponent {
         synchronized(this) { deviceAdapter ?: DisabledWorkflowDeviceAdapter }
 
     /* 200 step / 100 loop iterations / 60s cap — bounded runner. */
-    fun runner(): WorkflowRunner {
+    fun runner(context: Context): WorkflowRunner {
         synchronized(this) {
             runner?.let { return it }
             val adapter = deviceAdapter ?: DisabledWorkflowDeviceAdapter
@@ -69,6 +69,11 @@ object TaskComponent {
                 maxLoopIterations = 100,
                 maxMillis = 60_000L,
                 deviceAdapter = adapter,
+                // Phase 41: the runner writes real daily-log entries under the
+                // app-private filesDir/workflows/daily-log/YYYY-MM-DD/ so Home's
+                //「生成推荐」reads genuine workflow output (same single writer the
+                // DailyLogEventSource reads).
+                baseDir = context.applicationContext.filesDir,
             ).also { runner = it }
         }
     }

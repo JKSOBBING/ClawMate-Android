@@ -2712,3 +2712,64 @@ remain the replaceable contract and all model/background paths stay explicit-act
   keywords/domains/todo only, which is what Phase-39 verifies.
 - ENF enrich overlay is read lazily per explicit generate call (low traffic; fine for the
   low-memory single-thread profile).
+
+---
+
+## 26. Phase 41 — real daily-log data source (P0, work package A)
+
+**Goal.** Close the P0 data-source gap from the Phase 40 audit (G1): nothing on Android
+produced `workflows/daily-log/*`, so the entire consolidation → enrichment →
+home-recommendation chain consumed empty (or pre-seeded-only) input. This phase makes the
+Android **Workflow runner itself** produce a real, Harmony-format daily-log entry when a
+workflow genuinely succeeds **and** exposes a real structured `summary` output — mirroring
+Harmony `WorkflowRunner.appendDailySummaryLog` (header + numbered entries) that
+`DailyLogParser` already parses.
+
+**What was added (only real behaviors; nothing fabricated).**
+
+- **`DailyLogWorkspace.appendEntry(baseDir, day, fileName, text, metadata)`** — a new
+  Harmony-format single-writer append method (existing `writeDocument` import API is
+  unchanged). Writes `baseDir/workflows/daily-log/YYYY-MM-DD/<name>.md` with a bounded
+  `<!-- DAILY_LOG_METADATA { workflow_metadata, latest_entry_index } -->` header and
+  blank-line separated `N. text` numbered entries. Repeat-runs into the same file
+  **append** (stable numbered indices / source refs preserved) and climb
+  `latest_entry_index`; every dimension is bounded (entry chars / file name / doc chars /
+  entries-per-day) and the write is atomic (temp + rename).
+- **`WorkflowRunnerImpl`** gained:
+  - a real **`summary` tool step** (resolves a `text`/`summary`/`value` field from real
+    workflow inputs/context over `${...}`), producing a bounded `resultSummary`;
+  - a `WorkflowRunResult.resultSummary` / `WorkflowRunResult.dailyLogPath` bounded result
+    fields;
+  - a `FileWorkflowDailyLogSink` (over injected `baseDir`) wired as the single writer.
+- On **successful** runs with a real (non-blank) summary, the runner appends the summary
+  as a numbered entry with real metadata (workflow `name`/`description`). Failed /
+  UNSUPPORTED / NOT_CONFIGURED / cancelled / no-summary / bare-`echo` runs write
+  **nothing** — a plain debug echo or an error is never promoted to a daily-log summary.
+
+**Production call chain (no new path / DB / format).**
+
+- `TaskViewModel.run(task)` → `WorkflowRunnerImpl.run(definition)` (built by `TaskComponent`).
+- On success+summary it writes `filesDir/workflows/daily-log/YYYY-MM-DD/<name>.md` via
+  `FileWorkflowDailyLogSink` → `DailyLogWorkspace.appendEntry`.
+- Home「生成推荐」(`ClawMateRoot.appPrivateDailyLogSource`) reads it via
+  `DailyLogEventSourceFactory.appPrivate(context.filesDir).load()` → `DailyLogParser`, then
+  `DailyLogPlannerEventMapper` feeds the planner. The writer is the **same single
+  `DailyLogWorkspace`** the reader expects — nothing new.
+
+**Focused tests added (all offline over temp dirs).**
+
+- `DailyLogWorkspaceAppendTest` — header/`latest_entry_index` round-trip through
+  `DailyLogEventSourceFactory`; repeat-append stable indices; bounds (blank, bad day/file,
+  entry cap, per-day cap, distinct files).
+- `WorkflowRunnerDailyLogWriteTest` — success+summary writes a parseable entry and returns
+  the path; context resolution; repeat-append; BLOCKED GUI / NOT_CONFIGURED VLM / bare
+  `echo` / blank-summary write nothing; no-sink runner never writes (spy).
+
+**Honest deltas vs Harmony (kept).** Bundled GUI/VLM workflows still cannot reach SUCCESS on
+Android (no HDC/VLM), so their runs stay BLOCKED/NOT_CONFIGURED and write no daily-log —
+the writer only fires for a genuinely successful, summary-producing workflow. The runner
+never fabricates VLM/screenshot content; negative cases are exercised in tests.
+
+**WorkManager conclusion.** Unchanged and still out of scope: `androidx.work` remains absent
+from the offline cache; no `Worker`/`PeriodicWorkRequest` was fabricated and no background or
+periodic cadence was added in this phase.

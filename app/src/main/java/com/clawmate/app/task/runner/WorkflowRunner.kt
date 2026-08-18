@@ -1,5 +1,6 @@
 package com.clawmate.app.task.runner
 
+import com.clawmate.app.datamanager.DailyLogWorkspace
 import com.clawmate.app.task.model.WorkflowDefinition
 import com.clawmate.app.task.model.WorkflowStep
 import kotlinx.coroutines.CancellationException
@@ -13,6 +14,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
  * A bounded, honest workflow runner for the Android Task slice.
@@ -22,8 +26,8 @@ import kotlinx.serialization.json.put
  *                so unit tests do not wait);
  *   - `loop`  -> bounded iteration over nested steps with `loop.index`/`loop.last`;
  *   - `if`    -> deterministic condition evaluation driving then/else branches;
- *   - `tool`  -> only a deterministic `echo` no-op; any VLM/model tool is
- *                NOT_CONFIGURED.
+ *   - `tool`  -> only a deterministic `echo` no-op and a real `summary` output
+ *                step; any VLM/model tool is NOT_CONFIGURED.
  *
  * Every GUI / HDC / open-app / device-control step (`gui_task`, and `gui_action`
  * screenshot / swipe / click) is *never* executed and *never* fabricated: it is
@@ -31,11 +35,48 @@ import kotlinx.serialization.json.put
  * becomes [RunStatus.BLOCKED]. A VLM `tool` step becomes [RunStatus.NOT_CONFIGURED].
  * The run therefore stays honest when blocked.
  *
+ * Phase 41 (daily-log data source): when a run **succeeds** and the workflow
+ * explicitly exposed a real `summary` output step (real text from its own
+ * inputs/context — never inferred from bare `echo`), the runner appends that real,
+ * bounded summary to the existing [DailyLogWorkspace] single writer as a numbered
+ * entry under `filesDir/workflows/daily-log/YYYY-MM-DD/`, so
+ * [com.clawmate.app.datamanager.DailyLogParser] /
+ * [com.clawmate.app.datamanager.DailyLogEventSource] consume it. Ordinary runs
+ * with no summary step, failed / UNSUPPORTED / NOT_CONFIGURED / cancelled runs
+ * write **nothing** (honest — no fabricated daily-log).
+ *
  * Bounds: total step budget, per-loop iteration cap, and a wall-clock timeout are
  * enforced; coroutine cancellation surfaces as [RunStatus.CANCELLED].
  */
 interface WorkflowRunner {
     suspend fun run(definition: WorkflowDefinition): WorkflowRunResult
+}
+
+/**
+ * Minimal daily-log write boundary the runner needs (Phase 41). Defaults to a
+ * real file-backed writer over the app-private filesDir; tests inject a spy.
+ */
+fun interface WorkflowDailyLogSink {
+    /** Append the real summary [text] for [day] as a numbered daily-log entry.
+     * @return the absolute path written (handed back on the run result), or null
+     *   when nothing was written (invalid/bounded out). */
+    fun append(day: String, fileName: String, text: String, metadata: Map<String, String>): String?
+}
+
+/** File-backed [WorkflowDailyLogSink] over the app-private base dir. */
+class FileWorkflowDailyLogSink(private val baseDir: File) : WorkflowDailyLogSink {
+    override fun append(
+        day: String,
+        fileName: String,
+        text: String,
+        metadata: Map<String, String>,
+    ): String? = DailyLogWorkspace.appendEntry(
+        baseDir = baseDir,
+        day = day,
+        fileName = fileName,
+        entryText = text,
+        workflowMetadata = metadata,
+    )?.absolutePath
 }
 
 class WorkflowRunnerImpl(
@@ -52,6 +93,19 @@ class WorkflowRunnerImpl(
      */
     private val deviceAdapter: com.clawmate.app.task.hdc.WorkflowDeviceAdapter =
         com.clawmate.app.task.hdc.DisabledWorkflowDeviceAdapter,
+    /**
+     * App-private files dir enabling the real file-backed daily-log writer
+     * (Phase 41). Null = no daily-log write (runner stays pure/callable without
+     * storage). Production wires `context.applicationContext.filesDir`.
+     */
+    private val baseDir: File? = null,
+    /**
+     * Overridable daily-log write boundary. Defaults to [FileWorkflowDailyLogSink]
+     * bound to [baseDir] when [baseDir] is provided, else a no-op.
+     */
+    private val dailyLogSink: WorkflowDailyLogSink? = null,
+    /** Date provider for the `YYYY-MM-DD` run day (injectable for tests). */
+    private val runDateProvider: () -> String = { LazyIsoDate.now() },
 ) : WorkflowRunner {
 
     /** Injectable time source so tests avoid real delays. */
@@ -67,7 +121,13 @@ class WorkflowRunnerImpl(
         var stepCount: Int = 0,
         var blocked: RunStatus? = null,
         var blockedMessage: String = "",
+        /** Phase 41: real structured summary output exposed by the workflow. */
+        var resultSummary: String = "",
+        val summaryStepId: MutableList<String> = mutableListOf(),
     )
+
+    private val sink: WorkflowDailyLogSink =
+        dailyLogSink ?: (baseDir?.let { FileWorkflowDailyLogSink(it) } ?: NoOpDailyLogSink)
 
     override suspend fun run(definition: WorkflowDefinition): WorkflowRunResult = coroutineScope {
         val deadline = if (maxMillis > 0) nowNanos() + maxMillis * 1_000_000L else Long.MAX_VALUE
@@ -87,11 +147,45 @@ class WorkflowRunnerImpl(
                 RunStatus.CANCELLED -> "Workflow cancelled"
                 RunStatus.FAILED -> session.blockedMessage
             }
-            WorkflowRunResult(status = status, message = message, steps = session.results.toList())
+            // Phase 41: only a genuinely successful run with a real structured
+            // summary output writes a daily-log entry. Failed / UNSUPPORTED /
+            // NOT_CONFIGURED / cancelled runs write nothing (no fabricated log).
+            val summary = session.resultSummary.trim()
+            val dailyLogPath = if (status == RunStatus.SUCCESS && summary.isNotEmpty()) {
+                writeDailyLog(definition, session)
+            } else {
+                ""
+            }
+            WorkflowRunResult(
+                status = status,
+                message = message,
+                steps = session.results.toList(),
+                resultSummary = summary,
+                dailyLogPath = dailyLogPath.orEmpty(),
+            )
         } catch (c: CancellationException) {
             // Cooperative cancellation: surface an honest CANCELLED result.
             WorkflowRunResult(status = RunStatus.CANCELLED, message = "Workflow cancelled", steps = emptyList())
         }
+    }
+
+    /**
+     * Append the real summary output as a numbered daily-log entry through the
+     * single [DailyLogWorkspace] writer. Real, bounded metadata (name/description
+     * from the workflow definition) preserve provenance so downstream
+     * consolidation/enrichment/Home see genuine workflow input. Returns the
+     * absolute written path, or null when the writer refused (bounds/IO).
+     */
+    private fun writeDailyLog(definition: WorkflowDefinition, session: Session): String? {
+        val day = runDateProvider()
+        val title = definition.title
+        val fileName = dailyLogFileName(title)
+        val metadata = buildMap {
+            definition.metadata?.name?.takeIf { it.isNotBlank() }?.let { put("name", it) }
+            definition.metadata?.description?.takeIf { it.isNotBlank() }?.let { put("description", it) }
+            // scene id is not carried by WorkflowDefinition; keep honest real fields only.
+        }
+        return sink.append(day, fileName, session.resultSummary, metadata)
     }
 
     private suspend fun executeStep(
@@ -120,7 +214,7 @@ class WorkflowRunnerImpl(
                 "GUI task automation (${step.taskDescription ?: step.name ?: ""}) requires a screenshot-driven VLM decider loop, which the safe device adapter does not orchestrate; only discrete gui_action protocol calls are exposed."
             )
             "gui_action" -> executeGuiAction(step, deadlineNanos)
-            "tool" -> executeTool(step)
+            "tool" -> executeTool(session, step)
             "loop" -> executeLoop(session, step, deadlineNanos)
             "if" -> executeIf(session, step, deadlineNanos)
             else -> StepOutcome.Unsupported("unknown step type '${step.type}' cannot be executed by this bounded runner.")
@@ -213,15 +307,42 @@ class WorkflowRunnerImpl(
             response.height?.let { put("height", JsonPrimitive(it)) }
         }
 
-    private suspend fun executeTool(step: WorkflowStep): StepOutcome {
+    private suspend fun executeTool(session: Session, step: WorkflowStep): StepOutcome {
         val toolName = step.toolName ?: return StepOutcome.Unsupported("tool step without tool_name.")
         return when (toolName) {
             // Deterministic no-op used to exercise the runner in tests.
             "echo" -> StepOutcome.Success(buildJsonObject { put("echo", step.raw["inputs"]?.toString() ?: "") })
+            // Phase 41: a workflow may expose a real structured summary output step.
+            // The text is resolved from the workflow's own inputs/context (real
+            // content, resolved over real context/step outputs) — never fabricated
+            // and never inferred from bare `echo`. A blank/missing text keeps the
+            // summary empty so nothing is written.
+            "summary" -> executeSummaryTool(session, step)
             else -> StepOutcome.NotConfigured(
                 "tool '$toolName' requires a cloud VLM/model that is not configured on this device; GUI instrumentation is unavailable."
             )
         }
+    }
+
+    /** Resolve the real summary text of an explicit `summary` tool step. */
+    private fun executeSummaryTool(session: Session, step: WorkflowStep): StepOutcome {
+        val inputs = step.raw["inputs"] as? JsonObject ?: JsonObject(emptyMap())
+        val template = stringOf(inputs["text"])
+            ?: stringOf(inputs["summary"])
+            ?: stringOf(inputs["value"])
+            ?: return StepOutcome.Success(buildJsonObject { put("summary", "") })
+        val resolved = WorkflowVariableResolver.resolve(template) { expr ->
+            WorkflowVariableResolver.lookup(
+                session.stepOutputs, session.context, session.defaults, 0, false, expr,
+            )
+        }
+        // Real output only: reject blanks. Bound to the daily-log entry cap.
+        val bounded = resolved.trim().take(com.clawmate.app.datamanager.DailyLogBounds.MAX_ENTRY_CHARACTERS)
+        if (bounded.isEmpty()) {
+            return StepOutcome.Success(buildJsonObject { put("summary", "") })
+        }
+        session.resultSummary = bounded
+        return StepOutcome.Success(buildJsonObject { put("summary", bounded) })
     }
 
     private suspend fun executeLoop(
@@ -357,13 +478,38 @@ class WorkflowRunnerImpl(
         this@toJson?.useExperience?.let { put("use_experience", JsonPrimitive(it)) }
         this@toJson?.acceptPlannerChanges?.let { put("accept_planner_changes", JsonPrimitive(it)) }
     }
+
+    /**
+     * Deterministic, repeat-run-friendly daily-log file name (mirrors the Harmony
+     * `buildDailyLogFileName` shape but without a GUI package). A stable name means
+     * repeat runs of the same workflow on the same day **append** (via the
+     * numbered-entry index) instead of creating unbounded new files.
+     */
+    private fun dailyLogFileName(title: String): String {
+        val safe = sanitizeFileName(title.ifBlank { "workflow" })
+        return "$safe.md"
+    }
+
+    private fun sanitizeFileName(value: String): String =
+        value.replace("[^A-Za-z0-9._-]".toRegex(), "_").take(48).ifBlank { "workflow" }
 }
+
 
 /** Default clock that really sleeps for the given millis. */
 object RealStepClock : WorkflowRunnerImpl.StepClock {
     override suspend fun sleep(millis: Long): Unit {
         if (millis > 0) delay(millis)
     }
+}
+
+/** No-op daily-log sink used when no baseDir is wired (pure runner). */
+internal object NoOpDailyLogSink : WorkflowDailyLogSink {
+    override fun append(day: String, fileName: String, text: String, metadata: Map<String, String>): String? = null
+}
+
+/** Lazy ISO `YYYY-MM-DD` supplier (kept in a tiny object so tests can override the provider). */
+internal object LazyIsoDate {
+    fun now(): String = DateTimeFormatter.ISO_LOCAL_DATE.format(LocalDate.now())
 }
 
 /** Deterministic condition evaluator for `if` steps. */

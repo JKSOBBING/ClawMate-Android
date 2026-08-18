@@ -51,7 +51,7 @@ import com.clawmate.app.task.runner.RunStatus
 @Composable
 fun TaskScreen(context: Context, modifier: Modifier = Modifier) {
     val vm: TaskViewModel = viewModel(
-        factory = TaskViewModelFactory(TaskComponent.repository(context), TaskComponent.runner()),
+        factory = TaskViewModelFactory(TaskComponent.repository(context), TaskComponent.runner(context)),
     )
     val state by vm.state.collectAsState()
 

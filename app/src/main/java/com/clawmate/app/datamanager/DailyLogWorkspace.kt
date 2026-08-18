@@ -80,6 +80,116 @@ object DailyLogWorkspace {
         }.getOrNull()
     }
 
+    /**
+     * Append one real numbered entry to an existing (or new) daily-log document,
+     * mirroring the Harmony `WorkflowRunner.appendDailySummaryLog` semantics that
+     * [`DailyLogParser`] already reads: a bounded Harmony `workflow_metadata` +
+     * `latest_entry_index` header followed by blank-line separated `N. text`
+     * numbered entries (`N` keeps climbing so existing stable source refs never
+     * shift).
+     *
+     * This is the single-writer entry point used by the Android workflow runner
+     * so the Home「generation」pipeline gets real input. It never fabricates text:
+     * the caller supplies the real [entryText]; blanks are rejected and every
+     * dimension is bounded (entry chars / file name / document chars / entries
+     * per day).
+     *
+     * Repeat-runs into the same [day]/[fileName] **append** (the previous content
+     * and its stable numbered indices are preserved); only the new entry and the
+     * [latest_entry_index] in the header grow. The write is atomic (temp-file +
+     * rename) and bounded, so a second run can never renumber or lose the first.
+     *
+     * @return the written file, or null when the request is invalid / would exceed
+     *   a bound (over an explicit return-and-stop, never a throw).
+     */
+    fun appendEntry(
+        baseDir: File,
+        day: String,
+        fileName: String,
+        entryText: String,
+        workflowMetadata: Map<String, String> = emptyMap(),
+    ): File? {
+        val safeDay = day.trim()
+        if (!DailyLogPaths.isValidDayDirectory(safeDay)) return null
+        if (!fileName.endsWith(".md") || fileName.length > DailyLogBounds.MAX_FILE_NAME_LENGTH) return null
+        val text = entryText.trim().take(DailyLogBounds.MAX_ENTRY_CHARACTERS)
+        if (text.isEmpty()) return null
+
+        val dayDir = File(File(baseDir, DAILY_LOG_ROOT_RELATIVE), safeDay)
+        val target = File(dayDir, fileName)
+        val existingBody = if (target.isFile) stripMetadataHeader(readExisting(target)) else ""
+
+        val next = lastEntryNumber(existingBody) + 1
+        if (next > DailyLogBounds.MAX_ENTRIES_PER_DAY) return null
+
+        val newBody = if (existingBody.isBlank()) {
+            "$next. $text\n"
+        } else {
+            existingBody.trimEnd('\n') + "\n\n$next. $text\n"
+        }
+        val metadata = buildMetadataHeader(workflowMetadata, next)
+        val content = "$metadata\n$newBody"
+        if (content.length > DailyLogBounds.MAX_DOCUMENT_CHARACTERS) return null
+
+        return runCatching {
+            dayDir.mkdirs()
+            val tmp = File(dayDir, "$fileName.tmp${System.nanoTime()}")
+            tmp.writeText(content)
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                target.parentFile?.mkdirs()
+                target.writeText(content)
+            }
+            target
+        }.getOrNull()
+    }
+
+    /**
+     * The Harmony `<!-- DAILY_LOG_METADATA ... -->` block carrying the flat
+     * [workflow_metadata] primitives (name/description/scene) plus
+     * [latestEntryIndex]. JSON is rendered with 2-space indentation, exactly what
+     * [DailyLogMetadata] (and Harmony `DataManagerUtils`) parse.
+     */
+    private fun buildMetadataHeader(
+        workflowMetadata: Map<String, String>,
+        latestEntryIndex: Int,
+    ): String {
+        val meta = workflowMetadata.entries
+            .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+            .take(DailyLogBounds.MAX_FILE_NAME_LENGTH)
+            .joinToString(",\n") { (k, v) ->
+                "    \"${escape(k)}\": \"${escape(v.take(DailyLogBounds.MAX_ENTRY_CHARACTERS))}\""
+            }
+        return "<!-- DAILY_LOG_METADATA\n{\n" +
+            "  \"workflow_metadata\": {\n$meta\n  },\n" +
+            "  \"latest_entry_index\": $latestEntryIndex\n}\n-->"
+    }
+
+    /** The entry index marker as the Harmony `lastEntryNumber` would scan it. */
+    internal fun lastEntryNumber(body: String): Int {
+        var last = 0
+        body.split('\n').forEach { line ->
+            val dot = line.indexOf(". ")
+            if (dot > 0) {
+                val value = line.substring(0, dot).trim().toIntOrNull()
+                if (value != null && value > last) last = value
+            }
+        }
+        return last
+    }
+
+    /** Strip the DAILY_LOG_METADATA header, returning the raw numbered body. */
+    private fun stripMetadataHeader(content: String): String {
+        val idx = content.indexOf("-->")
+        return if (idx >= 0) content.substring(idx + 3).trimStart() else content
+    }
+
+    private fun readExisting(file: File): String = try {
+        if (file.length() > DailyLogBounds.MAX_DOCUMENT_CHARACTERS.toLong() * 4L) "" else file.readText()
+    } catch (t: Throwable) {
+        ""
+    }
+
     private fun escape(value: String): String =
         value.replace("\\", "\\\\").replace("\"", "\\\"")
 

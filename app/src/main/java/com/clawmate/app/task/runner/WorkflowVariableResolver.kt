@@ -50,6 +50,17 @@ data class WorkflowRunResult(
     val status: RunStatus,
     val message: String,
     val steps: List<StepResult> = emptyList(),
+    /**
+     * Bounded real structured summary text the run produced (Phase 41). Empty
+     * unless the workflow exposed a real output step; never fabricated from bare
+     * echo/failure/debug output. Mapped from real workflow output so the writer
+     * never invents a daily-log entry.
+     */
+    val resultSummary: String = "",
+    /** Absolute daily-log file written (app-private base + relative tree), or
+     * empty when the run produced no daily-log entry (no summary, failed,
+     * blocked, not-configured, or cancelled). */
+    val dailyLogPath: String = "",
 )
 
 /**
