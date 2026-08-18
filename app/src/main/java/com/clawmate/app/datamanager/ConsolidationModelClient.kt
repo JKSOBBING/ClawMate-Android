@@ -85,7 +85,15 @@ class ConsolidationModelClient(
                 system = SPLIT_SYSTEM_PROMPT,
                 user = buildSplitPrompt(chunk),
                 parse = { text -> parseSplitReply(text) },
-            ) ?: continue
+            )
+            if (reply == null) {
+                // Request failure / malformed JSON: every ref in this chunk keeps
+                // its heuristic baseline. Surface the fallback so an explicit seam
+                // can honestly report a full-failure (never a fabricated model).
+                for (entry in chunk) onSourceFallback?.invoke(entry.sourceRef)
+                continue
+            }
+            val handled = HashSet<String>()
             for (rawItem in reply.items) {
                 val sourceRef = ConsolidationText.normalizeFreeText(rawItem.sourceRef)
                 val entry = mapped[sourceRef] ?: continue
@@ -95,9 +103,26 @@ class ConsolidationModelClient(
                 } else {
                     onSourceFallback?.invoke(sourceRef)
                 }
+                handled.add(sourceRef)
+            }
+            // A real reply that omits some of this chunk's refs also keeps heuristic.
+            for (entry in chunk) {
+                if (entry.sourceRef !in handled) onSourceFallback?.invoke(entry.sourceRef)
             }
         }
         return result
+    }
+
+    /**
+     * Split **one** real source entry into bounded candidate facts (Harmony
+     * `DataPipelineModelClient.splitEntryIntoFacts` parity). Returns
+     * `splitEntriesIntoFacts([entry])[entry.sourceRef]`, or the deterministic
+     * heuristic facts if the model reply is malformed / empty / dropped — never
+     * throws and never fabricates a fact.
+     */
+    suspend fun splitEntryIntoFacts(entry: DailyLogEntry): List<CandidateFact> {
+        val batch = splitEntriesIntoFacts(listOf(entry))
+        return batch[entry.sourceRef] ?: heuristicSplit(entry)
     }
 
     // ---------------------------------------------------------------------
@@ -156,41 +181,7 @@ class ConsolidationModelClient(
     // ---------------------------------------------------------------------
 
     /** Deterministic, no-model split of one entry into candidate facts. */
-    internal fun heuristicSplit(entry: DailyLogEntry): List<CandidateFact> {
-        val text = ConsolidationText.normalizeFreeText(entry.text)
-        if (text.isEmpty()) return emptyList()
-        val sceneId = sceneIdOf(entry)
-        val clauses = atomicClauses(text)
-        if (clauses.isEmpty()) {
-            return listOf(
-                CandidateFact(
-                    summary = ConsolidationText.summarizeText(text, 60).ifEmpty { "未命名记录" },
-                    normalizedFact = text,
-                    eventDate = entry.sourceDate,
-                    rawExcerpt = summarize(text, MAX_EXCERPT_CHARACTERS),
-                    sourceRef = entry.sourceRef,
-                    sourceDate = entry.sourceDate,
-                    workflowSceneId = sceneId,
-                    modelNotes = "heuristic_split",
-                    dedupText = ConsolidationText.normalizeDedupText(text),
-                ),
-            )
-        }
-        return clauses.map { clause ->
-            val normalized = ConsolidationText.normalizeFreeText(clause)
-            CandidateFact(
-                summary = normalized,
-                normalizedFact = normalized,
-                eventDate = entry.sourceDate,
-                rawExcerpt = summarize(text, MAX_EXCERPT_CHARACTERS),
-                sourceRef = entry.sourceRef,
-                sourceDate = entry.sourceDate,
-                workflowSceneId = sceneId,
-                modelNotes = "heuristic_atomic_split",
-                dedupText = ConsolidationText.normalizeDedupText(normalized),
-            )
-        }
-    }
+    internal fun heuristicSplit(entry: DailyLogEntry): List<CandidateFact> = deterministicHeuristicSplit(entry)
 
     /** Safe deterministic dedup decision over the recent-scope records. */
     internal fun heuristicDedupDecision(
@@ -259,6 +250,15 @@ class ConsolidationModelClient(
      * `source_ref` / `source_date` / `workflow_scene_id`. Unknown/blank/over-long /
      * duplicate facts are dropped (never coerced); zero admitted facts means the
      * caller keeps the heuristic baseline.
+     *
+     * Phase-37 fidelity (Harmony `normalizeFactPayloads` + `atomicizeCandidateFacts`):
+     *   - `event_date` that is not a strict ISO date **or that is later than the
+     *     entry's `source_date`** (out-of-bounds, since an event can only occur on
+     *     or before its source date) is replaced by `source_date` — an invalid or
+     *     future date is never admitted verbatim;
+     *   - the admitted model facts are then **atomicized** (port of
+     *     `atomicizeCandidateFacts`) so a model fact that still packs multiple
+     *     atomic records is split into stable, deduped atomic facts.
      */
     internal fun validateSplitFacts(rawFacts: List<RawSplitFact>, entry: DailyLogEntry): List<CandidateFact> {
         val out = ArrayList<CandidateFact>()
@@ -270,7 +270,7 @@ class ConsolidationModelClient(
             val fact = CandidateFact(
                 summary = validSummary(raw.summary, normalized),
                 normalizedFact = normalized,
-                eventDate = if (ConsolidationText.isIsoDate(raw.eventDate)) raw.eventDate else "",
+                eventDate = normalizeEventDate(raw.eventDate, entry.sourceDate),
                 tags = ConsolidationText.normalizeTags(raw.tags),
                 modelNotes = MODEL_SPLIT_NOTE,
                 rawExcerpt = summarize(entry.text, MAX_EXCERPT_CHARACTERS),
@@ -284,7 +284,67 @@ class ConsolidationModelClient(
             out.add(fact)
             if (out.size >= MAX_FACTS_PER_ENTRY) break
         }
-        return out
+        return atomicizeFacts(entry, out)
+    }
+
+    /**
+     * Port of Harmony `normalizeFactPayloads` event_date handling: an invalid
+     * (non-ISO) or out-of-bounds date (later than [sourceDate]) is replaced by the
+     * entry's [sourceDate], whose semantics allow an event on or before it only.
+     */
+    private fun normalizeEventDate(raw: String, sourceDate: String): String {
+        val candidate = ConsolidationText.normalizeFreeText(raw)
+        if (!ConsolidationText.isIsoDate(candidate)) return sourceDate
+        // Out-of-bounds: an event cannot occur after its source date.
+        if (ConsolidationText.dateToTime(sourceDate) > 0L &&
+            ConsolidationText.dateToTime(candidate) > ConsolidationText.dateToTime(sourceDate)
+        ) {
+            return sourceDate
+        }
+        return candidate
+    }
+
+    /**
+     * Port of Harmony `atomicizeCandidateFacts`: re-split each admitted model fact's
+     * `normalized_fact` (then raw_excerpt) into atomic clauses, keeping real
+     * `source_ref` / `source_date` / `workflow_scene_id`; dedupes and caps. When no
+     * clause splits out, the fact itself is kept as the single atomic fact.
+     */
+    internal fun atomicizeFacts(entry: DailyLogEntry, facts: List<CandidateFact>): List<CandidateFact> {
+        val atomic = ArrayList<CandidateFact>()
+        val seen = HashSet<String>()
+        for (fact in facts) {
+            var clauses = atomicClauses(fact.normalizedFact)
+            if (clauses.isEmpty()) clauses = atomicClauses(fact.rawExcerpt)
+            if (clauses.isNotEmpty()) {
+                for (clause in clauses) {
+                    val dedupText = ConsolidationText.normalizeDedupText(clause)
+                    if (dedupText.isEmpty() || !seen.add(dedupText)) continue
+                    atomic.add(
+                        fact.copy(
+                            summary = ConsolidationText.summarizeText(clause),
+                            normalizedFact = ConsolidationText.normalizeFreeText(clause),
+                            eventDate = fact.eventDate.ifEmpty { entry.sourceDate },
+                            rawExcerpt = fact.rawExcerpt,
+                            dedupText = dedupText,
+                        ),
+                    )
+                    if (atomic.size >= MAX_FACTS_PER_ENTRY) return atomic
+                }
+            } else {
+                val dedupText = ConsolidationText.normalizeDedupText(fact.normalizedFact)
+                if (dedupText.isNotEmpty() && seen.add(dedupText)) {
+                    atomic.add(
+                        fact.copy(
+                            summary = ConsolidationText.summarizeText(fact.summary.ifEmpty { fact.normalizedFact }),
+                            dedupText = dedupText,
+                        ),
+                    )
+                    if (atomic.size >= MAX_FACTS_PER_ENTRY) return atomic
+                }
+            }
+        }
+        return atomic
     }
 
     // ---------------------------------------------------------------------
@@ -415,14 +475,7 @@ class ConsolidationModelClient(
         }
     }
 
-    private fun atomicClauses(text: String): List<String> {
-        val amounts = ConsolidationText.extractAmountTokens(text)
-        if (amounts.size > 1) {
-            val split = splitAmountClauses(text)
-            if (split.isNotEmpty()) return split
-        }
-        return emptyList()
-    }
+    private fun atomicClauses(text: String): List<String> = sharedAtomicClauses(text)
 
     private fun splitAmountClauses(text: String): List<String> {
         val cleaned = text
@@ -529,3 +582,93 @@ data class DedupOutcome(
     val decision: DedupDecision,
     val source: DecisionSource,
 )
+
+// ===========================================================================
+// Shared deterministic split helpers (Phase 37)
+// ---------------------------------------------------------------------------
+// These are top-level (no client instance / no network) so the Phase-37
+// [FactSplitRunner] explicit seam and the Phase-34 [ConsolidationModelClient]
+// both derive the same deterministic local baseline without duplicating the
+// ported `heuristicSplit` / `extractAtomicClauses` logic.
+// ===========================================================================
+
+/**
+ * Deterministic, no-model split of one real [DailyLogEntry] into candidate facts
+ * (synchronous port of `DataManagerUtils.heuristicSplit`, kept DRY for both the
+ * Phase-34 cloud client and the Phase-37 explicit seam). [sceneIdOf] resolves the
+ * real `task_scene_id` from the entry metadata; [excerpt] bounds the carried
+ * raw excerpt. Never calls the network.
+ */
+internal fun deterministicHeuristicSplit(
+    entry: DailyLogEntry,
+    sceneIdOf: (DailyLogEntry) -> Int = ::determinationSceneIdOf,
+    excerpt: (String, Int) -> String = { text, max -> ConsolidationText.summarizeText(text, max) },
+): List<CandidateFact> {
+    val text = ConsolidationText.normalizeFreeText(entry.text)
+    if (text.isEmpty()) return emptyList()
+    val sceneId = sceneIdOf(entry)
+    val clauses = sharedAtomicClauses(text)
+    if (clauses.isEmpty()) {
+        return listOf(
+            CandidateFact(
+                summary = ConsolidationText.summarizeText(text, 60).ifEmpty { "未命名记录" },
+                normalizedFact = text,
+                eventDate = entry.sourceDate,
+                rawExcerpt = excerpt(text, ConsolidationModelClient.MAX_EXCERPT_CHARACTERS),
+                sourceRef = entry.sourceRef,
+                sourceDate = entry.sourceDate,
+                workflowSceneId = sceneId,
+                modelNotes = "heuristic_split",
+                dedupText = ConsolidationText.normalizeDedupText(text),
+            ),
+        )
+    }
+    return clauses.map { clause ->
+        val normalized = ConsolidationText.normalizeFreeText(clause)
+        CandidateFact(
+            summary = normalized,
+            normalizedFact = normalized,
+            eventDate = entry.sourceDate,
+            rawExcerpt = excerpt(text, ConsolidationModelClient.MAX_EXCERPT_CHARACTERS),
+            sourceRef = entry.sourceRef,
+            sourceDate = entry.sourceDate,
+            workflowSceneId = sceneId,
+            modelNotes = "heuristic_atomic_split",
+            dedupText = ConsolidationText.normalizeDedupText(normalized),
+        )
+    }
+}
+
+/** Default scene-id resolver: read a real `task_scene_id` from flat workflow metadata (-1 when none). */
+internal fun determinationSceneIdOf(entry: DailyLogEntry): Int =
+    entry.workflowMetadata["task_scene_id"]?.trim()?.toIntOrNull() ?: -1
+
+/**
+ * Shared atomic-clause splitter used by the deterministic heuristic split and
+ * the model-fact atomicizer (port of `DataManagerUtils.extractAtomicClauses`,
+ * reduced to the bounded transaction/amount path the Android pipeline already
+ * validated). Returns an empty list when the text is a single atomic record.
+ */
+internal fun sharedAtomicClauses(text: String): List<String> {
+    val amounts = ConsolidationText.extractAmountTokens(text)
+    if (amounts.size > 1) {
+        val split = sharedSplitAmountClauses(text)
+        if (split.isNotEmpty()) return split
+    }
+    return emptyList()
+}
+
+internal fun sharedSplitAmountClauses(text: String): List<String> {
+    val cleaned = text
+        .replace(Regex("""^当前页面显示了.*?(?:订单记录|消费记录|账单记录)[，,:：\s]*"""), "")
+        .replace(Regex("""^近期在\d+家店(?:有)?消费(?:过|记录)?[，,:：\s]*"""), "")
+    val out = ArrayList<String>()
+    val seen = HashSet<String>()
+    for (chunk in cleaned.split("。")) {
+        val clause = ConsolidationText.normalizeFreeText(chunk.replace(Regex("[；;]+$"), ""))
+        if (clause.isNotEmpty() && ConsolidationText.extractAmountTokens(clause).isNotEmpty()) {
+            if (seen.add(clause)) out.add(clause)
+        }
+    }
+    return out
+}

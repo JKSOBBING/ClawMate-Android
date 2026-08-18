@@ -761,6 +761,32 @@ Unit tests added in Phase 11 (deterministic; no device, no ML Kit runtime):
 
 ## 8. Changelog
 
+- **Phase 37 (this phase):** Ports the Harmony **fact-batching** path
+  (`DataPipelineModelClient.splitEntriesIntoFacts` / `splitEntryIntoFacts`) onto an
+  explicit Android seam and pins the periodic-schedule host contract (see §23).
+  1. **Explicit fact-splitting seam** — `FactSplitRunner` + `FactSplitTypes` reuse the
+     Phase-34 `ConsolidationModelClient` (same shared `ChatClient` +
+     `ConsolidationModelConfig`). It reads the **real** daily-log scope and returns
+     candidate facts keyed by the entries' real `source_ref`; strict JSON, a real-ref
+     whitelist (unknown / duplicate / out-of-scope `source_ref` refused), bounded
+     batch/chars/count, `event_date` that is non-ISO or > the `source_date` replaced
+     by `source_date`, and model-fact atomicization (Harmony `atomicizeCandidateFacts`).
+     Failure / malformed JSON always falls back to the deterministic local split —
+     never a fabricated fact. Default `EMPTY`/`LOCAL_ONLY` (zero network) unless an
+     explicit + fully-configured action; serial / cancellable; the result is returned
+     (never auto-persisted). Wired to an explicit Settings "日志事实拆分" action.
+  2. **Phase-34 split fidelity fixes** — `ConsolidationModelClient` gained the
+     missing singular `splitEntryIntoFacts`, faithful `event_date` bounds + fallback,
+     and a shared `deterministicHeuristicSplit`/atomic-clause helper; `onSourceFallback`
+     now also fires on a request failure / malformed reply so an explicit seam can
+     report a full-failure honestly.
+  3. **Periodic-schedule host contract (WorkManager still absent)** — added A3 host
+     tests pinning the unique canonical work name, the `NOT_REQUIRED` network
+     constraint + `LOCAL_ONLY` mode, and the local-only worker that never references
+     the model-backed repository. A real `WorkManager` `Worker`/`PeriodicWorkRequest`
+     is still intentionally not introduced (the `androidx.work` artifacts + several
+     transitives are absent from the offline cache and would need a network download),
+     so the `PeriodicTriggerAdapter` remains the replaceable contract (§22/§23).
 - **Phase 36 (this phase):** Wires the Phase-35 seams into real **explicit Android
   Settings actions** and adds the **generic batch event-enrichment** model seam
   (see §22).
@@ -2419,3 +2445,62 @@ platform 34, Gradle 8.9):
   — the Phase-36 batch event-enrichment seam returns a typed surface keyed by real
   event id; persisting those derived keywords/domains/todos into `IndexService` /
   Home recommendation / collection grouping is a future phase.
+
+## 23. Phase 37 — explicit fact-splitting seam + schedule host contract
+
+**What was delivered** (all under `app/src/main/java/com/clawmate/app/`):
+
+- `datamanager/FactSplitTypes.kt` — bounded typed models: `SplitSourceScope`
+  (the real `SourceEntry` scope the split accepts), `SplitFact` (the bounded
+  `CandidateFact` surface), `FactSplitStatus` (`EMPTY` / `LOCAL_ONLY` / `MODEL` /
+  `FALLBACK`), `FactSplitResult` (keyed by real `source_ref`, never auto-persisted),
+  and bounds (batch 8, model cap, chars / facts caps).
+- `datamanager/FactSplitRunner.kt` — the single explicit seam. Loads the real
+  daily-log scope, computes the deterministic local split (zero-network baseline),
+  and only for an explicit + fully-configured action invites the model through the
+  existing Phase-34 `ConsolidationModelClient`. Refuses unknown / duplicate /
+  out-of-scope `source_ref`; reports a genuine `FALLBACK` when the model reply
+  fails / malforms (tracked via `onSourceFallback`); serial / cancellable.
+- `datamanager/FactSplitClientFactory.kt` — production composition reusing
+  `ConsolidationModelClientFactory` (same shared `ChatClient`).
+- `datamanager/ConsolidationModelClient.kt` — added the missing singular
+  `splitEntryIntoFacts`; faithful `event_date` fallback (non-ISO or > `source_date`
+  → `source_date`) and model-fact atomicization (`normalizeFactPayloads` +
+  `atomicizeCandidateFacts` parity); `onSourceFallback` now also fires on a request
+  failure / malformed reply; extracted shared `deterministicHeuristicSplit` /
+  `sharedAtomicClauses` helpers used by both the local and model paths.
+- `settings/ui/SettingsViewModel.kt` + `SettingsViewModelFactory.kt` + `SettingsUiState.kt`
+  + `SettingsSections.kt` — injectable `FactSplitRunner` and an explicit
+  "日志事实拆分" Settings action (zero network unless configured + explicit; result
+  returned, never auto-persisted).
+
+**Safety & honesty invariants**
+
+- Disabled by default; zero network unless explicit + fully-configured + real entries.
+- Accepts only real daily-log source scope; the model can never invent a `source_ref`,
+  an event date, or a fact.
+- Malformed / failed model replies always fall back to the deterministic local split.
+- Serial, cancellable; result returned for caller-only persistence; no URI / path /
+  token / secret carried in or out.
+
+**Verification (Phase 37)**
+
+1. Focused new tests `FactSplitTest` (+ `PeriodicSchedulingHostTest` A3 additions and
+   `SettingsSchedulingEnrichTest` additions) — green (serial offline).
+2. Full suite `:app:testDebugUnitTest` and `:app:assembleDebug` — serial
+   `--offline --no-daemon --max-workers=1` (numbers reported in the final result doc).
+3. `git diff --check` clean.
+
+**Remaining (honestly not ported)**
+
+- **Real WorkManager worker / `PeriodicWorkRequest`** — `androidx.work` + several
+  transitives (`lifecycle-service`, `sqlite-framework`, `annotation-experimental`,
+  `listenablefuture`) are absent from the offline Gradle cache and would require a
+  network download that conflicts with the repo's hard offline mandate. The
+  `PeriodicTriggerAdapter`/`SchedulingPolicy` remain the replaceable contract.
+- **Automated background cadence** — scheduling is still explicit-action-driven; no
+  system-triggered timer is registered.
+- **Persisting split facts downstream** — the Phase-37 seam returns candidate facts
+  keyed by `source_ref`; feeding them into consolidation / a persisted fact store is
+  a caller decision not yet wired.
+- **Profile/entity enrichment** already covered by Phases 32/35/36 (not re-ported).

@@ -39,6 +39,8 @@ data class SettingsUiState(
     val enrichBusy: Boolean = false,
     val enrichResultMessage: String? = null,
     val batchEnrichResultMessage: String? = null,
+    // Phase 37 — explicit fact-splitting result message (never auto-persisted).
+    val factSplitResultMessage: String? = null,
 )
 /** Simple storage/about facts, derived at load time. */
 data class StorageSummary(

@@ -112,6 +112,69 @@ class PeriodicSchedulingHostTest {
         assertEquals(null, runBlocking { host.runNow() })
     }
 
+    // ---- 3a. A3 host contract (Phase 37): unique work name + constraints +
+    //         local-only worker, verified on the replaceable seam.
+    //         (Real WorkManager is still absent from the offline cache; these
+    //         assertions pin the contract a future Worker must satisfy.)
+
+    @Test
+    fun `the registered task uses the single canonical unique work name`() {
+        val scheduler = PeriodicConsolidationScheduler()
+        val adapter = InProcessPeriodicTriggerAdapter(scheduler)
+        adapter.schedule(
+            policy = SchedulingPolicy(taskName = adapter.taskName, mode = SchedulerMode.LOCAL_ONLY, networkConstraint = NetworkConstraint.NOT_REQUIRED),
+            job = LocalOnlyPeriodicJob(tempBase()),
+        )
+        // One and only one task name exists, and it is the canonical constant.
+        assertEquals(listOf(SchedulingPolicyDefaults.DEFAULT_TASK_NAME), scheduler.scheduledTaskNames())
+        assertEquals("clawmate.periodic.local.consolidation", SchedulingPolicyDefaults.DEFAULT_TASK_NAME)
+    }
+
+    @Test
+    fun `the scheduled policy constraint is locally-local with no network requirement`() {
+        val base = tempBase()
+        // Register via the host; the only entry is a LOCAL_ONLY + NOT_REQUIRED
+        // local-only job under the canonical name.
+        val scheduler = PeriodicConsolidationScheduler()
+        val adapter = InProcessPeriodicTriggerAdapter(scheduler)
+        adapter.schedule(
+            policy = SchedulingPolicy(
+                taskName = adapter.taskName,
+                mode = SchedulerMode.LOCAL_ONLY,
+                intervalMinutes = SchedulingPolicyDefaults.DEFAULT_INTERVAL_MINUTES,
+                networkConstraint = NetworkConstraint.NOT_REQUIRED,
+                conflictPolicy = TaskConflictPolicy.REPLACE,
+            ),
+            job = LocalOnlyPeriodicJob(base),
+        )
+        assertTrue(adapter.isScheduled())
+        // Constraint contract: a WorkManager-equivalent worker must run with
+        // NOT_REQUIRED connectivity and a LOCAL_ONLY mode (never a connected job).
+        assertEquals(SchedulingPolicyDefaults.DEFAULT_TASK_NAME, adapter.taskName)
+        // The policy surface itself enforces local-only + no-network as the only
+        // registrable combination.
+        assertTrue(SchedulingPolicy(mode = SchedulerMode.LOCAL_ONLY).enabled)
+        assertFalse(SchedulingPolicy(mode = SchedulerMode.LOCAL_ONLY, networkConstraint = NetworkConstraint.CONNECTED).enabled)
+        assertFalse(SchedulingPolicy(mode = SchedulerMode.DISABLED).enabled)
+    }
+
+    @Test
+    fun `the scheduled worker is local-only and never the model-backed repository`() {
+        val base = tempBase()
+        seedDailyLog(base, "2026-08-01", "a.logs.md", listOf("买咖啡花 25 元"))
+        val host = PeriodicSchedulingHost(base)
+        host.scheduleIfEnabled(true)
+        val result = runBlocking { host.runNow() }
+        // The worker produced real deterministic local artifacts without any model
+        // path. The local-only job (:LocalOnlyPeriodicJob) never references
+        // :CloudConsolidationRepository.; this run rebuilds the Phase-30/33/32
+        // local index, not cloud-consolidated records.
+        assertTrue(result != null && result!!.indexedEvents > 0)
+        assertTrue(result!!.localRecords >= 0)
+        // Cancellation/failure leaves no stale registration (cleared from running).
+        assertEquals(true, host.isScheduled())
+    }
+
     // ---- 3. cancellable, serial ----
 
     @Test

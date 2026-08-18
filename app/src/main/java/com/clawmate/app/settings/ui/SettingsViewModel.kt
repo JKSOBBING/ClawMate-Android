@@ -98,6 +98,7 @@ class SettingsViewModel(
     private val batchEnricher: com.clawmate.app.datamanager.BatchEventEnricher? = null,
     private val entityEnrichmentRunner: com.clawmate.app.datamanager.EntityEnrichmentRunner? = null,
     private val entityPersistence: com.clawmate.app.datamanager.EntityEnrichmentPersistence? = null,
+    private val factSplitRunner: com.clawmate.app.datamanager.FactSplitRunner? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState(versionName = versionName, versionCode = versionCode))
@@ -791,6 +792,53 @@ class SettingsViewModel(
                 it.copy(
                     enrichBusy = false,
                     batchEnrichResultMessage = "批量增强状态=${result.status.token}，事件=${result.eventCount}，采纳=${result.admittedEventCount} $sample",
+                )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 37 — explicit fact splitting (Harmony `splitEntriesIntoFacts` /
+    // `splitEntryIntoFacts` seam; caller decides persistence).
+    // ------------------------------------------------------------------
+
+    /**
+     * Explicitly run the Phase-37 fact-splitting seam. Only ever from a
+     * Settings/Data-Manager click; zero network unless
+     * [com.clawmate.app.datamanager.ConsolidationModelConfig] is fully configured
+     * and the action is explicit. The result is a typed surface keyed by the
+     * entries' **real** `source_ref` and is **never auto-persisted** — the caller
+     * decides how to apply it. A LOCAL_ONLY / FALLBACK result carries the
+     * deterministic local split; EMPTY means no real daily-log entries.
+     */
+    fun runFactSplit() {
+        val runner = factSplitRunner ?: run {
+            _state.update { it.copy(enrichBusy = false, factSplitResultMessage = "未注入事实拆分运行器 — 未执行") }
+            return
+        }
+        if (_state.value.enrichBusy) return
+        _state.update { it.copy(enrichBusy = true, factSplitResultMessage = null) }
+        viewModelScope.launch {
+            val config = com.clawmate.app.datamanager.ConsolidationModelConfig.fromEndpointConfig()
+            val result = runCatching {
+                runner.splitFacts(
+                    mode = com.clawmate.app.datamanager.FactSplitRunner.SplitMode.ModelRequested(
+                        explicitAction = true,
+                        config = config,
+                    ),
+                    clientProvider = { cfg -> com.clawmate.app.datamanager.FactSplitClientFactory.client(cfg) },
+                )
+            }.getOrElse { e ->
+                _state.update { it.copy(enrichBusy = false, factSplitResultMessage = "事实拆分失败：${e.message}") }
+                return@launch
+            }
+            val sample = result.facts.values.take(1).firstOrNull()?.let { refFacts ->
+                refFacts.firstOrNull()?.let { "样例：${it.sourceRef} → ${it.normalizedFact.take(40)}" }.orEmpty()
+            }.orEmpty()
+            _state.update {
+                it.copy(
+                    enrichBusy = false,
+                    factSplitResultMessage = "事实拆分状态=${result.status.token}，来源=${result.sourceCount}，事实=${result.totalFacts}（结果仅返回，未自动写入） $sample",
                 )
             }
         }

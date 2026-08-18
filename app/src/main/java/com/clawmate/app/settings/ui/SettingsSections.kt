@@ -687,6 +687,35 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
             modifier = Modifier.padding(top = 6.dp),
         )
     }
+
+    // ------------------------------------------------------------------
+    // Phase 37 — explicit fact splitting (Harmony `splitEntriesIntoFacts` /
+    // `splitEntryIntoFacts`; result returned, caller decides persistence).
+    // ------------------------------------------------------------------
+    SettingsGroupCard(
+        title = "日志事实拆分（模型）",
+        subtitle = "把真实 daily-log 条目批量为候选事实（Phase 37）：零网络除非显式触发 + 完整配置 + 真实条目；结果仅返回，不自动写入",
+    ) {
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "运行事实拆分",
+                    kind = SettingsActionKind.Primary,
+                    enabled = !state.enrichBusy,
+                    onClick = { vm.runFactSplit() },
+                ),
+            ),
+        )
+        state.factSplitResultMessage?.let { m ->
+            Text(m, fontSize = 12.sp, color = SettingsThemeColors.SecondaryText, modifier = Modifier.padding(top = 6.dp))
+        }
+        Text(
+            "仅在显式点击时运行：模型对每个真实 source_ref 做白名单匹配，按 batch/chars/count 限制返回候选事实（summary / normalized_fact / event_date / tags / model_notes / dedup_text）；失败/畸形/越界回退到确定性本地拆分，绝不伪造事实。结果按真实 source_ref 键控返回，调用方自行决定是否持久化。",
+            fontSize = 11.sp,
+            color = SettingsThemeColors.SecondaryText,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
 }
 
 @Composable

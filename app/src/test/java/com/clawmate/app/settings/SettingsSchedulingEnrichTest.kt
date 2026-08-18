@@ -7,6 +7,7 @@ import com.clawmate.app.settings.ui.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -134,6 +135,36 @@ class SettingsSchedulingEnrichTest {
         val vm = SettingsViewModel(repo(), "1.0.0", 1L)
         vm.runBatchEventEnrichment()
         assertTrue(vm.state.value.batchEnrichResultMessage != null)
+    }
+
+    // ---- 4. Phase 37 — explicit fact-splitting action ----
+
+    @Test
+    fun `fact split without host reports a guarded outcome`() = runTest {
+        val vm = SettingsViewModel(repo(), "1.0.0", 1L)
+        vm.runFactSplit()
+        assertTrue(vm.state.value.factSplitResultMessage != null)
+        assertTrue(vm.state.value.factSplitResultMessage!!.contains("未注入"))
+    }
+
+    @Test
+    fun `fact split with an injected runner is zero network local-only by default`() = runTest {
+        // Isolate from any EndpointConfig seeded by an earlier test in this JVM:
+        // with no runtime cloud-planner config, the fact split must stay LOCAL_ONLY.
+        com.clawmate.app.config.EndpointConfig.load(java.util.Properties())
+        val base = tempBase()
+        // Seed a real daily-log entry using the workspace writer (proper format).
+        com.clawmate.app.datamanager.DailyLogWorkspace.writeDocument(
+            base, "2026-08-01", "a.logs.md", listOf("买了咖啡花了 25 元"),
+        )
+        val runner = com.clawmate.app.datamanager.FactSplitRunner(base)
+        val vm = SettingsViewModel(repo(), "1.0.0", 1L, factSplitRunner = runner)
+        vm.runFactSplit()
+        // Let the launched coroutine complete so the honest message is recorded.
+        advanceUntilIdle()
+        // No endpoint config seeded -> LOCAL_ONLY (zero network), honest message.
+        val message = vm.state.value.factSplitResultMessage
+        assertTrue("message was: $message", message != null && message.contains("local_only"))
     }
 
     @Test

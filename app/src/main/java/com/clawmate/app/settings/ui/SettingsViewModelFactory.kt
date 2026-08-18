@@ -46,6 +46,7 @@ class SettingsViewModelFactory(
                 batchEnricher = filesDir?.let { com.clawmate.app.datamanager.BatchEventEnricher(it) },
                 entityEnrichmentRunner = filesDir?.let { com.clawmate.app.datamanager.EntityEnrichmentRunner(it) },
                 entityPersistence = filesDir?.let { com.clawmate.app.datamanager.EntityEnrichmentPersistence(it) },
+                factSplitRunner = filesDir?.let { com.clawmate.app.datamanager.FactSplitRunner(it) },
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
