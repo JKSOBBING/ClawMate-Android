@@ -37,6 +37,11 @@ class AccessibilityAutoAgentService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         AccessibilityStateRegistry.onServiceConnected()
+        // Phase 47 — expose the live, connected service so the agent's GUI tools
+        // can reach the real gated executor (see SafeActionServiceHolder). The
+        // executor is still re-validated by ControlledSafeAccessibilityDispatcher
+        // on every action.
+        SafeActionServiceHolder.onConnected(this)
         AppLogger.i(LOG_TAG, "AutoAgent accessibility service connected")
     }
 
@@ -48,16 +53,19 @@ class AccessibilityAutoAgentService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        // No-op: nothing executing that could be interrupted.
+        // No-op: nothing executing that could be interrupted. The service stays
+        // connected; on a real disconnect the holder is cleared below.
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        SafeActionServiceHolder.onDisconnected()
         AccessibilityStateRegistry.onServiceDisconnected()
         AppLogger.i(LOG_TAG, "AutoAgent accessibility service unbound")
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        SafeActionServiceHolder.onDisconnected()
         AccessibilityStateRegistry.onServiceDisconnected()
         super.onDestroy()
     }

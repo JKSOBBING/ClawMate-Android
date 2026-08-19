@@ -2900,3 +2900,45 @@ JVM suite covers the decision seam (opt-in gate, schedule/cancel/replace, failur
 restore reconcile) via fakes and the result file states this boundary explicitly. The debug APK is
 signed with the local debug keystore (workspace `.android/` shadowing the sandbox-read-only
 `/root/.android`).
+
+## 29. Phase 47 — bridge controlled Accessibility semantic executor to the agent GUI tool boundary
+
+Phase 47 makes the already-existing, gated **safe semantic** AccessibilityService executor
+(`SafeAccessibilityExecutor`, `AndroidSafeAccessibilityExecutor`, `AccessibilityAutoAgentService`,
+allowlist `SAFE_ACTION_ALLOWLIST`) actually reachable from the chat agent's GUI tools, while keeping
+the default behavior **rejected**.
+
+**What is wired (only the closed safe allowlist, per the current executor).** The seven safe
+semantic actions — `click_text`, `click_content_description`, `back`, `scroll_forward`,
+`scroll_backward`, `global_back`, `global_home` — are exposed to the agent as `gui_*` tools
+(`gui_click_text`, `gui_click_content_description`, `gui_back`, `gui_scroll_forward`,
+`gui_scroll_backward`, `gui_global_back`, `gui_global_home`) via a new pure bridge
+(`accessibility/GuiSafeActionBridge`) + live device gateway (`accessibility/LiveSafeActionGateway`).
+The **coordinate/gesture/extraction** Phase-19 actions (`_screen_tap`/`type_text`/`swipe`/
+`capture_screen`/`open_app`) are **NOT** on the safe allowlist and stay controlled-disabled; there
+is no arbitrary TAP, raw gesture, shell / adb / hdc, screenshot upload, text injection or arbitrary
+package control.
+
+**Multi-gate kept on every invocation.** The action is performed only when ALL of: user's explicit
+accessibility opt-in (`accessibilityOptIn`, reflected via `AccessibilityOptInHolder`),
+session-level system AccessibilityService connected (`AccessibilityStateRegistry` +
+`SafeActionServiceHolder` holding the live service), live foreground package allowlisted
+(conservative `com.clawmate.app`), and the requested action on the closed allowlist with bounded
+inputs. Any missing gate returns an explicit `NOT_CONFIGURED` / `BLOCKED_SERVICE` /
+`BLOCKED_PACKAGE` / `UNSUPPORTED` result (never a fake success); default = rejected because the
+opt-in defaults off.
+
+**No information leakage.** Tool results are bounded (`≤160`-char de-identified messages, JSON with
+only `ok`/`status`/`message`); success is a fixed semantic label — full `AccessibilityNodeInfo`,
+screen text, screenshots, URIs or tokens are never written to logs, model context or the network,
+and the GUI tool never auto-triggers network/model calls.
+
+**Timeout/cancellation.** The node-bounded dispatch is wrapped in `withTimeout(10s)` on
+`Dispatchers.Default` so it cannot block the agent main thread; a timeout folds into an honest
+`ERROR`.
+
+Harmonie对照 (`/root/mobiinfra-oh`): the reference `MobileGuiTaskTool.ets` / GUI workflow is
+explicitly device/HDC/permission-gated (confirm callback + run callback, Planner/Decider config,
+hdc bridge). Android's controlled Accessibility executor is the on-device, tightly-scoped analog
+that brings only the safe semantic actions to the agent; HDC `run_cmd`/coordinate GUI remains
+disabled.

@@ -144,6 +144,9 @@ class SettingsViewModel(
                     dirty = false,
                 )
             }
+            // Phase 47 — reflect the restored opt-in so the agent's GUI tools
+            // build an honest gate on app restart (default OFF = REJECTED).
+            com.clawmate.app.accessibility.AccessibilityOptInHolder.set(draft.accessibilityOptIn)
         }
     }
 
@@ -250,7 +253,11 @@ class SettingsViewModel(
     fun setWorkflowHardwareSteps(value: Boolean) = updateDraft { it.copy(workflowHardwareStepsEnabled = value) }
     fun setPeriodicLocalConsolidationEnabled(value: Boolean) =
         updateDraft { it.copy(periodicLocalConsolidationEnabled = value) }
-    fun setAccessibilityOptIn(value: Boolean) = updateDraft { it.copy(accessibilityOptIn = value) }
+    fun setAccessibilityOptIn(value: Boolean) = updateDraft { it.copy(accessibilityOptIn = value) }.also {
+        // Phase 47 — reflect the explicit opt-in so the agent's GUI tools build
+        // an honest gate from live state (default OFF = REJECTED).
+        com.clawmate.app.accessibility.AccessibilityOptInHolder.set(value)
+    }
     fun setOverlayOptIn(value: Boolean) = updateDraft { it.copy(overlayOptIn = value) }
     fun setPcServerUrl(value: String) = updateDraft { it.copy(pcServerUrl = value) }
 

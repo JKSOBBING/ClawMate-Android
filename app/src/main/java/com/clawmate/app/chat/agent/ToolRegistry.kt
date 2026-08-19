@@ -228,6 +228,17 @@ fun createDefaultToolRegistry(): ToolRegistry = ToolRegistry().apply {
         name = "open_app",
         description = "Launch another app on the device. Executing cross-app control requires a PC bridge / AccessibilityService.",
     )
+    // ------------------------------------------------------------------
+    // Phase 47 — the *safe semantic* GUI tools: the only agent tools that can
+    // reach the real on-device AccessibilityService executor. They map to the
+    // closed SAFE_ACTION_ALLOWLIST (click_text / click_content_description /
+    // back / scroll_forward / scroll_backward / global_back / global_home).
+    // Each is gated on every invocation by the multi-gate boundary (explicit
+    // opt-in + connected service + foreground-package allowlist + action
+    // allowlist) and returns only a bounded, de-identified status/summary —
+    // never node content, screenshots, URIs or secrets.
+    // ------------------------------------------------------------------
+    registerSafeSemanticGuiTools(this)
     // Phase 20 — the float-overlay status tool reports the *live* overlay gate
     // (opt-in + observed SYSTEM_ALERT_WINDOW grant + renderer). It stays
     // controlled-disabled (no fake overlay is ever drawn), but its message now
@@ -254,6 +265,128 @@ private fun ToolRegistry.registerGuiDisabledTool(registry: ToolRegistry, name: S
             )
         },
     )
+}
+
+/**
+ * Registers the Phase 47 safe *semantic* GUI tools. These are the ONLY tools
+ * permitted to reach the on-device safe AccessibilityService executor. Each
+ * adapter:
+ *  - parses the model's JSON args into the bounded params shape the safe
+ *    allowlist accepts (`text` / `content_description` / `package_name`);
+ *  - routes through [LiveSafeActionGateway] (opt-in + connected service +
+ *    foreground-package allowlist + action allowlist), with a bounded timeout;
+ *  - returns the sanitized [SafeActionToolResult] JSON — never node content,
+ *    screenshots, URIs or secrets.
+ *
+ * The coordinate/gesture/extraction tools (`gui_screen_tap` / `gui_type_text` /
+ * `gui_swipe` / `capture_screen` / `open_app`) are NOT registered here and stay
+ * controlled-disabled.
+ */
+private fun ToolRegistry.registerSafeSemanticGuiTools(registry: ToolRegistry) {
+    val bridge = com.clawmate.app.accessibility.GuiSafeActionBridge
+    for (id in com.clawmate.app.accessibility.SafeAccessibilityActionId.entries) {
+        val toolName = bridge.toolNameFor(id)
+        registry.register(
+            AgentTool(
+                name = toolName,
+                description = safeSemanticToolDescription(id),
+                parameters = safeSemanticToolParameters(id),
+            ) { argsText, _ ->
+                val params = safeActionParamsFromJson(argsText)
+                if (params.error != null) {
+                    return@AgentTool safeActionResultJson(
+                        false, "UNSUPPORTED", "「$toolName」参数不合法：${params.error}。未执行任何操作。",
+                    )
+                }
+                val result = com.clawmate.app.accessibility.LiveSafeActionGateway.dispatchOrTimeout(
+                    toolName = toolName,
+                    params = params.params,
+                )
+                result.toJsonString()
+            },
+        )
+    }
+}
+
+/** A bounded, human-readable OpenAI `description` for a safe semantic GUI tool. */
+private fun safeSemanticToolDescription(id: com.clawmate.app.accessibility.SafeAccessibilityActionId): String = when (id) {
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.CLICK_TEXT ->
+        "Click the visible on-screen element whose text equals the provided `text`. Safe, in-app, gated by explicit opt-in + allowlisted foreground app. Returns a bounded status."
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.CLICK_CONTENT_DESCRIPTION ->
+        "Click the visible on-screen element whose content-description equals the provided `content_description`. Safe, in-app, gated. Returns a bounded status."
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.BACK ->
+        "Semantic back navigation within the allowlisted foreground app. Safe, gated. Returns a bounded status."
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.SCROLL_FORWARD ->
+        "Scroll the active scrollable node forward within the allowlisted foreground app. Safe, gated. Returns a bounded status."
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.SCROLL_BACKWARD ->
+        "Scroll the active scrollable node backward within the allowlisted foreground app. Safe, gated. Returns a bounded status."
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.GLOBAL_BACK ->
+        "Framework-sanctioned global back action. Safe, gated. Returns a bounded status."
+    com.clawmate.app.accessibility.SafeAccessibilityActionId.GLOBAL_HOME ->
+        "Framework-sanctioned global home action. Safe, gated. Returns a bounded status."
+}
+
+/** The bounded JSON schema for a safe semantic GUI tool. */
+private fun safeSemanticToolParameters(id: com.clawmate.app.accessibility.SafeAccessibilityActionId): JsonObject {
+    val properties = buildJsonObject {
+        when (id) {
+            com.clawmate.app.accessibility.SafeAccessibilityActionId.CLICK_TEXT ->
+                put("text", buildJsonObject {
+                    put("type", JsonPrimitive("string"))
+                    put("description", JsonPrimitive("The exact visible text of the element to click (≤ ${com.clawmate.app.accessibility.SafeAccessibilityActionContract.MAX_TEXT_LENGTH} chars)."))
+                })
+            com.clawmate.app.accessibility.SafeAccessibilityActionId.CLICK_CONTENT_DESCRIPTION ->
+                put("content_description", buildJsonObject {
+                    put("type", JsonPrimitive("string"))
+                    put("description", JsonPrimitive("The exact content-description of the element to click (≤ ${com.clawmate.app.accessibility.SafeAccessibilityActionContract.MAX_CONTENT_DESCRIPTION_LENGTH} chars)."))
+                })
+            else -> Unit
+        }
+        put("package_name", buildJsonObject {
+            put("type", JsonPrimitive("string"))
+            put("description", JsonPrimitive("Optional: the allowlisted foreground package; validated live before acting."))
+        })
+    }
+    return buildJsonObject {
+        put("type", JsonPrimitive("object"))
+        put("properties", properties)
+        put("additionalProperties", JsonPrimitive(false))
+    }
+}
+
+/** A parsed safe-action params map, or an explicit parse error (never throws). */
+private data class ParsedSafeActionParams(
+    val params: Map<String, Any?> = emptyMap(),
+    val error: String? = null,
+)
+
+/** Parses the model's JSON args into the bounded params map the safe allowlist accepts. */
+private fun safeActionParamsFromJson(argsText: String): ParsedSafeActionParams {
+    val text = argsText.trim().ifEmpty { "{}" }
+    val element = try {
+        kotlinx.serialization.json.Json.parseToJsonElement(text)
+    } catch (e: Exception) {
+        return ParsedSafeActionParams(error = e.message ?: "not valid JSON")
+    }
+    if (element !is JsonObject) return ParsedSafeActionParams(error = "arguments must be a JSON object")
+    val params = mutableMapOf<String, Any?>()
+    for ((key, value) in element) {
+        params[key] = when (value) {
+            is kotlinx.serialization.json.JsonPrimitive -> value.content
+            else -> value.toString()
+        }
+    }
+    return ParsedSafeActionParams(params = params)
+}
+
+/** Bounded JSON helper for the rare pre-gate parse failures. */
+private fun safeActionResultJson(ok: Boolean, status: String, message: String): String {
+    val sanitized = if (message.length <= 160) message else message.take(160) + "…"
+    val enc = kotlinx.serialization.json.Json.encodeToString(
+        kotlinx.serialization.json.JsonPrimitive.serializer(),
+        kotlinx.serialization.json.JsonPrimitive(sanitized),
+    )
+    return """{"ok":$ok,"status":"$status","message":$enc}"""
 }
 
 /**
