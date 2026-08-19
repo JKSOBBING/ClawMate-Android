@@ -32,6 +32,7 @@ object ProfileIndexBlender {
         curated: LocalAvatarProfile,
         indexState: ProfileState,
         updatedLabel: String,
+        avatar: AvatarSection = AvatarSection.notConfigured,
     ): HomeProfileViewModel {
         val blended = curated.domains.map { snapshot ->
             val index = indexState.domains[snapshot.domain]
@@ -53,6 +54,7 @@ object ProfileIndexBlender {
         val base = HomeProfileBuilder.build(
             profile = curated.copy(domains = blended),
             updatedLabel = updatedLabel,
+            avatar = avatar,
         )
         // Fold the real evidence ids into the pillars for faithful, read-only display.
         return base.copy(

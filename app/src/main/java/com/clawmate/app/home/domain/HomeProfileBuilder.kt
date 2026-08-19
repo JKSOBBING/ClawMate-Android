@@ -50,6 +50,7 @@ object HomeProfileBuilder {
         profile: LocalAvatarProfile,
         updatedLabel: String,
         recommendations: List<HomeRecommendationViewModel> = emptyList(),
+        avatar: AvatarSection = AvatarSection.notConfigured,
     ): HomeProfileViewModel {
         val domains = homeProfileDomains(profile)
         val populated = domains.any { it.desc.trim() != PROFILE_DOMAIN_NO_DATA }
@@ -61,6 +62,7 @@ object HomeProfileBuilder {
                 domains = defaultHomeDomains(),
                 recommendations = recommendations,
                 empty = true,
+                avatar = avatar,
             )
         }
         val totalEvents = profile.domains.sumOf { it.eventCount }
@@ -71,6 +73,7 @@ object HomeProfileBuilder {
             domains = domains,
             recommendations = recommendations,
             empty = false,
+            avatar = avatar,
         )
     }
 

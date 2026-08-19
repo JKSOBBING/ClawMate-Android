@@ -36,14 +36,32 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * No cloud call, no API key, no image synthesis, no NFC/adb/hdc. Nothing is
  * ever fabricated.
+ *
+ * Phase-48 seams (backend-compatible defaults; not a schema change):
+ *  - [defaultBaseDir] overrides the avatar root so the real repository can be
+ *    exercised device-free on the JVM against a temp dir;
+ *  - [decodeValidator] overrides the pixel-decode gate so the same repository
+ *    can be driven without Android `BitmapFactory` in unit tests.
  */
 class DiskAvatarAssetRepository(
-    private val context: Context,
+    private val context: Context? = null,
     private val maxImportBytes: Int = AvatarAssetLimits.DEFAULT_MAX_IMPORT_BYTES,
+    private val defaultBaseDir: File? = null,
+    private val decodeValidator: (ByteArray) -> Boolean = { bytes ->
+        DiskAvatarAssetRepository.defaultDecodeValidator(bytes)
+    },
 ) : AvatarAssetRepository {
 
+    /**
+     * App-private `files/avatar` root. When an [defaultBaseDir] (the avatar root)
+     * is injected — the device-free test seam — it is used directly; production
+     * defaults to `<filesDir>/avatar` exactly as before.
+     */
     private val avatarRoot: File
-        get() = File(context.filesDir, "avatar")
+        get() = defaultBaseDir ?: File(
+            requireNotNull(context) { "context or defaultBaseDir must be provided" }.filesDir,
+            "avatar",
+        )
     private val assetsRoot: File
         get() = File(avatarRoot, "assets")
     private val versionsRoot: File
@@ -110,8 +128,7 @@ class DiskAvatarAssetRepository(
             )
         }
         // Bounded validation gate #2 — must actually decode as a real image.
-        val decode = decodeBounds(bytes)
-        if (!decode.valid) {
+        if (!decodeValidator(bytes)) {
             return AvatarImportResult(loadState(), errorMessage = "所选文件不是可识别的图片")
         }
 
@@ -472,23 +489,24 @@ class DiskAvatarAssetRepository(
 
     private fun resolveAssetRelative(relativePath: String): File = File(avatarRoot, relativePath)
 
-    private fun decodeBounds(bytes: ByteArray): DecodeResult {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-        val w = opts.outWidth
-        val h = opts.outHeight
-        if (w <= 0 || h <= 0) return DecodeResult(false, 0, 0)
-        if (w < AvatarAssetLimits.MIN_DECODE_DIMENSION || h < AvatarAssetLimits.MIN_DECODE_DIMENSION) {
-            return DecodeResult(false, w, h)
-        }
-        if (w > AvatarAssetLimits.MAX_IMPORT_DIMENSION || h > AvatarAssetLimits.MAX_IMPORT_DIMENSION) {
-            return DecodeResult(false, w, h)
-        }
-        return DecodeResult(true, w, h)
-    }
-
-    private data class DecodeResult(val valid: Boolean, val width: Int, val height: Int)
-
     private fun nowIsoLocal(): String =
         java.time.LocalDateTime.now().toString().replace("T", " ")
+
+    companion object {
+        /**
+         * Production [decodeValidator]: these bytes must decode as a real image
+         * within the existing bounded dimension window. The single safety gate
+         * that guards every pixel import into the avatar asset store.
+         */
+        fun defaultDecodeValidator(bytes: ByteArray): Boolean {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            val w = opts.outWidth
+            val h = opts.outHeight
+            if (w <= 0 || h <= 0) return false
+            if (w < AvatarAssetLimits.MIN_DECODE_DIMENSION || h < AvatarAssetLimits.MIN_DECODE_DIMENSION) return false
+            if (w > AvatarAssetLimits.MAX_IMPORT_DIMENSION || h > AvatarAssetLimits.MAX_IMPORT_DIMENSION) return false
+            return true
+        }
+    }
 }

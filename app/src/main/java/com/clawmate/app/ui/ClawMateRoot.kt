@@ -123,10 +123,20 @@ fun ClawMateRoot(
         com.clawmate.app.datamanager.RealProfileGenerationRepository.appPrivate(context.filesDir)
     // Phase 32: the Home pillar cards blend the user-curated local profile with
     // the index-derived profile (local-first, never overwriting user edits).
+    // Phase 48: the same source reads the **real persisted avatar** through the
+    // app-private avatar asset repository so the Home card shows the actual
+    // stored avatar (only when it exists, is readable and passes the safety
+    // gate); the avatar section falls back to the honest not-configured state
+    // otherwise.
+    val homeAvatarAssetRepository =
+        com.clawmate.app.profile.avatar.data.DiskAvatarAssetRepository(context)
+    val homeAvatarImageCheck = com.clawmate.app.home.data.FileHomeAvatarImageCheck()
     val homeProfileSource = profileSource ?: com.clawmate.app.home.data.ProfileIndexHomeProfileSource(
         baseDir = context.filesDir,
         profileRepository = profileRepo,
         recommendationRepository = recommendationRepository,
+        avatarAssetRepository = homeAvatarAssetRepository,
+        avatarImageCheck = homeAvatarImageCheck,
     )
 
     val onboardingVersion by onboarding.onboardingVersion.collectAsState(initial = "")

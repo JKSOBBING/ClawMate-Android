@@ -1,8 +1,10 @@
 package com.clawmate.app.home.data
 
+import com.clawmate.app.home.domain.AvatarSection
 import com.clawmate.app.home.domain.HomeProfileBuilder
 import com.clawmate.app.home.domain.HomeProfileViewModel
 import com.clawmate.app.home.recommendation.HomeRecommendationRepository
+import com.clawmate.app.profile.avatar.data.AvatarAssetRepository
 import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
 
 /**
@@ -15,8 +17,10 @@ import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
  * on-device state: only what the user curated in the 数字分身 screen ever appears.
  *
  * Truthful capability boundaries preserved:
- *  - The avatar section stays NOT_CONFIGURED ([HomeProfileViewModel.avatar] is
- *    never populated here) — no generated avatar image is ever invented.
+ *  - The avatar section reflects the **real** persisted avatar when one exists,
+ *    is readable and passes the safety gate ([HomeAvatarSectionLoader]); it
+ *    stays [AvatarSection.notConfigured] otherwise. No generated avatar image is
+ *    ever invented.
  *  - The recommendation list is produced only by the explicit Phase-28
  *    "生成推荐" action through [recommendationRepository]; [load] itself never
  *    invents recommendation content.
@@ -25,6 +29,11 @@ import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
  * loader) may be injected so the Home's explicit button can generate real
  * recommendations from gallery data; when none is supplied, generation is
  * simply unavailable (honest empty state).
+ *
+ * Phase-48 DI: an optional [AvatarAssetRepository] (+ [avatarImageCheck]) is
+ * injected to surface a real persisted avatar on Home. When none is supplied
+ * (or its current asset is missing/corrupt/unreadable), the avatar stays the
+ * honest not-configured empty state.
  */
 class ProfileBackedHomeProfileSource(
     private val profileRepository: ProfileAvatarRepository,
@@ -32,13 +41,20 @@ class ProfileBackedHomeProfileSource(
     private val updatedLabelBuilder: (String) -> String = { time ->
         time.takeIf { it.isNotBlank() } ?: "暂无画像"
     },
+    private val avatarAssetRepository: AvatarAssetRepository? = null,
+    private val avatarImageCheck: HomeAvatarSectionLoader.ReadableImageCheck =
+        FileHomeAvatarImageCheck(),
 ) : HomeProfileSource {
 
     override suspend fun load(): HomeProfileViewModel {
         val profile = profileRepository.snapshot()
+        val avatar = avatarAssetRepository?.let {
+            HomeAvatarSectionLoader.load(it, avatarImageCheck)
+        } ?: AvatarSection.notConfigured
         return HomeProfileBuilder.build(
             profile = profile,
             updatedLabel = updatedLabelBuilder(profile.updatedAt),
+            avatar = avatar,
         )
     }
 }
