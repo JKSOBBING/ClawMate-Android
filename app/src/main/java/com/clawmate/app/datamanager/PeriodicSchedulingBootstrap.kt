@@ -45,4 +45,3 @@ object PeriodicPlatformSchedulerFactory {
             gateway = PeriodicSchedulingGatewayHolder.obtain(context),
         )
 }
-

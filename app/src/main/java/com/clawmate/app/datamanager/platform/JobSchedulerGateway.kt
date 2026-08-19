@@ -106,4 +106,3 @@ class PlatformJobInfoBuilder(
             .setRequiresCharging(false)
             .build()
 }
-

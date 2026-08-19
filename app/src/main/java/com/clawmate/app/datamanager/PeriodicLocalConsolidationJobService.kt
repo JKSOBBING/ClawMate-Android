@@ -124,4 +124,3 @@ class PeriodicLocalConsolidationJobService : JobService() {
     /** Mirror state for tests (never thread-conflicting). */
     internal fun currentOptedIn(): Boolean = PeriodicSchedulingRuntimeRegistry.isOptedIn()
 }
-

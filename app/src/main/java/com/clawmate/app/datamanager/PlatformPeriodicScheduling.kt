@@ -62,4 +62,3 @@ object PlatformPeriodicScheduling {
     /** True when the host supports persisted JobScheduler jobs (API 21+/fine for 26). */
     fun frameworkSupportsPersistedJobs(sdkInt: Int = Build.VERSION.SDK_INT): Boolean = sdkInt >= 21
 }
-

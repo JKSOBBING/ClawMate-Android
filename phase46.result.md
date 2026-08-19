@@ -178,4 +178,3 @@ same established pattern Phase 41 recorded in `MIGRATION_STATUS.md`).
 - `app/src/test/java/com/clawmate/app/datamanager/JobSchedulerTriggerAdapterTest.kt` — 14 JVM tests.
 - `.gitignore` — ignore the workspace-local `.ghome/` gradle home.
 - `MIGRATION_STATUS.md` — Phase 46 note.
-

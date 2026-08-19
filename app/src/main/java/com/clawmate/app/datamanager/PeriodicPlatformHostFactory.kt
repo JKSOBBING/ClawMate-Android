@@ -34,4 +34,3 @@ object PeriodicPlatformHostFactory {
     fun inProcessHost(baseDir: java.io.File): PeriodicSchedulingHost =
         PeriodicSchedulingHost(baseDir)
 }
-

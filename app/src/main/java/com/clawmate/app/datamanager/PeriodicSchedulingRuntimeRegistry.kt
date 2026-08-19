@@ -90,4 +90,3 @@ fun PeriodicRunResult.toJobRunOutcome(): JobRunOutcome =
         profileDomainCount = profileDomainCount,
         finishedAt = finishedAt,
     )
-

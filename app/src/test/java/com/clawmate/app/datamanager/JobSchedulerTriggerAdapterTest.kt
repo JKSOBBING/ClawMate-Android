@@ -277,4 +277,3 @@ class JobSchedulerTriggerAdapterTest {
         File(dayDir, "a.logs.md").writeText("1. 买咖啡花 25 元\n\n2. 中午吃火锅\n")
     }
 }
-

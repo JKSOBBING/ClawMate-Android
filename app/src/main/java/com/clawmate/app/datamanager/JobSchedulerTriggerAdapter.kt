@@ -109,4 +109,3 @@ class JobSchedulerTriggerAdapter(
         isCancelled: () -> Boolean,
     ): PeriodicRunResult? = scheduler.runScheduledOnce(taskName, isCancelled)
 }
-
