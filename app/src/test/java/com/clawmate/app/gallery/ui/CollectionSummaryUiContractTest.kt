@@ -2,8 +2,10 @@ package com.clawmate.app.gallery.ui
 
 import androidx.compose.ui.graphics.Color
 import com.clawmate.app.gallery.collection.IndexedEventCollectionService
+import com.clawmate.app.ui.theme.ClawMateDesign
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import androidx.compose.ui.unit.dp
 
 /** Locks the summary tab order and selected colors to the HarmonyOS reference. */
 class CollectionSummaryUiContractTest {
@@ -23,5 +25,14 @@ class CollectionSummaryUiContractTest {
         assertEquals(Color(0xFF39BFA3), summarySceneColor(1))
         assertEquals(Color(0xFF8066FF), summarySceneColor(2))
         assertEquals(Color(0xFF4B8BFF), summarySceneColor(3))
+    }
+
+    @Test
+    fun `summary action cards retain the shared white card contract`() {
+        assertEquals(Color.White, ClawMateDesign.Card.Surface)
+        assertEquals(18.dp, ClawMateDesign.Card.Radius)
+        assertEquals(12.dp, ClawMateDesign.Card.Padding)
+        assertEquals(1.dp, ClawMateDesign.Card.BorderWidth)
+        assertEquals(3.dp, ClawMateDesign.Card.ShadowElevation)
     }
 }

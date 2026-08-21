@@ -18,8 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -231,15 +230,17 @@ private fun RowScope.SummaryActionCard(
     border: Color,
     onClick: () -> Unit,
 ) {
-    Card(
+    Surface(
         onClick = onClick,
-        modifier = Modifier.weight(1f).height(100.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, border),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        modifier = Modifier
+            .weight(1f)
+            .height(100.dp)
+            .shadow(ClawMateDesign.Card.ShadowElevation, RoundedCornerShape(ClawMateDesign.Card.Radius)),
+        color = ClawMateDesign.Card.Surface,
+        shape = RoundedCornerShape(ClawMateDesign.Card.Radius),
+        border = BorderStroke(ClawMateDesign.Card.BorderWidth, border),
     ) {
-        Column(Modifier.fillMaxSize().padding(12.dp)) {
+        Column(Modifier.fillMaxSize().padding(ClawMateDesign.Card.Padding)) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(32.dp),
                 verticalAlignment = Alignment.CenterVertically,

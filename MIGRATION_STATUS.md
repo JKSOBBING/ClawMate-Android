@@ -3499,6 +3499,30 @@ Verification: `adb install -r` succeeded; task page UI dump showed `配置任务
 showed `设置中心 / 任务与自动化` and the expected controls. `:app:testDebugUnitTest` then exposed
 and was fixed for the shell palette mismatch (`#747B87`).
 
+## 54. Collection action entry verification
+
+Verified both summary-page action cards on the connected device. `图库分析` opens the real gallery
+analysis screen with image selection and analysis controls; `新增采集源` opens the real Settings
+Center and exposes the `数据采集` section. Both routes preserve the shared shell navigation and
+return affordances.
+
+The action-card surface was also made explicitly white, matching the other Android cards and the
+HarmonyOS source; purple is retained only for the per-card accent, border, and arrow.
+
+Verification: Android UI dumps and screenshots confirmed the destination titles and controls after
+each tap; no crash observed.
+
+## 55. Shared white card contract
+
+Unified the summary action cards with the app's other card surfaces and the HarmonyOS source. The
+shared `ClawMateDesign.Card` contract now defines a white surface, 18dp radius, 12dp padding, 1dp
+border, and 3dp shadow; summary cards use it directly. The existing summary UI contract test locks
+these values to prevent a later purple tonal surface regression.
+
+Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `adb install -r`
+succeeded; the connected-device summary screenshot shows white card interiors with only purple
+accent borders/icons/arrows.
+
 ## 52. Collection summary visual cleanup
 
 Aligned the Android summary page's indexed-record panel and action cards with the HarmonyOS

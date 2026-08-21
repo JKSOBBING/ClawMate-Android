@@ -34,6 +34,14 @@ object ClawMateDesign {
         val Pill = 24.dp
     }
 
+    object Card {
+        val Surface = Colors.Surface
+        val Radius = 18.dp
+        val Padding = 12.dp
+        val BorderWidth = 1.dp
+        val ShadowElevation = 3.dp
+    }
+
     object Size {
         val InputHeight = 42.dp
         val ButtonHeight = 40.dp
