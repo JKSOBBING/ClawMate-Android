@@ -3467,3 +3467,12 @@ now consume the shared dimensions instead of duplicating them.
 
 Verification: `:app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean. Device visual
 verification remains pending while the connected phone is locked.
+
+## 50. Core page token adoption
+
+Applied the shared Harmony-aligned page background and header tokens to Home, Collection Summary,
+Task, and the common page header. Semantic content colors remain page-specific; shell surfaces now
+use the same background, title, secondary text, and accent roles.
+
+Verification: `:app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean. The current APK was
+installed successfully with `adb install -r`; screenshots remain blocked by the device lock screen.

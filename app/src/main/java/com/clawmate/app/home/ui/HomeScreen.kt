@@ -50,6 +50,7 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.res.painterResource
 import com.clawmate.app.R
 import com.clawmate.app.ui.ClawMateHeader
+import com.clawmate.app.ui.theme.ClawMateDesign
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.home.data.HomeProfileSource
 import com.clawmate.app.home.data.HomeRecRepository
@@ -131,7 +132,7 @@ private fun HomeStateWithHeader(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F8FF)),
+            .background(ClawMateDesign.Colors.PageBackground),
     ) {
         ClawMateHeader(
             title = "你的智伴",
@@ -194,7 +195,7 @@ private fun HomeContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .background(Color(0xFFF4F8FF))
+            .background(ClawMateDesign.Colors.PageBackground)
             .padding(bottom = 24.dp),
     ) {
         ClawMateHeader(

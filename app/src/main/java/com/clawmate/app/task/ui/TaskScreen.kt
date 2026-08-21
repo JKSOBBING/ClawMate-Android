@@ -43,6 +43,7 @@ import com.clawmate.app.task.TaskComponent
 import com.clawmate.app.task.model.WorkflowScene
 import com.clawmate.app.task.model.WorkflowTask
 import com.clawmate.app.ui.ClawMateHeader
+import com.clawmate.app.ui.theme.ClawMateDesign
 
 /**
  * Compose Task screen — Android vertical slice of HarmonyOS TaskPage.ets.
@@ -82,7 +83,7 @@ private fun TaskStateWithHeader(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F7FB)),
+            .background(ClawMateDesign.Colors.PageBackground),
     ) {
         ClawMateHeader(title = "自定义任务", iconRes = R.drawable.header_task)
         content()
@@ -94,7 +95,7 @@ private fun TaskContent(vm: TaskViewModel, state: TaskUiState, context: Context)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F7FB)),
+            .background(ClawMateDesign.Colors.PageBackground),
     ) {
         ClawMateHeader(title = "自定义任务", iconRes = R.drawable.header_task)
         TaskExecutionHeaderPanel(tasks = state.tasks, onOpenConfig = { /* TODO: open config/editor view */ })

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.clawmate.app.ui.theme.ClawMateDesign
 
 /** Shared page header mirroring HarmonyOS AppHeader. */
 @Composable
@@ -53,7 +54,7 @@ fun ClawMateHeader(
                     fontSize = 25.sp,
                     lineHeight = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF172033),
+                    color = ClawMateDesign.Colors.Text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -77,13 +78,13 @@ fun ClawMateHeader(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .background(Color(0xFFF0ECFF), RoundedCornerShape(12.dp)),
+                        .background(ClawMateDesign.Colors.PrimaryContainer, RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("盾", fontSize = 12.sp, color = Color(0xFF8066FF))
+                    Text("盾", fontSize = 12.sp, color = ClawMateDesign.Colors.PrimaryStrong)
                 }
-                Text("隐私守护中", fontSize = 13.sp, color = Color(0xFF6B6F7C), modifier = Modifier.padding(horizontal = 5.dp))
-                Text(">", fontSize = 16.sp, color = Color(0xFF8B909A))
+                Text("隐私守护中", fontSize = 13.sp, color = ClawMateDesign.Colors.TextSecondary, modifier = Modifier.padding(horizontal = 5.dp))
+                Text(">", fontSize = 16.sp, color = ClawMateDesign.Colors.TextMuted)
             }
             if (pcServerVisible) {
                 Row(

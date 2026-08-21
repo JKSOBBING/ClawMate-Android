@@ -40,6 +40,7 @@ import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.collection.IndexedCollectionTab
 import com.clawmate.app.gallery.collection.IndexedEventCollectionService
 import com.clawmate.app.ui.ClawMateHeader
+import com.clawmate.app.ui.theme.ClawMateDesign
 
 /** HarmonyOS CollectionPage equivalent used by the Android 汇总 tab. */
 @Composable
@@ -71,7 +72,7 @@ fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F8FF))
+            .background(ClawMateDesign.Colors.PageBackground)
             .verticalScroll(rememberScrollState())
             .padding(bottom = 84.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
