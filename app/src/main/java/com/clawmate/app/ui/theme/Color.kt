@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.sp
 
 // Color tokens mirrored from HarmonyOS resources and page styles.
 val BlueViolet700 = ClawMateDesign.Colors.PrimaryStrong
-val BlueViolet500 = ClawMateDesign.Colors.Primary
+val BlueViolet500 = ClawMateDesign.Colors.Accent
 val BlueViolet300 = Color(0xFFA99BFF)
 val BlueViolet200 = ClawMateDesign.Colors.PrimaryContainer
 val Ink = ClawMateDesign.Colors.Text

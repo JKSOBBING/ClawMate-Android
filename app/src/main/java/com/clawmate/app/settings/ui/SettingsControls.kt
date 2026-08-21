@@ -26,11 +26,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.clawmate.app.ui.theme.ClawMateDesign
 
-private val CardRadius = 18.dp
-private val ControlRadius = 12.dp
-private val CardPadding = 16.dp
-private val FieldHeight = 42.dp
+private val CardRadius = ClawMateDesign.Shape.Card
+private val ControlRadius = ClawMateDesign.Shape.Control
+private val CardPadding = ClawMateDesign.Space.Lg
+private val FieldHeight = ClawMateDesign.Size.InputHeight
 
 /**
  * Grouped settings card — title + optional subtitle + injected content.

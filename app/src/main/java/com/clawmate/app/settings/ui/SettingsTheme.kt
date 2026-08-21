@@ -17,8 +17,8 @@ object SettingsThemeColors {
     val InputDisabledBackground = ClawMateDesign.Colors.InputDisabled
     val PanelBackground = Color(0xFFEEF4FF)
     val TitleColor = ClawMateDesign.Colors.Text
-    val SecondaryText = ClawMateDesign.Colors.TextSecondary
-    val MutedText = ClawMateDesign.Colors.TextSecondary
+    val SecondaryText = Color(0xFF7B8290)
+    val MutedText = Color(0xFF6F7684)
     val BorderColor = ClawMateDesign.Colors.Border
     val PanelBorderColor = Color(0xFFD9E5FF)
 
@@ -27,7 +27,7 @@ object SettingsThemeColors {
     val Success = ClawMateDesign.Colors.Success
     val Warning = ClawMateDesign.Colors.Warning
     val Danger = ClawMateDesign.Colors.Danger
-    val Special = ClawMateDesign.Colors.Primary
+    val Special = ClawMateDesign.Colors.Accent
 
     val Connected = Color(0xFF2D9B73)
     val Disconnected = Color(0xFFD26B31)

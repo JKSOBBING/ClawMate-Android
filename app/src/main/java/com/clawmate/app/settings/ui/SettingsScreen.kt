@@ -49,6 +49,7 @@ import com.clawmate.app.settings.domain.SettingsSectionId
 import com.clawmate.app.log.ui.LogScreen
 import com.clawmate.app.R
 import com.clawmate.app.ui.ClawMateHeader
+import com.clawmate.app.ui.theme.ClawMateDesign
 
 /**
  * Compose Settings screen — the Android vertical slice of the HarmonyOS 设置 tab
@@ -277,7 +278,7 @@ private fun SettingsSaveResetBar(saveBusy: Boolean, dirty: Boolean, onSave: () -
             onClick = onSave,
             enabled = dirty && !saveBusy,
             colors = ButtonDefaults.buttonColors(containerColor = SettingsThemeColors.Primary),
-            modifier = Modifier.weight(1f).height(44.dp),
+            modifier = Modifier.weight(1f).height(ClawMateDesign.Size.ButtonHeight),
         ) {
             if (saveBusy) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White)
@@ -287,7 +288,7 @@ private fun SettingsSaveResetBar(saveBusy: Boolean, dirty: Boolean, onSave: () -
         }
         TextButton(
             onClick = onReset,
-            modifier = Modifier.height(44.dp),
+            modifier = Modifier.height(ClawMateDesign.Size.ButtonHeight),
         ) {
             Text("恢复默认", fontSize = 14.sp, color = SettingsThemeColors.Secondary)
         }

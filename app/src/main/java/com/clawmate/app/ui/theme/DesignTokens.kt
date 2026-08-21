@@ -12,7 +12,10 @@ object ClawMateDesign {
         val Input = Color(0xFFF2F5FC)
         val InputDisabled = Color(0xFFE6EAF2)
         val Border = Color(0xFFE3E8F1)
-        val Primary = Color(0xFF765BFF)
+        // SettingsCenterTheme.ets uses blue for primary actions; purple remains
+        // a separate accent for chat/navigation states.
+        val Primary = Color(0xFF4F68FF)
+        val Accent = Color(0xFF765BFF)
         val PrimaryStrong = Color(0xFF8066FF)
         val PrimaryContainer = Color(0xFFF0ECFF)
         val Text = Color(0xFF11182F)
@@ -25,15 +28,15 @@ object ClawMateDesign {
     }
 
     object Shape {
-        val Card = 16.dp
+        val Card = 18.dp
         val Control = 12.dp
         val Small = 8.dp
         val Pill = 24.dp
     }
 
     object Size {
-        val InputHeight = 48.dp
-        val ButtonHeight = 44.dp
+        val InputHeight = 42.dp
+        val ButtonHeight = 40.dp
         val IconButton = 48.dp
         val PageHorizontalPadding = 16.dp
     }

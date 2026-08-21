@@ -3457,3 +3457,13 @@ The gallery and task UI changes from `fix/task-ui` were committed and fast-forwa
 Verification (JDK 17.0.19, SDK platform 34, Gradle 8.9): `:app:assembleDebug` BUILD SUCCESSFUL;
 `git diff --check` clean. APK installation via `adb install -r` succeeded on the connected device.
 Visual runtime verification is pending because the device entered its lock screen after install.
+
+## 49. HarmonyOS theme token correction
+
+Refined the shared token layer against the authoritative HarmonyOS settings theme: primary action
+blue is `#4F68FF`, purple is an explicit accent, settings cards use 18dp corners, controls use
+12dp corners, and settings fields/buttons retain the source 42dp/40dp sizing. Settings controls
+now consume the shared dimensions instead of duplicating them.
+
+Verification: `:app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean. Device visual
+verification remains pending while the connected phone is locked.
