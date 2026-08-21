@@ -184,7 +184,7 @@ private fun SectionDetail(
             .fillMaxSize()
             .background(SettingsThemeColors.PageBackground)
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            .padding(start = 16.dp, end = 16.dp, bottom = 128.dp),
     ) {
         Row(
         modifier = Modifier

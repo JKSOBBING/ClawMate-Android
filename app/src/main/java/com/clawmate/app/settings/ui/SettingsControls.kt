@@ -118,38 +118,34 @@ fun SettingInput(
     singleLine: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
-    Row {
+    Column(modifier = Modifier.fillMaxWidth()) {
         if (label.isNotEmpty()) {
-            Column(modifier = Modifier.padding(end = 8.dp).width(124.dp)) {
-                Text(
-                    label,
-                    fontSize = 13.sp,
-                    color = SettingsThemeColors.MutedText,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = { Text(placeholder, color = SettingsThemeColors.Disabled, fontSize = 13.sp) },
-                enabled = enabled,
-                singleLine = singleLine,
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    color = if (enabled) SettingsThemeColors.TitleColor else SettingsThemeColors.SecondaryText,
-                    fontSize = 13.sp,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        if (enabled) SettingsThemeColors.InputBackground else SettingsThemeColors.InputDisabledBackground,
-                        RoundedCornerShape(ControlRadius),
-                    ),
+            Text(
+                label,
+                fontSize = 13.sp,
+                color = SettingsThemeColors.MutedText,
+                modifier = Modifier.padding(bottom = 6.dp),
             )
         }
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = SettingsThemeColors.Disabled, fontSize = 13.sp) },
+            enabled = enabled,
+            singleLine = singleLine,
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = if (enabled) SettingsThemeColors.TitleColor else SettingsThemeColors.SecondaryText,
+                fontSize = 13.sp,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (enabled) SettingsThemeColors.InputBackground else SettingsThemeColors.InputDisabledBackground,
+                    RoundedCornerShape(ControlRadius),
+                ),
+        )
     }
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(10.dp))
 }
 
 /**

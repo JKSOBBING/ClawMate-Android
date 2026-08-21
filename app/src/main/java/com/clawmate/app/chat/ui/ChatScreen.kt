@@ -876,28 +876,61 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
  */
 @Composable
 private fun MissingConfigPane(onOpenSettings: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        Text(
-            "尚未配置云端模型",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            "请在本地配置文件中填写云端模型端点（baseUrl / API Key），\n填写后重启应用即可开始对话。",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        Button(
-            onClick = onOpenSettings,
-            modifier = Modifier.padding(top = 16.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8066FF)),
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(18.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E6EF)),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("打开设置中心")
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CloudOff,
+                    contentDescription = null,
+                    tint = Color(0xFF8066FF),
+                    modifier = Modifier.size(36.dp),
+                )
+                Text(
+                    text = "云端模型尚未配置",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                Text(
+                    text = "配置完成前不会发送消息。",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = Color(0xFF687386),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("1. 打开设置中心的“模型与智能体”", fontSize = 14.sp, lineHeight = 20.sp)
+                    Text("2. 填写地址、密钥和模型名", fontSize = 14.sp, lineHeight = 20.sp)
+                    Text("3. 返回聊天页即可生效，无需重启", fontSize = 14.sp, lineHeight = 20.sp)
+                }
+                Button(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.padding(top = 16.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8066FF)),
+                ) {
+                    Icon(Icons.Filled.Settings, contentDescription = null)
+                    Text("  打开设置中心")
+                }
+            }
         }
     }
 }
