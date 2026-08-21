@@ -1,6 +1,7 @@
 package com.clawmate.app.settings.ui
 
 import androidx.compose.ui.graphics.Color
+import com.clawmate.app.ui.theme.ClawMateDesign
 
 /**
  * Settings-center palette, mirrored from HarmonyOS
@@ -10,23 +11,23 @@ import androidx.compose.ui.graphics.Color
  * the source's rested blue-tinted background.
  */
 object SettingsThemeColors {
-    val PageBackground = Color(0xFFF4F8FF)
-    val CardBackground = Color(0xFFFFFFFF)
-    val InputBackground = Color(0xFFF2F5FC)
-    val InputDisabledBackground = Color(0xFFE6EAF2)
+    val PageBackground = ClawMateDesign.Colors.PageBackground
+    val CardBackground = ClawMateDesign.Colors.Surface
+    val InputBackground = ClawMateDesign.Colors.Input
+    val InputDisabledBackground = ClawMateDesign.Colors.InputDisabled
     val PanelBackground = Color(0xFFEEF4FF)
-    val TitleColor = Color(0xFF11182F)
-    val SecondaryText = Color(0xFF7B8290)
-    val MutedText = Color(0xFF6F7684)
-    val BorderColor = Color(0xFFE6EAF2)
+    val TitleColor = ClawMateDesign.Colors.Text
+    val SecondaryText = ClawMateDesign.Colors.TextSecondary
+    val MutedText = ClawMateDesign.Colors.TextSecondary
+    val BorderColor = ClawMateDesign.Colors.Border
     val PanelBorderColor = Color(0xFFD9E5FF)
 
-    val Primary = Color(0xFF4F68FF)
+    val Primary = ClawMateDesign.Colors.Primary
     val Secondary = Color(0xFF607D8B)
-    val Success = Color(0xFF38BE8B)
-    val Warning = Color(0xFFFF9800)
-    val Danger = Color(0xFFF44336)
-    val Special = Color(0xFF765BFF)
+    val Success = ClawMateDesign.Colors.Success
+    val Warning = ClawMateDesign.Colors.Warning
+    val Danger = ClawMateDesign.Colors.Danger
+    val Special = ClawMateDesign.Colors.Primary
 
     val Connected = Color(0xFF2D9B73)
     val Disconnected = Color(0xFFD26B31)

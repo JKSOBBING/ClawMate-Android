@@ -7,17 +7,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // Color tokens mirrored from HarmonyOS resources and page styles.
-val BlueViolet700 = Color(0xFF8066FF)
-val BlueViolet500 = Color(0xFF6D56E8)
+val BlueViolet700 = ClawMateDesign.Colors.PrimaryStrong
+val BlueViolet500 = ClawMateDesign.Colors.Primary
 val BlueViolet300 = Color(0xFFA99BFF)
-val BlueViolet200 = Color(0xFFE7E2FF)
-val Ink = Color(0xFF151A28)
+val BlueViolet200 = ClawMateDesign.Colors.PrimaryContainer
+val Ink = ClawMateDesign.Colors.Text
 val DeepInk = Color(0xFF121212)
-val NearWhite = Color(0xFFF4F8FF)
-val White = Color(0xFFFFFFFF)
+val NearWhite = ClawMateDesign.Colors.PageBackground
+val White = ClawMateDesign.Colors.Surface
 val TabSelected = Color(0xFF5B5CE2)
 val TabIndicator = Color(0xFFEEF0FF)
-val MutedText = Color(0xFF747B87)
+val MutedText = ClawMateDesign.Colors.TextSecondary
 
 val ClawMateTypography = Typography(
     headlineMedium = TextStyle(

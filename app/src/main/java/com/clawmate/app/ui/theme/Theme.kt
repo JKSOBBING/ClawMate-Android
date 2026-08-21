@@ -17,8 +17,8 @@ private val LightColors = lightColorScheme(
     onBackground = Ink,
     surface = White,
     onSurface = Ink,
-    surfaceVariant = Color(0xFFF8FBFF),
-    onSurfaceVariant = Color(0xFF6F7684),
+    surfaceVariant = ClawMateDesign.Colors.SurfaceSubtle,
+    onSurfaceVariant = ClawMateDesign.Colors.TextSecondary,
 )
 
 private val DarkColors = darkColorScheme(
