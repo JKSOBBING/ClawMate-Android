@@ -3488,6 +3488,17 @@ bar. No startup crash was observed during this pass.
 Verification: `adb install -r` succeeded; Android CLI screenshots and layout inspection completed
 for the listed routes.
 
+## 53. Task configuration handoff verification
+
+Verified the task execution header's `配置任务` action on the connected device. It now opens the
+real Settings screen with `任务与自动化` selected, exposing the existing Workflow, Agent, HDC,
+and AutoAgent controls instead of leaving the action inert. Kept the shell muted-text token
+separate from the settings secondary-text token after the HarmonyOS source comparison.
+
+Verification: `adb install -r` succeeded; task page UI dump showed `配置任务`; the tapped route
+showed `设置中心 / 任务与自动化` and the expected controls. `:app:testDebugUnitTest` then exposed
+and was fixed for the shell palette mismatch (`#747B87`).
+
 ## 52. Collection summary visual cleanup
 
 Aligned the Android summary page's indexed-record panel and action cards with the HarmonyOS

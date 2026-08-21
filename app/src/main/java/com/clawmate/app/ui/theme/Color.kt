@@ -17,7 +17,8 @@ val NearWhite = ClawMateDesign.Colors.PageBackground
 val White = ClawMateDesign.Colors.Surface
 val TabSelected = Color(0xFF5B5CE2)
 val TabIndicator = Color(0xFFEEF0FF)
-val MutedText = ClawMateDesign.Colors.TextSecondary
+// App shell / bottom navigation muted text; settings uses TextSecondary separately.
+val MutedText = Color(0xFF747B87)
 
 val ClawMateTypography = Typography(
     headlineMedium = TextStyle(
