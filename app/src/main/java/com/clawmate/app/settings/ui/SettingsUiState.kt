@@ -43,6 +43,9 @@ data class SettingsUiState(
     val factSplitResultMessage: String? = null,
     // Phase 38 — explicit fact-split → persisted model consolidation outcome.
     val factSplitConsolidationMessage: String? = null,
+    // Explicit WeChat collection action state; no bridge call occurs on launch.
+    val wechatCollecting: Boolean = false,
+    val wechatCollectionMessage: String? = null,
 )
 /** Simple storage/about facts, derived at load time. */
 data class StorageSummary(

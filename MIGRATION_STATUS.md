@@ -3534,6 +3534,18 @@ Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; the 
 successfully and the connected-device empty gallery state shows the disabled clear action with no
 fake pagination control.
 
+## 57. WeChat collection action wiring
+
+Connected the enabled WeChat collection status action to the existing typed
+`WechatCollectionGate.collect` boundary. The settings UI now reports collecting, success, blocked,
+transport, unsupported, and bridge-error messages; it never calls arbitrary commands or drives
+WeChat directly. When the bridge is absent or the opt-in is off, the action remains disabled with
+the existing honest status text.
+
+Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; the latest APK was
+installed and the settings page UI dump confirmed the default `NOT_CONFIGURED` boundary is
+disabled with no automatic request.
+
 ## 52. Collection summary visual cleanup
 
 Aligned the Android summary page's indexed-record panel and action cards with the HarmonyOS

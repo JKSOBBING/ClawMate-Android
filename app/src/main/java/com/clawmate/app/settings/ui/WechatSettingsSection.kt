@@ -116,9 +116,9 @@ private fun WechatCollectionBoundaryCard(
                 false,
             )
             WechatCollectionStatus.AVAILABLE -> Triple(
-                "采集可用 — 已配置并健康校验的 bridge，可发起显式采集",
+                if (state.wechatCollecting) "正在采集微信摘要…" else "显式采集微信摘要",
                 SettingsActionKind.Success,
-                true,
+                !state.wechatCollecting,
             )
             WechatCollectionStatus.UNAVAILABLE -> Triple(
                 "采集不可用",
@@ -128,9 +128,26 @@ private fun WechatCollectionBoundaryCard(
         }
         SettingsActionRow(
             actions = listOf(
-                SettingsAction(statusLabel, statusKind, enabled = enabled, onClick = {}),
+                SettingsAction(
+                    statusLabel,
+                    statusKind,
+                    enabled = enabled,
+                    onClick = vm::collectWechatSummary,
+                ),
             ),
         )
+        state.wechatCollectionMessage?.let { message ->
+            Text(
+                message,
+                fontSize = 12.sp,
+                color = if (status == WechatCollectionStatus.AVAILABLE) {
+                    SettingsThemeColors.SecondaryText
+                } else {
+                    SettingsThemeColors.Warning
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+        }
         if (validation.isNotEmpty()) {
             Text(
                 "请求校验：$validation",

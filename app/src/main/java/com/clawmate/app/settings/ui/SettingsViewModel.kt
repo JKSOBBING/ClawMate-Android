@@ -652,6 +652,29 @@ class SettingsViewModel(
         return if (com.clawmate.app.wechat.domain.validateWechatAutoSummaryRequest(request).isEmpty()) request else null
     }
 
+    /** Explicitly invoke the safe, fixed `wechat_collect` adapter action. */
+    fun collectWechatSummary() {
+        val request = wechatSummaryRequestOrNull()
+        if (request == null) {
+            _state.update { it.copy(wechatCollectionMessage = "采集请求参数校验未通过，未发起任何采集。") }
+            return
+        }
+        _state.update { it.copy(wechatCollecting = true, wechatCollectionMessage = null) }
+        viewModelScope.launch {
+            val message = when (val result = wechatCollectionGate().collect(request)) {
+                is com.clawmate.app.wechat.domain.WechatCollectionResult.Success ->
+                    "微信采集已完成：${result.response.message ?: "bridge 返回成功"}"
+                is com.clawmate.app.wechat.domain.WechatCollectionResult.Error ->
+                    "微信采集失败：${result.response.message ?: "bridge 返回错误"}"
+                is com.clawmate.app.wechat.domain.WechatCollectionResult.Blocked -> result.reason
+                is com.clawmate.app.wechat.domain.WechatCollectionResult.NotConfigured -> result.message
+                is com.clawmate.app.wechat.domain.WechatCollectionResult.TransportError -> result.message
+                is com.clawmate.app.wechat.domain.WechatCollectionResult.Unsupported -> result.reason
+            }
+            _state.update { it.copy(wechatCollecting = false, wechatCollectionMessage = message) }
+        }
+    }
+
     // ------------------------------------------------------------------
     // Phase 36 — periodic local-only consolidation scheduling (explicit only)
     // ------------------------------------------------------------------
