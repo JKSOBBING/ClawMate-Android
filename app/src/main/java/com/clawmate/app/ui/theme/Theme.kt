@@ -5,9 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
-// Reference palette derived from the HarmonyOS app's light theme:
-// blue-violet accent (#5B6BF0 family) with a near-white surface.
+// Reference palette derived from the HarmonyOS app's light theme.
 private val LightColors = lightColorScheme(
     primary = BlueViolet700,
     onPrimary = White,
@@ -17,6 +17,8 @@ private val LightColors = lightColorScheme(
     onBackground = Ink,
     surface = White,
     onSurface = Ink,
+    surfaceVariant = Color(0xFFF8FBFF),
+    onSurfaceVariant = Color(0xFF6F7684),
 )
 
 private val DarkColors = darkColorScheme(

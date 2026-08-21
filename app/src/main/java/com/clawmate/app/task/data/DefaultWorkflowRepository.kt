@@ -85,7 +85,24 @@ class DefaultWorkflowRepository(
             // Index present but unreadable/empty: rebuild from what we have.
             return bootstrap()
         }
-        return decoded
+        // Older builds could persist partially decoded entries when one
+        // bundled metadata file was malformed. Remove only unusable records;
+        // valid user-edited tasks remain untouched.
+        val sanitized = decoded.filter { task ->
+            task.id.isNotBlank() &&
+                task.configFileName.isNotBlank() &&
+                task.title.isNotBlank()
+        }
+        if (sanitized.isEmpty()) return bootstrap()
+
+        // Harmony's WorkflowStorage.syncCodeDefinedDefaultTasks restores any
+        // code-defined defaults missing from a partially persisted index while
+        // preserving custom/user-edited records. This is important after an
+        // interrupted first install or an older build that wrote a truncated
+        // task index.
+        val synced = syncMissingDefaults(sanitized)
+        if (synced.size != decoded.size || synced != decoded) writeIndex(synced)
+        return synced
     }
 
     private fun bootstrap(): List<WorkflowTask> {
@@ -99,11 +116,27 @@ class DefaultWorkflowRepository(
         return tasks
     }
 
+    private fun syncMissingDefaults(existing: List<WorkflowTask>): List<WorkflowTask> {
+        val byId = existing.associateBy { it.id }
+        val synced = existing.toMutableList()
+        DefaultConfigs.entries.forEach { entry ->
+            if (byId.containsKey(entry.id)) return@forEach
+            val raw = bundled.read(entry.fileName) ?: return@forEach
+            val config = copiedConfigFile(entry.fileName)
+            if (!config.isFile) config.writeText(raw)
+            definitionFor(raw, entry)?.let(synced::add)
+        }
+        return synced
+    }
+
     private fun definitionFor(raw: String, entry: DefaultConfigs): WorkflowTask? {
         val def = WorkflowJsonParser.parse(raw)
         val metadata = (def as? WorkflowJsonParser.Result.Ok)?.definition?.metadata
+        // A single malformed bundled workflow must not make the entire task
+        // tab unusable. Keep the task visible with a deterministic fallback;
+        // execution still reports the real parser error when the user runs it.
         val title = metadata?.description?.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("default config ${entry.fileName} missing description")
+            ?: entry.fileName.removeSuffix(".json")
         val source = metadata?.name?.takeIf { it.isNotBlank() } ?: entry.fileName.removeSuffix(".json")
         return WorkflowTask(
             id = entry.id,

@@ -767,12 +767,9 @@ class SettingsViewModel(
                 _state.update { it.copy(enrichBusy = false, enrichResultMessage = "实体增强失败：${e.message}") }
                 return@launch
             }
-            val modelEligible = persistence != null && persistence.canPersist(result)
-            val persisted = if (modelEligible) {
-                persistence!!.writeEnriched(result)
-            } else {
-                false // LOCAL_ONLY / FALLBACK / EMPTY are never written by this seam.
-            }
+            val persistenceForResult = persistence?.takeIf { it.canPersist(result) }
+            val modelEligible = persistenceForResult != null
+            val persisted = persistenceForResult?.writeEnriched(result) ?: false
             val status = result.status.token
             val extra = when {
                 !modelEligible -> "（未写入，旧索引保持不变）"

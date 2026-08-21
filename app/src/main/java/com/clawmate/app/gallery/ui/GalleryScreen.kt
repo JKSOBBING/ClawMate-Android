@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,14 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -27,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,9 +41,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.analysis.CapabilityState
@@ -73,7 +80,10 @@ import com.clawmate.app.settings.SettingsComponent
  *   pages/collection/CollectionPage.ets
  */
 @Composable
-fun GalleryScreen() {
+fun GalleryScreen(
+    onBack: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+) {
     val context = LocalContext.current
     val repository = remember {
         GalleryComponent.getRepository(context)
@@ -103,6 +113,7 @@ fun GalleryScreen() {
     val insightsState by insightsVm.state.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
+    var selectedScene by remember { mutableStateOf("全部") }
 
     // Phase 42 — explicit "扫描/同步图库" entry. The coordinator is the
     // production singleton built in GalleryComponent with the real MediaStore
@@ -141,6 +152,14 @@ fun GalleryScreen() {
         vm.onPickResult(context, result)
     }
 
+    val requestScan = {
+        when (scanGateProvider().status) {
+            GallerySyncGateStatus.READY -> scanVm.scanNow()
+            GallerySyncGateStatus.NOT_CONFIGURED -> scanVm.refreshGate()
+            GallerySyncGateStatus.BLOCKED -> permissionLauncher.launch(mediaReadPermissionName())
+        }
+    }
+
     // Phase-44 — index-backed 汇总 grouping over the real indexed daily-log
     // events. Constructing the ViewModel triggers no I/O; reads only happen on
     // the explicit「同步」action inside [CollectionIndexViewModel.refreshIndex].
@@ -150,9 +169,10 @@ fun GalleryScreen() {
     )
     val indexedDetail by indexedVm.detail.collectAsState()
 
-    if (indexedDetail != null) {
+    val openIndexedDetail = indexedDetail
+    if (openIndexedDetail != null) {
         IndexedCollectionGroupDetailScreen(
-            detail = indexedDetail!!,
+            detail = openIndexedDetail,
             onBack = { indexedVm.closeDetail() },
         )
         return
@@ -175,25 +195,30 @@ fun GalleryScreen() {
         }
     }
 
-    Scaffold(
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { launchPicker() },
-                icon = { Icon(Icons.Filled.Add, contentDescription = "选择图片") },
-                text = { Text("选择图片") },
-            )
-        },
-    ) { padding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, bottom = 84.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("汇总 / 图库", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "从系统相册选择图片，保存为图库条目并按集合分组。",
-                style = MaterialTheme.typography.bodyMedium,
+            GalleryPageHeader(onBack = onBack, onOpenSettings = onOpenSettings)
+
+            val storedCount = (uiState as? GalleryUiState.Loaded)?.items?.size ?: 0
+            GalleryOverviewCard(
+                storedCount = storedCount,
+                syncing = scanState is GalleryScanUiState.Running,
+                onPick = { launchPicker() },
+                onSync = requestScan,
+            )
+
+            // Phase-44 — index-backed collection grouping (real daily-log events).
+            // Distinct from the photo heuristic grouping; groups are clickable and
+            // open IndexedCollectionGroupDetailScreen full-screen.
+            IndexedCollectionPanel(
+                vm = indexedVm,
+                onOpenGroup = { g -> indexedVm.openGroup(g.groupId) },
             )
 
             Spacer(Modifier.height(8.dp))
@@ -204,18 +229,7 @@ fun GalleryScreen() {
             // media-read permission first).
             GalleryScanSection(
                 state = scanState,
-                onScan = {
-                    when (val g = scanGateProvider().status) {
-                        GallerySyncGateStatus.READY -> scanVm.scanNow()
-                        GallerySyncGateStatus.NOT_CONFIGURED ->
-                            // Not opted in: honest notice, no scan. The user must
-                            // enable it in Settings first.
-                            scanVm.refreshGate()
-                        GallerySyncGateStatus.BLOCKED ->
-                            // Opted in but permission missing → request it now.
-                            permissionLauncher.launch(mediaReadPermissionName())
-                    }
-                },
+                onScan = requestScan,
                 onCancel = { scanVm.cancelActive() },
             )
 
@@ -232,6 +246,11 @@ fun GalleryScreen() {
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            GallerySceneTabs(
+                selected = selectedScene,
+                onSelected = { selectedScene = it },
+            )
+
             Spacer(Modifier.height(8.dp))
 
             // Phase 15 — real monthly-insights panel (pure derivation over stored
@@ -246,24 +265,135 @@ fun GalleryScreen() {
 
             Spacer(Modifier.height(8.dp))
 
-            // Phase-44 — index-backed collection grouping (real daily-log events).
-            // Distinct from the photo heuristic grouping; groups are clickable and
-            // open IndexedCollectionGroupDetailScreen full-screen.
-            IndexedCollectionPanel(
-                vm = indexedVm,
-                onOpenGroup = { g -> indexedVm.openGroup(g.groupId) },
-            )
-
-            Spacer(Modifier.height(8.dp))
-
             when (val s = uiState) {
                 is GalleryUiState.Loading -> LoadingBlock()
                 is GalleryUiState.Error -> ErrorBlock(s.message)
                 is GalleryUiState.Loaded -> LoadedBlock(
                     state = s,
                     query = searchQuery,
+                    sceneFilter = selectedScene,
                     onOpenItem = { id -> vm.selectItem(id) },
                 )
+            }
+        }
+        ExtendedFloatingActionButton(
+            onClick = { launchPicker() },
+            icon = { Icon(Icons.Filled.Add, contentDescription = "选择图片") },
+            text = { Text("选择图片") },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 16.dp),
+        )
+    }
+}
+
+@Composable
+private fun GalleryPageHeader(onBack: () -> Unit, onOpenSettings: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.90f)
+            .padding(top = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.IconButton(onClick = onBack) {
+            Icon(Icons.Filled.ArrowBack, contentDescription = "返回汇总")
+        }
+        Column(
+            modifier = Modifier.weight(1f).padding(start = 8.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            Text("图库分析", fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color(0xFF11182F))
+            Text("相册、截图与文档图片洞察", fontSize = 13.sp, color = Color(0xFF717684), modifier = Modifier.padding(top = 3.dp))
+        }
+        androidx.compose.material3.IconButton(onClick = onOpenSettings) {
+            Icon(Icons.Filled.Settings, contentDescription = "图库设置", tint = Color(0xFF2F5BEA))
+        }
+    }
+}
+
+private val galleryScenes = listOf("全部", "购物", "外卖", "娱乐", "聊天", "生活", "社交", "差旅")
+
+@Composable
+private fun GallerySceneTabs(
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        galleryScenes.forEach { scene ->
+            FilterChip(
+                selected = selected == scene,
+                onClick = { onSelected(scene) },
+                label = { Text(scene) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun GalleryOverviewCard(
+    storedCount: Int,
+    syncing: Boolean,
+    onPick: () -> Unit,
+    onSync: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = androidx.compose.ui.graphics.Color(0xFFF8FAFE),
+        ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("已整理", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        storedCount.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                androidx.compose.material3.VerticalDivider(
+                    modifier = Modifier.height(44.dp),
+                    color = androidx.compose.ui.graphics.Color(0xFFE7E9F0),
+                )
+                Column(modifier = Modifier.weight(1f).padding(start = 18.dp)) {
+                    Text("最近同步", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (syncing) "整理中" else if (storedCount == 0) "尚未同步" else "已入库",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onPick,
+                    modifier = Modifier.weight(1f).height(38.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2F5BEA)),
+                ) {
+                    Icon(Icons.Filled.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("选择图片", modifier = Modifier.padding(start = 4.dp))
+                }
+                OutlinedButton(
+                    onClick = onSync,
+                    enabled = !syncing,
+                    modifier = Modifier.weight(1f).height(38.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                ) {
+                    Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("同步图库", modifier = Modifier.padding(start = 4.dp))
+                }
             }
         }
     }
@@ -292,10 +422,12 @@ private fun ErrorBlock(message: String) {
 private fun LoadedBlock(
     state: GalleryUiState.Loaded,
     query: String,
+    sceneFilter: String,
     onOpenItem: (String) -> Unit,
 ) {
-    val visibleItems = if (query.isBlank()) state.items
-    else filterByQuery(state.items, query)
+    val sceneItems = state.items.filter { gallerySceneMatches(it, sceneFilter) }
+    val visibleItems = if (query.isBlank()) sceneItems
+    else filterByQuery(sceneItems, query)
 
     // Honest capability summary reflecting real states.
     if (state.capability.hasUnconfigured || state.capability.hasUnsupported) {
@@ -323,8 +455,8 @@ private fun LoadedBlock(
     when {
         state.items.isEmpty() -> EmptyBlock()
         visibleItems.isEmpty() -> Text("没有匹配的结果", style = MaterialTheme.typography.bodyMedium)
-        else -> LazyColumn(Modifier.fillMaxWidth()) {
-            items(visibleItems, key = { it.id }) { item ->
+        else -> Column(Modifier.fillMaxWidth()) {
+            visibleItems.forEach { item ->
                 PhotoRow(item, onClick = { onOpenItem(item.id) })
             }
         }

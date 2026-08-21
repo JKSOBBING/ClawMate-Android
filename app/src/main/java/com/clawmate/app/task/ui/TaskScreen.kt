@@ -3,7 +3,6 @@ package com.clawmate.app.task.ui
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,12 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -33,14 +30,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.task.TaskComponent
 import com.clawmate.app.task.model.WorkflowScene
 import com.clawmate.app.task.model.WorkflowTask
 import com.clawmate.app.task.runner.RunStatus
+import com.clawmate.app.R
+import com.clawmate.app.ui.ClawMateHeader
 
 /**
  * Compose Task screen — the Android vertical slice of the HarmonyOS 任务 tab
@@ -59,22 +61,43 @@ fun TaskScreen(context: Context, modifier: Modifier = Modifier) {
         val error = state.error
         val empty = state.emptyMessage
         when {
-            state.isLoading -> LoadingState()
-            error != null && state.tasks.isEmpty() -> FullError(vm, error)
-            empty != null -> EmptyState(vm, empty)
+            state.isLoading -> TaskStateWithHeader {
+                LoadingState(modifier = Modifier.weight(1f))
+            }
+            error != null && state.tasks.isEmpty() -> TaskStateWithHeader {
+                FullError(vm, error, modifier = Modifier.weight(1f))
+            }
+            empty != null -> TaskStateWithHeader {
+                EmptyState(vm, empty, modifier = Modifier.weight(1f))
+            }
             else -> TaskContent(vm, state, context)
         }
     }
 }
 
 @Composable
+private fun TaskStateWithHeader(
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF4F7FB)),
+    ) {
+        ClawMateHeader(title = "自定义任务", iconRes = R.drawable.header_task)
+        content()
+    }
+}
+
+@Composable
 private fun TaskContent(vm: TaskViewModel, state: TaskUiState, context: Context) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        SceneFilterBar(
-            scenes = state.scenes,
-            selected = state.sceneFilter,
-            onSelect = vm::selectScene,
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF4F7FB)),
+    ) {
+        ClawMateHeader(title = "自定义任务", iconRes = R.drawable.header_task)
+        TaskExecutionHeaderPanel(state.tasks)
         if (state.error != null) {
             Text(
                 text = state.error,
@@ -84,13 +107,38 @@ private fun TaskContent(vm: TaskViewModel, state: TaskUiState, context: Context)
             )
         }
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (state.filteredTasks.isEmpty()) {
                 item {
                     Text("此分类下暂无 workflow", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else if (state.sceneFilter == null) {
+                state.scenes.forEach { scene ->
+                    val sceneTasks = state.tasks.filter { it.sceneId == scene.sceneId }
+                    if (sceneTasks.isNotEmpty()) {
+                        item(key = "scene-${scene.sceneId}") {
+                            TaskSceneHeading(scene = scene, tasks = sceneTasks)
+                        }
+                        items(sceneTasks, key = { it.id }) { task ->
+                            TaskCard(
+                                task = task,
+                                scene = scene,
+                                isRunning = state.runningTaskId == task.id,
+                                isExpanded = state.expandedTaskId == task.id,
+                                stepSummary = state.stepSummary,
+                                runResult = state.activeResult,
+                                onToggle = { vm.toggleEnabled(task) },
+                                onExpand = { vm.toggleExpanded(task) },
+                                onRun = { vm.run(task) },
+                            )
+                        }
+                    }
                 }
             } else {
                 items(state.filteredTasks, key = { it.id }) { task ->
@@ -108,6 +156,15 @@ private fun TaskContent(vm: TaskViewModel, state: TaskUiState, context: Context)
                 }
             }
             item {
+                BatchRunPanel(
+                    enabledCount = state.tasks.count { it.enabled },
+                    running = state.batchRunning,
+                    message = state.batchMessage,
+                    onRun = vm::runEnabledTasks,
+                    onCancel = vm::cancelRun,
+                )
+            }
+            item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { vm.reload() }, modifier = Modifier.align(Alignment.CenterVertically)) {
                         Text("刷新")
@@ -119,25 +176,92 @@ private fun TaskContent(vm: TaskViewModel, state: TaskUiState, context: Context)
 }
 
 @Composable
-private fun SceneFilterBar(scenes: List<WorkflowScene>, selected: Int?, onSelect: (Int?) -> Unit) {
+private fun TaskSceneHeading(scene: WorkflowScene, tasks: List<WorkflowTask>) {
+    val accent = parseHexColor(scene.colorHex)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(top = 6.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(
-            selected = selected == null,
-            onClick = { onSelect(null) },
-            label = { Text("全部") },
+        Text(
+            scene.label,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF11182F),
+            modifier = Modifier.weight(1f),
         )
-        scenes.forEach { scene ->
-            FilterChip(
-                selected = selected == scene.sceneId,
-                onClick = { onSelect(scene.sceneId) },
-                label = { Text(scene.label) },
+        Text(
+            "${tasks.count { it.enabled }}/${tasks.size} 开启",
+            fontSize = 11.sp,
+            color = accent,
+            modifier = Modifier
+                .background(Color(0xFFF8F9FE), RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun TaskExecutionHeaderPanel(tasks: List<WorkflowTask>) {
+    val enabledCount = tasks.count { it.enabled }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth(0.86f)
+            .padding(top = 24.dp, bottom = 18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE3E8F1)),
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                "任务执行",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF11182F),
             )
+            Text(
+                "已开启 $enabledCount / 全部 ${tasks.size}",
+                fontSize = 12.sp,
+                color = Color(0xFF6F7584),
+                modifier = Modifier.padding(top = 7.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BatchRunPanel(
+    enabledCount: Int,
+    running: Boolean,
+    message: String?,
+    onRun: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth(0.86f)
+            .padding(bottom = 18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE3E8F1)),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            message?.let {
+                Text(it, fontSize = 12.sp, color = Color(0xFF4E5666), modifier = Modifier.padding(bottom = 10.dp))
+            }
+            Button(
+                onClick = if (running) onCancel else onRun,
+                enabled = running || enabledCount > 0,
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = if (running) Color(0xFF8A93A3) else Color(0xFF276EF1),
+                    disabledContainerColor = Color(0xFFA9B7E9),
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(if (running) "停止执行" else "执行已开启任务", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -156,7 +280,7 @@ private fun TaskCard(
 ) {
     val accent = scene?.let { parseHexColor(it.colorHex) } ?: MaterialTheme.colorScheme.primary
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(0.86f),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         ),
@@ -167,11 +291,16 @@ private fun TaskCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(54.dp)
                         .background(accent.copy(alpha = if (task.enabled) 0.18f else 0.08f), MaterialTheme.shapes.medium),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(task.icon.take(1), color = accent, fontWeight = FontWeight.Bold)
+                    Text(
+                        task.icon,
+                        fontSize = 13.sp,
+                        color = accent,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -309,8 +438,8 @@ private fun parseHexColor(hex: String): androidx.compose.ui.graphics.Color {
 }
 
 @Composable
-private fun LoadingState() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun LoadingState(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Spacer(Modifier.height(8.dp))
@@ -320,8 +449,8 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun FullError(vm: TaskViewModel, message: String) {
-    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+private fun FullError(vm: TaskViewModel, message: String, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("加载失败", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -333,8 +462,8 @@ private fun FullError(vm: TaskViewModel, message: String) {
 }
 
 @Composable
-private fun EmptyState(vm: TaskViewModel, message: String) {
-    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+private fun EmptyState(vm: TaskViewModel, message: String, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(message, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(12.dp))

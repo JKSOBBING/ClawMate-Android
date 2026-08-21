@@ -1,7 +1,10 @@
 package com.clawmate.app.home.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import androidx.compose.ui.res.painterResource
+import com.clawmate.app.R
+import com.clawmate.app.ui.ClawMateHeader
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.home.data.HomeProfileSource
 import com.clawmate.app.home.data.HomeRecRepository
@@ -96,8 +102,12 @@ fun HomeScreen(
     }
 
     when (val s = state) {
-        is HomeUiState.Loading -> LoadingBox()
-        is HomeUiState.Error -> ErrorBox(message = s.message)
+        is HomeUiState.Loading -> HomeStateWithHeader {
+            LoadingBox(modifier = Modifier.weight(1f))
+        }
+        is HomeUiState.Error -> HomeStateWithHeader {
+            ErrorBox(message = s.message, modifier = Modifier.weight(1f))
+        }
         is HomeUiState.Ready -> HomeContent(
             profile = s.profile,
             list = list,
@@ -115,8 +125,26 @@ fun HomeScreen(
 }
 
 @Composable
-private fun LoadingBox() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun HomeStateWithHeader(
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF4F8FF)),
+    ) {
+        ClawMateHeader(
+            title = "你的智伴",
+            iconRes = R.drawable.header_companion,
+            pcServerVisible = true,
+        )
+        content()
+    }
+}
+
+@Composable
+private fun LoadingBox(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Text(
@@ -129,10 +157,11 @@ private fun LoadingBox() {
 }
 
 @Composable
-private fun ErrorBox(message: String) {
+private fun ErrorBox(message: String, modifier: Modifier = Modifier) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .then(modifier)
+            .fillMaxWidth()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -168,12 +197,10 @@ private fun HomeContent(
             .background(Color(0xFFF4F8FF))
             .padding(bottom = 24.dp),
     ) {
-        Text(
-            text = "你的智伴",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF1B2030),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+        ClawMateHeader(
+            title = "你的智伴",
+            iconRes = R.drawable.header_companion,
+            pcServerVisible = true,
         )
 
         // --------------------------------------------------- avatar section
@@ -182,12 +209,6 @@ private fun HomeContent(
         // ------------------------------------------- completeness + pillars
         CompletenessCard(completeness = profile.completeness)
         PillarsRow(domains = profile.domains)
-
-        // --------------------------------------------------- explicit 生成画像
-        ProfileGenerationSection(
-            profileGeneration = profileGeneration,
-            onGenerateProfile = onGenerateProfile,
-        )
 
         // --------------------------------------------------- recommendations
         RecommendationsSection(
@@ -198,6 +219,14 @@ private fun HomeContent(
             onPrevious = onPrevious,
             onNext = onNext,
             onSetCompleted = onSetCompleted,
+        )
+
+        // Keep the real indexed-profile generation flow available after the
+        // Harmony-aligned first viewport, rather than inserting an extra card
+        // between the source page's completeness and recommendation blocks.
+        ProfileGenerationSection(
+            profileGeneration = profileGeneration,
+            onGenerateProfile = onGenerateProfile,
         )
     }
 }
@@ -326,87 +355,163 @@ private fun ProfileGenerateButton(
 @Composable
 private fun AvatarSectionCard(profile: HomeProfileViewModel, onOpenAvatar: () -> Unit) {
     val avatar = profile.avatar
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFEDF5FF)),
+            .background(Color(0xFFEDF5FF)),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            if (avatar.hasAvatarImage && avatar.imageUri.isNotBlank()) {
-                AsyncImage(
-                    model = avatar.imageUri,
-                    contentDescription = "数字分身",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(270.dp)
-                        .background(Color(0xFFE8F1FF), RoundedCornerShape(20.dp)),
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(270.dp)
-                        .background(Color(0xFFE8F1FF), RoundedCornerShape(20.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(avatar.statusLabel, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "数字分身生成功能未在此设备启用",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF6F7684),
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                }
-            }
-            Row(
+        if (avatar.hasAvatarImage && avatar.imageUri.isNotBlank()) {
+            AsyncImage(
+                model = avatar.imageUri,
+                contentDescription = "数字分身",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(if (avatar.status == AvatarStatus.CURRENT) Color(0xFF7669FF) else Color(0xFFB1B7C6), RoundedCornerShape(4.dp)),
-                )
-                Text(
-                    avatar.statusLabel,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF1B2030),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 10.dp),
-                )
-                Text(
-                    avatar.updatedLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF7B8190),
-                    modifier = Modifier.padding(start = 10.dp),
-                )
-                Text(">", fontSize = 17.sp, color = Color(0xFF8B909A), modifier = Modifier.padding(start = 6.dp))
-            }
-            Row(
+                    .fillMaxWidth(0.92f)
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp)
+                    .height(270.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFFE8F1FF)),
+            )
+        } else {
+            Image(
+                painter = painterResource(R.drawable.digital_avatar),
+                contentDescription = "默认数字分身",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Button(
-                    onClick = onOpenAvatar,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7669FF)),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("数字分身 · 管理本地画像", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+                    .fillMaxWidth(0.92f)
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp)
+                    .height(270.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFFE8F1FF)),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FeaturePill(
+                icon = R.drawable.home_feature_understand,
+                title = "理解你",
+                description = "更懂你的偏好",
+                modifier = Modifier.weight(1f),
+            )
+            FeaturePill(
+                icon = R.drawable.home_feature_protect,
+                title = "守护你",
+                description = "隐私安全可靠",
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FeaturePill(
+                icon = R.drawable.home_feature_companion,
+                title = "陪伴你",
+                description = "服务你的生活",
+                modifier = Modifier.weight(1f),
+            )
+            FeaturePill(
+                icon = R.drawable.home_feature_growth,
+                title = "成就你",
+                description = "助力你的成长",
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 16.dp, bottom = 16.dp)
+                .height(48.dp)
+                .shadow(10.dp, RoundedCornerShape(24.dp))
+                .background(Color.White, RoundedCornerShape(24.dp))
+                .padding(horizontal = 18.dp)
+                .clickable(onClick = onOpenAvatar),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(if (avatar.status == AvatarStatus.CURRENT) Color(0xFF7669FF) else Color(0xFFB1B7C6), RoundedCornerShape(4.dp)),
+            )
+            Text(
+                avatar.statusLabel,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1B2030),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp),
+            )
+            Text(
+                avatar.updatedLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF7B8190),
+                modifier = Modifier.padding(start = 10.dp),
+            )
+            Text(">", fontSize = 17.sp, color = Color(0xFF8B909A), modifier = Modifier.padding(start = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun FeaturePill(
+    icon: Int,
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(66.dp)
+            .background(Color.White, RoundedCornerShape(16.dp))
+            .padding(start = 14.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .background(Color(0xFFF2F6FF), RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(icon),
+                contentDescription = null,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        Column(
+            modifier = Modifier.padding(start = 12.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            Text(
+                title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF172033),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                description,
+                fontSize = 12.sp,
+                color = Color(0xFF6F7684),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 3.dp),
+            )
         }
     }
 }

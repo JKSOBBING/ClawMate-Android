@@ -66,6 +66,10 @@ class ChatVoiceController(
     private val ttsAdapter = AndroidTextToSpeechTtsAdapter(context)
     private val sessionController = VoiceSessionController()
 
+    private var playbackGeneration: Int = 0
+    private var voicingMessageId: String = ""
+    private var voicingText: String = ""
+
     private val _state = MutableStateFlow(buildState())
     val state: StateFlow<VoiceControllerState> = _state.asStateFlow()
 
@@ -81,10 +85,6 @@ class ChatVoiceController(
     // Voice-input start/stop generation guards (pure, ported).
     private var voiceInputStartGeneration: Int = 0
     private var voiceInputStoppedGeneration: Int = 0
-
-    private var playbackGeneration: Int = 0
-    private var voicingMessageId: String = ""
-    private var voicingText: String = ""
 
     fun setHost(
         activeInputProvider: () -> String,
@@ -104,7 +104,9 @@ class ChatVoiceController(
             ttsReady = ttsAdapter.ready,
             ttsInitializing = ttsAdapter.state == TtsInitState.INITIALIZING,
             permissionRequirementVisible = false,
-            voicingMessageId = voicingMessageId,
+            // Keep the UI state contract non-null even if this method is ever
+            // called during a partially initialized controller.
+            voicingMessageId = voicingMessageId.orEmpty(),
         )
 
     private fun emitRoomState() {

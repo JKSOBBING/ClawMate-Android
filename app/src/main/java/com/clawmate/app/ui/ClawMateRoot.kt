@@ -1,34 +1,43 @@
 package com.clawmate.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Summarize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.first
+import com.clawmate.app.R
 import com.clawmate.app.chat.ui.ChatScreen
 import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.model.GalleryPhotoItem
 import com.clawmate.app.gallery.ui.GalleryScreen
+import com.clawmate.app.gallery.ui.CollectionSummaryScreen
 import com.clawmate.app.datamanager.DailyLogEntry
 import com.clawmate.app.datamanager.DailyLogEventSourceFactory
 import com.clawmate.app.home.data.DataStoreHomeRecRepository
@@ -53,16 +62,20 @@ import com.clawmate.app.settings.ui.SettingsScreen
 sealed class Destination(
     val route: String,
     val label: String,
-    val icon: ImageVector,
+    val icon: Int,
 ) {
-    data object Home : Destination("home", "首页", Icons.Filled.Home)
-    data object Summary : Destination("summary", "汇总", Icons.Filled.Summarize)
-    data object Chat : Destination("chat", "聊天", Icons.AutoMirrored.Filled.Chat)
-    data object Task : Destination("task", "任务", Icons.AutoMirrored.Filled.List)
-    data object Settings : Destination("settings", "设置", Icons.Filled.Settings)
+    data object Home : Destination("home", "首页", R.drawable.tab_home)
+    data object Summary : Destination("summary", "汇总", R.drawable.tab_summary)
+    data object Chat : Destination("chat", "聊天", R.drawable.tab_chat)
+    data object Task : Destination("task", "任务", R.drawable.tab_task)
+    data object Settings : Destination("settings", "设置", R.drawable.tab_settings)
 
     companion object {
-        val items = listOf(Home, Summary, Chat, Task, Settings)
+        // Do not cache this list during Destination class initialization.
+        // Kotlin data-object initialization can otherwise expose a null nested
+        // object to the first Compose frame on some Android runtimes.
+        val items: List<Destination>
+            get() = listOf(Home, Summary, Chat, Task, Settings)
     }
 }
 
@@ -166,43 +179,112 @@ private fun MainTabScaffold(
     dailyLogSource: (suspend () -> List<DailyLogEntry>)?,
     profileGenerationRepository: com.clawmate.app.datamanager.ProfileGenerationRepository?,
 ) {
-    val navController = rememberNavController()
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = backStackEntry?.destination
+    // These are peer-level tabs, not a nested back stack. Keeping the selected
+    // tab as local saved state avoids constructing a navigation graph for every
+    // click and keeps a broken optional feature from taking down the shell.
+    var selectedRoute by rememberSaveable { mutableStateOf(Destination.Home.route) }
 
     Scaffold(
+        containerColor = com.clawmate.app.ui.theme.NearWhite,
         bottomBar = {
-            NavigationBar {
-                Destination.items.forEach { destination ->
-                    val selected = currentDestination?.hierarchy
-                        ?.any { it.route == destination.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = { Text(destination.label) },
-                    )
-                }
-            }
+            MainBottomBar(
+                selectedRoute = selectedRoute,
+                onSelect = { selectedRoute = it },
+            )
         },
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            val context = LocalContext.current
-            when (backStackEntry?.destination?.route) {
-                Destination.Home.route -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource, profileGenerationRepository = profileGenerationRepository)
-                Destination.Summary.route -> GalleryScreen()
-                Destination.Chat.route -> ChatScreen(context)
-                Destination.Task.route -> WorkflowTaskScreen(context)
-                Destination.Settings.route -> SettingsScreen(context)
-                else -> HomeScreen(homeRecRepository = homeRecRepository, profileSource = profileSource, galleryItemsSource = galleryItemsSource, dailyLogSource = dailyLogSource, profileGenerationRepository = profileGenerationRepository)
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            when (selectedRoute) {
+                Destination.Home.route -> {
+                HomeScreen(
+                    homeRecRepository = homeRecRepository,
+                    profileSource = profileSource,
+                    galleryItemsSource = galleryItemsSource,
+                    dailyLogSource = dailyLogSource,
+                    profileGenerationRepository = profileGenerationRepository,
+                )
+                }
+                Destination.Summary.route -> CollectionSummaryScreen(
+                    context = LocalContext.current,
+                    onOpenSettings = { selectedRoute = Destination.Settings.route },
+                )
+                Destination.Chat.route -> ChatScreen(
+                    context = LocalContext.current,
+                    onOpenTasks = { selectedRoute = Destination.Task.route },
+                    onOpenSettings = { selectedRoute = Destination.Settings.route },
+                )
+                Destination.Task.route -> WorkflowTaskScreen(LocalContext.current)
+                Destination.Settings.route -> SettingsScreen(LocalContext.current)
+                else -> HomeScreen(
+                    homeRecRepository = homeRecRepository,
+                    profileSource = profileSource,
+                    galleryItemsSource = galleryItemsSource,
+                    dailyLogSource = dailyLogSource,
+                    profileGenerationRepository = profileGenerationRepository,
+                )
+            }
+        }
+    }
+}
+
+/** Fixed-size bottom tabs matching HarmonyOS Index.TabItem. */
+@Composable
+private fun MainBottomBar(
+    selectedRoute: String,
+    onSelect: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .navigationBarsPadding(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Destination.items.forEach { destination ->
+                val selected = selectedRoute == destination.route
+                Column(
+                    modifier = Modifier
+                        .width(72.dp)
+                        .height(58.dp)
+                        .clickable { onSelect(destination.route) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(
+                                if (selected) com.clawmate.app.ui.theme.TabIndicator else Color.Transparent,
+                                RoundedCornerShape(16.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(destination.icon),
+                            contentDescription = destination.label,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(21.dp),
+                        )
+                    }
+                    Text(
+                        destination.label,
+                        fontSize = 13.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) com.clawmate.app.ui.theme.TabSelected else com.clawmate.app.ui.theme.MutedText,
+                        modifier = Modifier.padding(top = 2.dp),
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }

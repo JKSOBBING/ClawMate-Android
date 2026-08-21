@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Single-color "claw paw" glyph for Android 13+ themed icons. The system tints
+    this shape (default white) to match the user's dynamic theme, so it must be a
+    plain opaque silhouette with no gradients or color.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main paw pad -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,58 C42,58 34,64 34,73 C34,81 42,86 54,86 C66,86 74,81 74,73 C74,64 66,58 54,58 Z" />
+    <!-- Four toe pads -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M28,42 a9,9 0 1,1 0.001,0 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M44,31 a9,9 0 1,1 0.001,0 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M64,31 a9,9 0 1,1 0.001,0 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M80,42 a9,9 0 1,1 0.001,0 z" />
+</vector>

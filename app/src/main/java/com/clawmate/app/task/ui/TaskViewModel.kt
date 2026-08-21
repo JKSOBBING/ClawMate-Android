@@ -31,6 +31,8 @@ data class TaskUiState(
     val stepSummary: List<StepSummaryLine> = emptyList(),
     /** Run outcome for the expanded task. */
     val activeResult: WorkflowRunResult? = null,
+    val batchRunning: Boolean = false,
+    val batchMessage: String? = null,
 ) {
     val scenes: List<WorkflowScene> get() = WorkflowSceneConfig.scenes
     val filteredTasks: List<WorkflowTask>
@@ -178,10 +180,52 @@ class TaskViewModel(
         }
     }
 
+    /** Runs enabled workflows in source order, matching HarmonyOS batch execution. */
+    fun runEnabledTasks() {
+        if (_state.value.batchRunning || _state.value.runningTaskId != null) return
+        val enabled = _state.value.tasks.filter { it.enabled }
+        if (enabled.isEmpty()) {
+            _state.update { it.copy(batchMessage = "没有已开启的 workflow") }
+            return
+        }
+        runningJob?.cancel()
+        runningJob = viewModelScope.launch {
+            _state.update { it.copy(batchRunning = true, batchMessage = "正在执行 ${enabled.size} 个 workflow", error = null) }
+            var success = 0
+            var failed = 0
+            enabled.forEach { task ->
+                _state.update { it.copy(runningTaskId = task.id, expandedTaskId = task.id, stepSummary = emptyList(), activeResult = null) }
+                val outcome = runCatching {
+                    val json = repository.configJson(task)
+                        ?: throw IllegalStateException("找不到配置文件")
+                    when (val parsed = WorkflowJsonParser.parse(json)) {
+                        is WorkflowJsonParser.Result.Ok -> runner.run(parsed.definition)
+                        is WorkflowJsonParser.Result.Err -> throw IllegalStateException("workflow 配置解析失败: ${parsed.message}")
+                    }
+                }
+                outcome.onSuccess { result ->
+                    success++
+                    runCatching { repository.recordRun(task.id, result) }
+                    _state.update { state ->
+                        state.copy(tasks = state.tasks.map { current ->
+                            if (current.id == task.id) current.copy(lastRunStatus = result.status.uiLabel(), lastMessage = result.message) else current
+                        })
+                    }
+                }.onFailure { error ->
+                    failed++
+                    _state.update { it.copy(error = error.message ?: "运行失败") }
+                }
+            }
+            _state.update {
+                it.copy(batchRunning = false, runningTaskId = null, batchMessage = "批量执行完成：成功 $success，失败 $failed")
+            }
+        }
+    }
+
     fun cancelRun() {
         runningJob?.cancel()
         runningJob = null
-        _state.update { it.copy(runningTaskId = null) }
+        _state.update { it.copy(runningTaskId = null, batchRunning = false, batchMessage = "已取消执行") }
     }
 }
 

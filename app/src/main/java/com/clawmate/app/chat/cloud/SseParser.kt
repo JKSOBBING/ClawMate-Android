@@ -122,7 +122,8 @@ object ChatStreamChunkParser {
         if (choices.isEmpty()) return CloudStreamChunk()
 
         val choiceObj = try {
-            choices.firstOrNull()!!.jsonObject
+            choices.firstOrNull()?.jsonObject
+                ?: throw IllegalArgumentException("missing first choice")
         } catch (e: Exception) {
             throw SseParserException("Cloud stream choice is not an object")
         }

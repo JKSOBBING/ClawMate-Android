@@ -3,6 +3,118 @@
 Source of truth (reference only, do not modify): `/root/mobiinfra-oh`
 Target: this repository (`/root/ClawMate-Android`)
 
+## Current UI parity pass (2026-08-20)
+
+This pass uses the HarmonyOS pages under `/root/mobiinfra-oh/entry/src/main/ets`
+as the visual reference for the five-tab shell and the core Home, Collection,
+Chat, Task, and Settings flows.
+
+Implemented in Android:
+
+- Main tab order and labels match `main/MainTabConfig.ets`; the shell uses the
+  Harmony light palette (`#8066FF` accent, `#F4F8FF` page background, white
+  bottom bar, `#EEF0FF` selected indicator).
+- Home has the source default digital-avatar asset and the profile/recommendation
+  cards; Chat has the source-style empty welcome state with avatar, greeting,
+  and three prompt cards; prompts only fill the composer and do not fake a send.
+- Collection/summary has the source title and a real-data overview card showing
+  stored count and sync state; photo picking, grouping, scan gates, and detail
+  states remain explicit and honest.
+- Task has the source `自定义任务` header and background; malformed persisted
+  task-index records are sanitized without discarding valid user records, and
+  missing code-defined defaults are restored from bundled resources while
+  preserving user-edited task state.
+- Settings keeps the source section order, labels, card spacing, and letter
+  badges; detail pages expose Android capability boundaries as
+  `NOT_CONFIGURED` / `DISABLED` rather than claiming unsupported Harmony
+  integrations work.
+- Home, Collection, Task, and Settings now share an Android `ClawMateHeader`
+  that mirrors HarmonyOS `AppHeader`: source-matched semantic icon, title,
+  optional subtitle, and the privacy-protection status affordance.
+- Launcher resources now include the exact Harmony brand bitmap for the
+  adaptive icon and a standard `mipmap-anydpi` legacy fallback, with both
+  `android:icon` and `android:roundIcon` declared.
+- Home, Task, and Settings retain their Harmony-style page header during
+  loading, empty, and error states instead of replacing the whole page with a
+  headerless centered placeholder.
+- Settings primary navigation now contains the same five HarmonyOS sections;
+  Android-only NFC, WeChat auto-summary, and runtime-log features are exposed
+  as explicit actions inside their owning sections rather than extra top-level
+  cards.
+- Chat voice controller property initialization was reordered so its initial
+  non-null state cannot observe a JVM-default null `voicingMessageId`.
+- Chat session create/select/delete operations now catch repository failures and
+  render actionable in-page errors instead of allowing a storage exception in a
+  `viewModelScope` coroutine to crash the process.
+- Home's Harmony-first viewport now keeps the source order (avatar/status,
+  completeness, four lifestyle pillars, recommendations); the real indexed
+  profile-generation card remains available below recommendations instead of
+  displacing the primary source blocks.
+- Chat send now includes active-session recovery inside the same exception
+  boundary as the streaming request, so storage failures reset the sending
+  state and surface the existing error banner instead of escaping the
+  coroutine.
+- Chat now mirrors the Harmony top bar with a real `MobiAgent` header, persisted
+  cloud/local mode selector (switching creates the corresponding session), and
+  a direct entry to the existing in-app log viewer.
+- Shared Android page headers now match the Harmony privacy shield treatment;
+  the Home header also exposes the honest default `PC 未连接` status, while
+  Settings detail headers show the active section title like Harmony.
+- The Android cold-start window background now uses the Harmony page token
+  `#F4F8FF`, avoiding a white-to-blue flash before Compose renders.
+- Collection first viewport now follows the Harmony order with horizontally
+  scrollable scene tabs (`全部`, `购物`, `外卖`, `娱乐`, `聊天`, `生活`, `社交`,
+  `差旅`) before the real-data overview; selecting a scene filters stored items
+  using their category, title, summary, and tags.
+
+Verification executed for this pass:
+
+- `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`.
+- `:app:assembleDebug` — `BUILD SUCCESSFUL`.
+- `ChatModeContractTest` — persisted mode ids, labels, and legacy fallback
+  behavior covered by JVM regression tests.
+- `DefaultWorkflowRepositoryTest.partial persisted index restores missing
+  code-defined defaults` — partial task indexes recover the complete default
+  task set without overwriting user state.
+- `git diff --check` — passed.
+- Collection scene-tab layout and filtering compile-tested through the full
+  debug unit-test and APK build above.
+- Collection first viewport ordering now matches the Harmony reference more
+  closely: scene tabs, stored-count overview, indexed collection groups, then
+  scan/search/monthly analysis and photo rows.
+- Fixed Compose space allocation in Chat and Task: the message/task lists now
+  consume only remaining height, keeping the chat composer and task controls
+  visible. Collection now uses one outer scroll container instead of a nested
+  list that could be clipped by the preceding analysis panels.
+- APK: `app/build/outputs/apk/debug/app-debug.apk` (SHA-256 recorded in the
+  handoff message for each rebuild; latest rebuild SHA-256 is
+  `d4c62cc3315c9f7d0ea2cbbc62cdb1662a5cd2b6a0fb93c0be438629e753f800`.
+- APK-level resource verification with `aapt2 dump` / `unzip -l` confirmed
+  package `com.clawmate.app`, launchable app metadata, both `icon` and
+  `roundIcon` resolving to `@mipmap/ic_launcher`, the exact brand/avatar
+  bitmaps, and all five tab vector resources present in the APK.
+- Final APK resource verification repeated the same package/icon/avatar/tab
+  checks. Latest SHA-256:
+  `22582ee912aa6a9affe218d107613f8bf025b52dd3a30f73a0c0d43db7f7c97e`.
+
+Remaining platform differences and verification gaps:
+
+- The SDK `adb` binary is available and its server starts successfully, but the
+  current environment reports no connected Android device and no AVD. Screenshot
+  comparison, install verification, and click-by-click runtime regression have
+  therefore not been executed here.
+- The five Harmony tab SVGs are now converted to Android VectorDrawable assets
+  and used directly by the bottom bar. Some page header/category illustrations
+  still use Android Material icons or text badges where no Android asset adapter
+  exists yet; those remain visual approximations.
+- Chat's core session, streaming, attachment, voice, and empty-state flow is
+  present, but the Harmony top-bar mode selector and direct runtime-log action
+  do not yet have equivalent Android state/route contracts; Android exposes
+  supported configuration and logs through Settings instead of adding inert
+  controls.
+- HDC/GUI automation, Harmony native MNN behavior, and PC-side services remain
+  controlled Android adapters with explicit disabled/not-configured states.
+
 > Phase 1 of N. This file records the source inventory, source-of-truth
 > locations, and the chosen Android implementation strategy for each major
 > feature. It is updated at the end of every phase (AGENTS.md — Collaboration
@@ -2942,3 +3054,395 @@ explicitly device/HDC/permission-gated (confirm callback + run callback, Planner
 hdc bridge). Android's controlled Accessibility executor is the on-device, tightly-scoped analog
 that brings only the safe semantic actions to the agent; HDC `run_cmd`/coordinate GUI remains
 disabled.
+
+## 30. Core UI regression pass — task icon parity
+
+Compared the Android task card against Harmony `TaskPage.ets`: Harmony renders the complete
+`task.icon` in a 54dp badge, while Android was truncating it with `take(1)` inside a 40dp badge.
+Android now renders the complete icon at 54dp with the matching 13sp treatment. The settings
+section letter badges were checked against Harmony and are already identical, so they were left
+unchanged.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `aapt2 dump badging` confirms
+`com.clawmate.app`, version `1.0.0`, target SDK `34`; manifest `icon` and `roundIcon` resolve to
+the same `@mipmap/ic_launcher` resource. Latest APK SHA256:
+`c5bf4d6d74fbbee6254773bb66dad66f3571480bd3e51e79166c7c51e9d651be`.
+
+Remaining gap: no Android device/AVD is available in this environment for interactive screenshot
+and crash verification; `adb` cannot start its daemon (`Operation not permitted`).
+
+## 31. Core screen parity pass — Home and Gallery
+
+Compared the Harmony home implementation (`HomePage.ets`) and added the four visible capability
+entries below the default/avatar image: `理解你`, `守护你`, `陪伴你`, and `成就你`. Their 42dp
+icon tiles, 66dp pills, labels, descriptions, and semantic colors now use Android vector
+drawables derived from the corresponding Harmony media assets. The existing avatar persistence,
+status, and local-image management actions remain unchanged.
+
+The Android summary tab now uses the Harmony page title `图库分析` and subtitle
+`相册、截图与文档图片洞察` instead of the generic `你的足迹`, while preserving the existing
+gallery, collection, scan, search, and monthly-insight flows.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean;
+`aapt2` confirms package `com.clawmate.app`, version `1.0.0`, target SDK `34`, and identical
+manifest `icon`/`roundIcon` resource references. Latest APK SHA256:
+`34a22cc5c587e1d1471310ec2daf47286747a434ac35f98d62639cd8d03fa5da`.
+
+## 32. Core navigation parity pass
+
+Replaced the default Material 3 `NavigationBar` with a fixed-size Compose bottom bar matching
+Harmony `Index.ets` `TabItem`: each tab is 72dp wide and 58dp high, the icon is 21dp inside a
+32dp selected circle, and the label is 13sp with the Harmony selected/unselected colors and
+selected bold weight. The five routes and their click behavior are unchanged, including the
+previous fix that avoids null `Destination` objects during the first frame.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean;
+`aapt2` confirms package `com.clawmate.app`, version `1.0.0`, target SDK `34`, with `icon` and
+`roundIcon` both resolving to `@mipmap/ic_launcher`. Latest APK SHA256:
+`dad76394fd9db960158b395aef701f41296e422d2ae98388e29e14bf1e6accb3`.
+
+The remaining verification gap is interactive device/AVD execution: this environment's `adb`
+daemon cannot start (`Operation not permitted`), so screenshot, tab-tap and crash-free runtime
+checks remain pending on a real Android device.
+
+## 33. Chat screen parity pass
+
+Compared `ChatPage.ets`: the Android chat header now places compact `云端`/`本地` mode pills
+alongside `MobiAgent`, matching the Harmony 46x28dp pills instead of using full-width Material
+filter chips below the header. The composer now follows Harmony's `+` + transparent multiline
+input + single 82x40dp primary button structure. An empty composer invokes the existing guarded
+voice-permission flow; text or pending attachments invoke the existing send flow. No cloud or
+voice capability is fabricated.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean;
+`aapt2` confirms package `com.clawmate.app`, version `1.0.0`, target SDK `34`, and both manifest
+icon attributes resolve to `@mipmap/ic_launcher`. Latest APK SHA256:
+`3c9d44524c8b7de3f5a2628a9fc3d6bac2b3d6b4cee3b2f32a0b5c4a1510d6fe`.
+
+Interactive chat launch, voice permission, send, and tab-tap checks still require a real Android
+device/AVD because the available `adb` daemon cannot start in this environment.
+
+## 34. Task execution header parity and final rebuild
+
+Added the Harmony execution-state header to the Android task page: `任务执行` plus the live
+`已开启 x / 全部 y` count appears before scene filters and task cards. The Android-only page
+does not show a non-functional `配置任务` button; configuration remains an explicit platform
+gap rather than a fake action.
+
+The first verification attempt stopped during D8 with `No space left on device`. Only generated
+outputs and caches were removed (`app/build`, project `.gradle-local`, and temporary test data;
+source and Git files were untouched), after which the complete command succeeded.
+
+Final verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean;
+`aapt2` confirms package `com.clawmate.app`, version `1.0.0`, target SDK `34`, and both manifest
+icon attributes resolve to `@mipmap/ic_launcher`. Final APK SHA256:
+`1779eec7c4eb69c152ec016af6e14bf5684d778564a473b63835f59289d7c3f2`.
+
+Interactive device/AVD checks remain unavailable because the local `adb` daemon cannot start;
+the final runtime gap is unchanged.
+
+## 35. Task scene grouping parity
+
+When no scene filter is selected, the Android task list now renders each non-empty workflow scene
+as a Harmony-style section: scene title, live `开启数/总数` badge, then that scene's task cards.
+The existing filter, toggle, expand, run, and refresh actions remain unchanged; empty scenes are
+omitted just as the Harmony execution list omits scenes with no tasks.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean;
+`aapt2` confirms package `com.clawmate.app`, version `1.0.0`, target SDK `34`, and matching
+manifest `icon`/`roundIcon` references. Latest APK SHA256:
+`9f6f5ec5826aefbdf15e4b59980e4e66d08e94ee4ca0151323d39e27d1c17444`.
+
+The APK has not been interactively launched here because no usable Android device/AVD is
+available and the local `adb` daemon fails to start.
+
+## 36. Gallery overview action parity
+
+Aligned the gallery overview first viewport with the Harmony action toolbar: the summary now
+shows the existing `选择图片` picker and `同步图库` action below the live stats. Both actions
+reuse the existing picker and synchronization permission/opt-in gate, so the page does not
+advertise fake clear or analysis operations. The scan section uses the same guarded action path.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean;
+`aapt2` confirms package `com.clawmate.app`, version `1.0.0`, target SDK `34`, and matching
+manifest `icon`/`roundIcon` references. Latest APK SHA256:
+`07ff44d4576a01b2ff98b7c9f07f080db6ecc6912c8e96dbe4d55ce4ef67b50d`.
+
+Interactive device/AVD checks remain unavailable because the local `adb` daemon cannot start;
+chat launch, bottom-navigation taps, task loading, gallery actions, and settings navigation
+still need to be exercised on a connected Android runtime.
+
+## 37. Core regression audit and delivery verification
+
+Re-audited the current navigation shell, chat ViewModel/voice initialization, task repository
+recovery path, gallery scan gate, settings section routing, and Harmony-derived launcher asset.
+No additional source change was required in this pass: the known null-safety and malformed-index
+guards remain present, and the launcher bitmap matches the Harmony `Icon.png` reference.
+
+Final verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest` BUILD SUCCESSFUL, 1126 tests with 0 failures, 0 errors, and 0 skipped;
+`:app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean. `aapt2` confirms package
+`com.clawmate.app`, version `1.0.0`, target SDK `34`, and both manifest icon attributes resolve
+to the same launcher resource. APK SHA256:
+`07ff44d4576a01b2ff98b7c9f07f080db6ecc6912c8e96dbe4d55ce4ef67b50d`.
+
+Runtime verification remains open: this environment has neither the `android` CLI nor `adb`,
+and no device/AVD is available for screenshot comparison or click-by-click crash regression.
+Android-only HDC/GUI automation, background gallery access, and native model capabilities remain
+explicit adapters/disabled states where HarmonyOS APIs have no direct Android equivalent.
+
+## 38. Home avatar hero layout parity
+
+Compared `HomePage.ets` against `HomeScreen.kt` and corrected a confirmed first-viewport mismatch:
+the Android avatar hero now uses the same full-width `#EDF5FF` section, centered 92%-width avatar,
+270dp image height, 92%-width two-row capability grid, and clickable status row as HarmonyOS.
+The Android-only duplicate `数字分身 · 管理本地画像` button was removed; the status row remains the
+single entry to the existing Android avatar management screen. Capability card padding and icon/text
+spacing now match the source values.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1126 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. `aapt2` confirms package `com.clawmate.app`, version
+`1.0.0`, target SDK `34`, and matching manifest `icon`/`roundIcon` references. Latest APK SHA256:
+`4004d7b81b1d4554b71e1a45c557cc53b06e5a8da4fbd98ae21e42812bd84f78`.
+
+Interactive screenshot and click regression remains unavailable because this environment has no
+`adb`, Android CLI, device, or AVD. The remaining platform differences listed above are unchanged.
+
+## 39. Chat header and composer parity
+
+Compared `ChatPage.ets` with `ChatScreen.kt` and aligned two visible structures: the Android chat
+header now matches HarmonyOS `MobiAgent + mode tabs + 日志` without an extra session-title row,
+and the composer now uses the HarmonyOS white rounded surface, 20dp horizontal inset, 22dp bottom
+inset, 26dp radius, shadow, and internal 12dp padding. Existing send, voice-permission, attachment,
+streaming, and error handling paths are unchanged.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1126 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`78515aa977e67ce8e42bccbf951d731a0952b85269ec6c952aa6bb3a6c51e767`.
+
+Real device/AVD screenshot and tap regression remains unavailable because this environment has no
+`adb` or Android CLI. The chat crash fix is covered by source-level initialization and JVM contract
+checks, but cannot be claimed as device-runtime verified here.
+
+## 40. Settings section list parity
+
+Compared the HarmonyOS `SettingsSectionList` and `SettingsDetailHeader` with Android. The Android
+settings list now centers the five source sections at 92% width with 12dp inter-item spacing, and
+the detail header uses the source's 92% width and 18dp top spacing. Section order and titles remain
+the same; Android-only WeChat/log capabilities stay reachable from their owning detail sections
+without changing the Harmony five-item first screen.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1126 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`2ff1d4a932c5970dabcc6cb5dfa96d11d5c2ff2cef2ad9c5a3634b279bff9f2f`.
+
+Device/AVD screenshot, settings-section taps, and crash-free runtime checks remain unavailable in
+this environment because `adb` and the Android CLI are not installed.
+
+## 41. Summary collection route parity
+
+Compared the HarmonyOS `CollectionPage.ets` with Android navigation and corrected a root mapping
+error: HarmonyOS `汇总` opens `你的足迹`, while Android had routed it directly to `图库分析`.
+Added a real `CollectionSummaryScreen` with the Harmony-style header, scene tabs, centered 86%-width
+stats/sync card, indexed collection panel, and action cards. `图库分析` now opens the existing
+gallery analysis page as a separate action, while `新增采集源` opens the real Android settings
+center. Indexed collection data remains local and explicit; no fake model or network result was added.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1126 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. `aapt2` confirms package `com.clawmate.app`, version
+`1.0.0`, target SDK `34`, and matching manifest `icon`/`roundIcon` references. Latest APK SHA256:
+`20abdc7b6cda2d7ba8c0fa4b75a267a3a42246b2b348ea72efc7cb9250f269f4`.
+
+Device/AVD screenshot, summary-card taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.
+
+## 48. Summary and task visual regression parity
+
+Compared the Android summary and task first viewports with HarmonyOS `CollectionPage.ets` and
+`TaskPage.ets`. Summary scene tabs now use the source scene colors, 38dp tab height, and the
+source's selected/unselected text treatment; the sync action is now the source 44dp lavender
+circle instead of a Material outlined button. Task cards now use the source's 86%-width centered
+layout while retaining the existing real workflow loading, execution, cancellation, and result
+states. These are UI-only changes and do not fabricate unsupported task-editor capabilities.
+
+Added a JVM contract test for the summary scene order/labels/selected colors and included this
+comparison in the existing build gate: the full offline
+`:app:testDebugUnitTest :app:assembleDebug` completed successfully with 1129 tests, 0 failures,
+0 errors, and 0 skipped; `git diff --check` passed. APK SHA256:
+`dbc11bdaccef6470f19fa3d37b38681237d3a9a4bb2bd172f18836965859ceb9`.
+
+Device/AVD screenshot and tap verification remain unavailable because `adb` and the Android CLI
+are not installed in this environment.
+
+## 49. Chat configuration recovery flow
+
+Compared Android `ChatScreen.kt` with HarmonyOS `ChatPage.ets`. When the cloud model is not
+configured, Android still keeps the state honest and blocks sending, but the previous dead-end
+message has been replaced with an explicit `打开设置中心` action wired through `ClawMateRoot` to
+the real settings tab. This preserves the source's actionable configuration flow without claiming
+that an unconfigured endpoint is available.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1129 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. `aapt2` confirms package `com.clawmate.app` and both
+Manifest icon attributes resolve to `@mipmap/ic_launcher`. Latest APK SHA256:
+`0d3bd97d90d304cd0a71e28e0ab78e9568edd41a9e790b32a031c87dda3c961`.
+
+Device/AVD screenshot, navigation taps, and crash-free runtime checks remain unavailable because
+`adb` and the Android CLI are not installed in this environment.
+
+## 51. Final packaged-resource parity audit
+
+Compared the packaged Android resources with the HarmonyOS source assets. The launcher bitmap
+`app/src/main/res/drawable/ic_launcher_brand.png` is byte-identical to
+`/root/mobiinfra-oh/AppScope/resources/base/media/Icon.png`, and
+`digital_avatar.png` is byte-identical to the Harmony default avatar. The final APK contains the
+adaptive/fallback launcher resource, all five tab icons, and the default avatar; Manifest `icon`
+and `roundIcon` both resolve to `@mipmap/ic_launcher`. No source or resource replacement was
+justified by this audit.
+
+Remaining platform differences are explicit: Android uses Photo Picker/MediaStore, Android
+TextToSpeech/SpeechRecognizer, JobScheduler, and controlled Accessibility adapters; Harmony-only
+HDC/GUI/native integrations remain disabled or report `UNSUPPORTED`/`BLOCKED` rather than being
+shown as connected. Runtime screenshots/taps remain unavailable here because `adb` and the Android
+CLI are not installed.
+
+## 52. Runtime verification environment audit
+
+The SDK does include `/opt/deepseek-harness/android-sdk/platform-tools/adb`; the earlier status
+wording saying that `adb` was not installed was imprecise and is superseded by this entry. After
+running the SDK binary with the required host permission, `adb devices -l` starts successfully but
+returns an empty device list. No emulator binary/AVD is available in this environment, so APK
+installation, launch, navigation taps, screenshots, and device Logcat cannot be executed here.
+Static APK/resource checks and the full JVM test/build gate remain the available verification.
+
+## 50. Crash-path null-safety audit
+
+Audited the previously reported chat voice initialization path and adjacent core-page async states.
+The voice state keeps a non-null default before its first emission; the summary/gallery detail
+screens now snapshot nullable detail state before rendering; gallery stored-address restoration
+uses an explicit nullable branch; settings enrichment persists only through a verified persistence
+target; and malformed SSE choices now produce the typed `SseParserException` path instead of any
+forced non-null access. Added a regression test for a non-object SSE choice.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1130 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. `aapt2` confirms package `com.clawmate.app`, target SDK 34,
+and both Manifest icon attributes resolve to `@mipmap/ic_launcher`. Latest APK SHA256:
+`677ac53ff504a34e77f20dc5b42ca08698946b49da2c7e844d233e2327f3b664`.
+
+Device/AVD screenshot, navigation taps, and crash-free runtime checks remain unavailable because
+`adb` and the Android CLI are not installed in this environment.
+
+## 46. Home avatar status card parity
+
+Compared the HarmonyOS `HomePage.ets` avatar hero with Android. The Android digital-avatar status
+row now matches the source's 48dp white rounded pill, 16dp vertical spacing, shadow, horizontal
+padding, and bold status text. The default `digital_avatar.png` was verified byte-for-byte against
+`/root/mobiinfra-oh/entry/src/main/resources/base/media/digital_avatar.png` (same SHA256), so the
+default image resource was retained rather than replaced. The four capability assets and existing
+avatar-management click flow remain unchanged.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1127 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`e7855439aebd7798c040c2055650aed7293a5e3f3e7e8ac2c186b4dacac65961`.
+
+Device/AVD screenshot, home taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.
+
+## 45. Settings detail control parity
+
+Compared the HarmonyOS `SettingsDetailHeader` with Android. The Android detail-page back control
+now uses the source's 42dp white rounded button, source title color, and matching 18dp top spacing;
+the five primary settings sections, order, subtitles, and blue-tinted page palette remain aligned
+with the HarmonyOS list. Android-only WeChat and runtime-log sections remain behind their existing
+owned flows rather than being added to the first viewport.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1127 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`0a037c1fa8f315092f5e6169d0279e48028a59c79dd8f8764decf4404c3bf78d`.
+
+Device/AVD screenshot, settings taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.
+
+## 47. Startup and packaged-resource audit
+
+Audited the Android startup path, manifest, onboarding gate, application initialization, and
+launcher resources against the migration target. `MainActivity` is the exported launcher activity,
+`ClawMateApplication` uses safe empty endpoint defaults and isolates periodic-job restoration on a
+background thread, and onboarding indices are clamped before use. The packaged APK reports package
+`com.clawmate.app`, target SDK 34, and both `android:icon` and `android:roundIcon` resolve to
+`@mipmap/ic_launcher`; the APK also contains the brand launcher bitmap and default digital-avatar
+resource. No additional source change was justified by this audit.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9): previous full build remains
+`BUILD SUCCESSFUL`; 1127 tests with 0 failures, 0 errors, and 0 skipped; `aapt2 dump badging`,
+`aapt2 dump xmltree`, `aapt2 dump resources`, and `git diff --check` completed successfully. APK
+SHA256: `e7855439aebd7798c040c2055650aed7293a5e3f3e7e8ac2c186b4dacac65961`.
+
+Device/AVD screenshot, navigation taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.
+
+## 44. Gallery analysis entry and first-viewport parity
+
+Compared the HarmonyOS `GalleryPage.ets` entry with Android. The gallery page is now a distinct
+screen opened from `汇总 > 图库分析`, with a Harmony-style 90%-width header containing back and
+settings actions, the `图库分析` title/subtitle, and category filters moved into the content area
+instead of appearing as a collection-page header. Back returns to the real Android summary screen;
+settings uses the existing settings route. Photo Picker, MediaStore scan gates, Room-backed gallery
+items, OCR/vision capability states, and error recovery remain unchanged and honest.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1127 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`49de34e177570727fcba731a4b380b7f4aec15adee27b45f15a426359699c5e2`.
+
+Device/AVD screenshot, gallery taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.
+
+## 43. Chat header, welcome state, and task handoff parity
+
+Compared the HarmonyOS `ChatPage.ets` first screen with Android. The Android chat header now uses
+the source's 22dp top / 18dp horizontal spacing and 18sp `MobiAgent` title, the empty welcome
+content uses the source's 28dp side inset, and the composer uses a real 22dp bottom margin outside
+the rounded surface. Added the visible `下发任务` action above the composer; it navigates to the
+real Android task tab through the root shell. Unsupported Harmony-only deep-thinking and PC-server
+states remain unadvertised rather than being represented as fake capabilities.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1127 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`03bcfccfc5d1f3eecef1c4f91941b5f1959ab26a3df36d6fbf3dc921ae3104e1`.
+
+Device/AVD screenshot, chat taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.
+
+## 42. Task execution layout and batch regression
+
+Compared the HarmonyOS task execution branch in `TaskPage.ets` with Android. The Android
+execution screen now removes the extra execution-state scene filter, uses the source's 86%-width
+task execution and batch cards, keeps scene-grouped task rows, and adds a real batch execution /
+stop action backed by the existing parser and bounded workflow runner. No device action is faked:
+unsupported GUI/HDC steps continue to surface their honest blocked result. Added
+`TaskViewModelTest` to verify loading, ordered batch execution, result persistence, and final state.
+
+Verification (offline, JDK 17.0.19, SDK platform 34, Gradle 8.9):
+`:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL; 1127 tests with 0 failures, 0 errors,
+and 0 skipped; `git diff --check` clean. Latest APK SHA256:
+`120d00e88e6943b955c725f8dad7adb198bb6157a40070c31b81abc1dce7eccd`.
+
+Device/AVD screenshot, task taps, and crash-free runtime checks remain unavailable in this
+environment because `adb` and the Android CLI are not installed.

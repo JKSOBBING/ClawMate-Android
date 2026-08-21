@@ -9,9 +9,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -27,6 +37,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
@@ -36,7 +49,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,14 +57,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageRole
 import com.clawmate.app.chat.model.ChatSession
+import com.clawmate.app.chat.model.ChatMode
 import com.clawmate.app.chat.model.AttachmentSource
 import com.clawmate.app.chat.model.PendingChatAttachment
 import com.clawmate.app.chat.model.PendingAttachmentState
@@ -60,6 +80,8 @@ import com.clawmate.app.chat.voice.VoiceInteractionStatus
 import com.clawmate.app.chat.voice.VoiceSessionSnapshot
 import com.clawmate.app.gallery.photo.PickResult
 import com.clawmate.app.gallery.photo.rememberPhotoPicker
+import com.clawmate.app.R
+import com.clawmate.app.log.ui.LogScreen
 
 /**
  * Compose chat screen for the cloud-model vertical slice (Phase 2) extended
@@ -82,12 +104,22 @@ import com.clawmate.app.gallery.photo.rememberPhotoPicker
  * without it.
  */
 @Composable
-fun ChatScreen(context: android.content.Context) {
+fun ChatScreen(
+    context: android.content.Context,
+    onOpenTasks: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+) {
     val vm: ChatViewModel = viewModel(factory = ChatViewModelFactory(context))
     val state by vm.state.collectAsState()
     val voice by vm.voiceState.collectAsState()
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var showLogs by remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    if (showLogs) {
+        LogScreen(onBack = { showLogs = false })
+        return
+    }
 
     // Keep the ViewModel's drawer flag in sync with the actual drawer state
     // (including swipe gestures), and open/close the drawer when the flag is
@@ -158,7 +190,7 @@ fun ChatScreen(context: android.content.Context) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(start = 18.dp, end = 18.dp, top = 22.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = {
@@ -166,12 +198,24 @@ fun ChatScreen(context: android.content.Context) {
                 }) {
                     Icon(Icons.Filled.Menu, contentDescription = "历史会话")
                 }
-                Text(
-                    text = state.title.ifEmpty { "新会话" },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "MobiAgent",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+                ChatModeTabs(
+                    mode = state.mode,
+                    enabled = !state.isSending,
+                    onSelect = { mode ->
+                        if (mode != state.mode) vm.newSession(mode)
+                    },
                 )
+                TextButton(onClick = { showLogs = true }) {
+                    Text("日志")
+                }
             }
 
             MessageList(
@@ -180,6 +224,7 @@ fun ChatScreen(context: android.content.Context) {
                 voice = voice.session,
                 vm = vm,
                 listState = listState,
+                modifier = Modifier.weight(1f),
             )
 
             if (state.error != null) {
@@ -189,6 +234,7 @@ fun ChatScreen(context: android.content.Context) {
                 )
             }
 
+            ChatActionStrip(onOpenTasks = onOpenTasks)
             VoiceStatusBanner(voice.session)
 
             if (state.isConfigured) {
@@ -209,7 +255,68 @@ fun ChatScreen(context: android.content.Context) {
                     onRemoveAttachment = vm::removePendingAttachment,
                 )
             } else {
-                MissingConfigPane()
+                MissingConfigPane(onOpenSettings = onOpenSettings)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatActionStrip(onOpenTasks: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(17.dp),
+            modifier = Modifier
+                .height(34.dp)
+                .clickable(onClick = onOpenTasks),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E5EA)),
+        ) {
+            Text(
+                "下发任务",
+                fontSize = 12.sp,
+                color = Color(0xFF222222),
+                modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatModeTabs(
+    mode: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .background(Color(0xFFF4F6FA), RoundedCornerShape(16.dp))
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf(ChatMode.CLOUD_AGENT, ChatMode.LOCAL_INFERENCE).forEach { option ->
+            Box(
+                modifier = Modifier
+                    .width(46.dp)
+                    .height(28.dp)
+                    .background(
+                        if (mode == option) Color(0xFF111827) else Color.Transparent,
+                        RoundedCornerShape(14.dp),
+                    )
+                    .clickable(enabled = enabled) { onSelect(option) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (option == ChatMode.LOCAL_INFERENCE) "本地" else "云端",
+                    fontSize = 12.sp,
+                    fontWeight = if (mode == option) FontWeight.Bold else FontWeight.Normal,
+                    color = if (mode == option) Color.White else Color(0xFF5D6472),
+                )
             }
         }
     }
@@ -319,9 +426,10 @@ private fun MessageList(
     voice: VoiceSessionSnapshot,
     vm: ChatViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    modifier: Modifier = Modifier,
 ) {
     if (messages.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (state.isSending) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
@@ -332,17 +440,14 @@ private fun MessageList(
                     )
                 }
             } else {
-                Text(
-                    "开始一段新的对话",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+                EmptyChatWelcome(onPrompt = vm::onInputChange)
             }
         }
         return
     }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxWidth(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -364,6 +469,92 @@ private fun MessageList(
                     CircularProgressIndicator(modifier = Modifier.padding(4.dp))
                     Text("模型思考中…", style = MaterialTheme.typography.bodyMedium)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyChatWelcome(onPrompt: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.digital_avatar),
+            contentDescription = "数字分身",
+            modifier = Modifier.size(112.dp),
+        )
+        Text(
+            text = "你好，今天想做什么？",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF111827),
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        Text(
+            text = "我可以帮你整理信息、执行任务",
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color(0xFF6F7787),
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Column(modifier = Modifier.padding(top = 18.dp)) {
+            ChatPromptCard(
+                title = "整理今天截图里的关键信息",
+                description = "从图片和聊天里提取重点",
+                prompt = "整理今天截图里的关键信息",
+                onPrompt = onPrompt,
+            )
+            ChatPromptCard(
+                title = "规划一个自动化 workflow",
+                description = "拆解步骤并生成执行计划",
+                prompt = "规划一个收集微信聊天记录的 workflow",
+                onPrompt = onPrompt,
+            )
+            ChatPromptCard(
+                title = "淘宝搜索耳机比价",
+                description = "帮你比较价格和参数",
+                prompt = "淘宝搜索耳机比价",
+                onPrompt = onPrompt,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatPromptCard(
+    title: String,
+    description: String,
+    prompt: String,
+    onPrompt: (String) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clickable { onPrompt(prompt) },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(Color(0xFFF2F5FF), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("·", color = Color(0xFF8066FF), fontWeight = FontWeight.Bold)
+            }
+            Column(modifier = Modifier.padding(start = 12.dp)) {
+                Text(title, fontWeight = FontWeight.Bold, color = Color(0xFF111827))
+                Text(description, color = Color(0xFF7B8392), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -563,39 +754,66 @@ private fun InputBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 22.dp)
+                .shadow(14.dp, RoundedCornerShape(26.dp))
+                .background(Color.White, RoundedCornerShape(26.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onChange,
-                enabled = !sending,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("输入消息…") },
-                maxLines = 4,
-            )
-            // Attach image(s): opens the system photo picker (user-triggered,
-            // least-privilege; no automatic upload). Kept selectable even for a
-            // pure-image message so `发送` can surface the honest unsupported state.
             IconButton(
                 onClick = onAttachClicked,
                 enabled = !sending,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, RoundedCornerShape(20.dp)),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "添加图片")
+                Icon(Icons.Filled.Add, contentDescription = "添加图片", modifier = Modifier.size(24.dp))
             }
-            // Voice input (on-device ASR). First tap requests RECORD_AUDIO; once
-            // granted it starts the recognizer. No mic is opened until granted.
-            IconButton(
-                onClick = onMicClicked,
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
                 enabled = !sending,
-            ) {
-                Icon(Icons.Filled.Mic, contentDescription = "语音输入")
-            }
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp, max = 120.dp)
+                    .padding(start = 8.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF4B5563)),
+                maxLines = 4,
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        if (value.isBlank()) {
+                            Text(
+                                "输入消息…",
+                                color = Color(0xFF7B8392),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
             Button(
-                onClick = onSend,
-                enabled = (value.isNotBlank() || pendingAttachments.isNotEmpty()) && !sending,
+                onClick = {
+                    if (value.isNotBlank() || pendingAttachments.isNotEmpty()) onSend()
+                    else onMicClicked()
+                },
+                enabled = !sending,
+                modifier = Modifier.size(width = 82.dp, height = 40.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (value.isBlank() && pendingAttachments.isEmpty()) Color(0xFF5968FF) else Color(0xFF111827),
+                    disabledContainerColor = Color(0xFFAEB7C8),
+                ),
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                if (value.isBlank() && pendingAttachments.isEmpty()) {
+                    Icon(Icons.Filled.Mic, contentDescription = "语音输入", modifier = Modifier.size(20.dp))
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送", modifier = Modifier.size(18.dp))
+                    Text("发送", modifier = Modifier.padding(start = 4.dp))
+                }
             }
         }
     }
@@ -639,7 +857,7 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun MissingConfigPane() {
+private fun MissingConfigPane(onOpenSettings: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -655,5 +873,13 @@ private fun MissingConfigPane() {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 12.dp),
         )
+        Button(
+            onClick = onOpenSettings,
+            modifier = Modifier.padding(top = 16.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8066FF)),
+        ) {
+            Text("打开设置中心")
+        }
     }
 }

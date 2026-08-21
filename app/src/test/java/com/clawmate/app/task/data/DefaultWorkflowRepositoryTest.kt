@@ -1,6 +1,7 @@
 package com.clawmate.app.task.data
 
 import com.clawmate.app.task.json.WorkflowJsonParser
+import com.clawmate.app.task.model.WorkflowTask
 import com.clawmate.app.task.runner.RunStatus
 import com.clawmate.app.task.runner.WorkflowRunResult
 import java.io.File
@@ -122,5 +123,41 @@ class DefaultWorkflowRepositoryTest {
         // A fresh repository instance over the same base dir must see the edit.
         val repo2 = DefaultWorkflowRepository(baseDir = base, bundled = FileDirBundledConfigReader(bundledDir()))
         assertFalse(repo2.tasks().first { it.id == task.id }.enabled)
+    }
+
+    @Test
+    fun `partial persisted index restores missing code-defined defaults`() = runBlocking {
+        val base = Files.createTempDirectory("base").toFile()
+        val bundled = bundledDir()
+        val workflows = File(base, "workflows/configs").apply { mkdirs() }
+        val kept = bundled.resolve("default_alipay_bill.json").readText()
+        workflows.resolve("default_alipay_bill.json").writeText(kept)
+        File(base, "workflows/task-index.json").writeText(
+            WorkflowTaskIndexCodec.encode(
+                listOf(
+                    WorkflowTask(
+                        id = "default_alipay_bill",
+                        sceneId = 0,
+                        icon = "Buy",
+                        iconColor = "#4B8BFF",
+                        title = "我的自定义账单标题",
+                        source = "custom",
+                        enabled = false,
+                        configFileName = "default_alipay_bill.json",
+                        lastRunStatus = "未运行",
+                        lastRun = "尚未执行",
+                        lastMessage = "保留用户状态",
+                        isUserModified = true,
+                    ),
+                ),
+            ),
+        )
+
+        val tasks = DefaultWorkflowRepository(base, FileDirBundledConfigReader(bundled)).tasks()
+
+        assertEquals(DefaultConfigs.entries.size, tasks.size)
+        assertEquals("我的自定义账单标题", tasks.first { it.id == "default_alipay_bill" }.title)
+        assertEquals(false, tasks.first { it.id == "default_alipay_bill" }.enabled)
+        assertTrue(tasks.any { it.id == "default_ele_order" })
     }
 }

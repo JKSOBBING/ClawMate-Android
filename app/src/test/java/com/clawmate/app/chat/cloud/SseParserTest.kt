@@ -111,6 +111,16 @@ class SseParserTest {
     }
 
     @Test
+    fun `non-object choice is reported as a typed parse error`() {
+        try {
+            ChatStreamChunkParser.parse("""{"choices":[null]}""")
+            fail("expected SseParserException")
+        } catch (e: SseParserException) {
+            assertTrue(e.message.orEmpty().contains("choice"))
+        }
+    }
+
+    @Test
     fun `no choices key yields empty chunk`() {
         val chunk = ChatStreamChunkParser.parse("""{"id":"x"}""")
         assertEquals("", chunk.contentDelta)

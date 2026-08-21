@@ -410,19 +410,17 @@ class GalleryViewModel(
         }
         // If a stored address exists, reflect it as honestly Resolved (without a
         // fresh lookup) rather than re-running geocoding.
-        val effectiveLocation = if (
+        val effectiveLocation = storedItem?.takeIf {
             (baseLocation is LocationViewState.NotConfigured || baseLocation is LocationViewState.NoCoordinates) &&
-            !storedItem?.address.isNullOrBlank()
-        ) {
+                it.address.isNotBlank()
+        }?.let { item ->
             LocationViewState.Resolved(
                 GalleryLocationInfo(
-                    formattedAddress = storedItem!!.address,
-                    provider = storedItem.locationProvider.ifBlank { "geocoder" },
+                    formattedAddress = item.address,
+                    provider = item.locationProvider.ifBlank { "geocoder" },
                 ),
             )
-        } else {
-            baseLocation
-        }
+        } ?: baseLocation
         // OCR view state: preserve a transient in-flight/recent state on refresh,
         // otherwise derive honestly from the stored item (real text after a
         // successful Analyze, or Idle when nothing was persisted).

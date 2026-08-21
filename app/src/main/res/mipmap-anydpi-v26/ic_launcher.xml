@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive launcher icon. The Monochrome/foreground/background drawables are
-     placeholders sized for the launcher; visual assets will be brought over from
-     the HarmonyOS media set in a later phase. -->
+<!--
+    Adaptive launcher icon backed by the real ClawMate brand mark
+    (drawable/ic_launcher_brand.png, ported from HarmonyOS
+    AppScope/resources/base/media/Icon.png).
+
+    Layout rationale:
+      * <background> uses the same Icon.png brand asset as the legacy fallback,
+        so launcher versions cannot show two different application identities.
+        The launcher mask provides the final adaptive crop.
+      * <foreground> is deliberately transparent so the brand is NOT double
+        layered and the launcher sees only the masked brand mark.
+      * <monochrome> is a single-color paw glyph for Android 13+ themed icons;
+        the system tints it to the user's theme.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_background" />
+    <background android:drawable="@drawable/ic_launcher_brand" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

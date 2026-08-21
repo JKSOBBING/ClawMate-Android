@@ -10,6 +10,7 @@ import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageKind
 import com.clawmate.app.chat.model.ChatMessageRole
 import com.clawmate.app.chat.model.ChatSession
+import com.clawmate.app.chat.model.ChatMode
 import com.clawmate.app.chat.model.PendingChatAttachment
 import com.clawmate.app.chat.model.chatAttachmentSendPlan
 import com.clawmate.app.chat.model.toPendingAttachments
@@ -30,6 +31,7 @@ import kotlinx.coroutines.launch
 data class ChatUiState(
     val sessionId: String = "",
     val title: String = "",
+    val mode: String = ChatMode.CLOUD_AGENT,
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
     val isSending: Boolean = false,
@@ -153,7 +155,12 @@ class ChatViewModel(
                 ?: sessions.firstOrNull()
             if (active != null) {
                 _state.update {
-                    it.copy(sessionId = active.id, title = active.displayTitle, messages = active.messages)
+                    it.copy(
+                        sessionId = active.id,
+                        title = active.displayTitle,
+                        mode = ChatMode.normalize(active.mode),
+                        messages = active.messages,
+                    )
                 }
             }
         }
@@ -167,11 +174,15 @@ class ChatViewModel(
     fun newSession(mode: String? = null) {
         if (_state.value.isSending) return
         viewModelScope.launch {
-            val session = repository.createSession(mode)
+            val session = runCatching { repository.createSession(mode) }.getOrElse { error ->
+                _state.update { it.copy(error = "新建会话失败：${error.message ?: "未知错误"}") }
+                return@launch
+            }
             _state.update {
                 it.copy(
                     sessionId = session.id,
                     title = session.displayTitle,
+                    mode = ChatMode.normalize(session.mode),
                     messages = emptyList(),
                     inputText = "",
                     error = null,
@@ -188,12 +199,16 @@ class ChatViewModel(
     fun selectSession(sessionId: String) {
         if (_state.value.isSending) return
         viewModelScope.launch {
-            val session = repository.selectSession(sessionId)
+            val session = runCatching { repository.selectSession(sessionId) }.getOrElse { error ->
+                _state.update { it.copy(error = "切换会话失败：${error.message ?: "未知错误"}") }
+                return@launch
+            }
             if (session != null) {
                 _state.update {
                     it.copy(
                         sessionId = session.id,
                         title = session.displayTitle,
+                        mode = ChatMode.normalize(session.mode),
                         messages = session.messages,
                         inputText = "",
                         error = null,
@@ -202,6 +217,8 @@ class ChatViewModel(
                         attachmentNote = null,
                     )
                 }
+            } else {
+                _state.update { it.copy(error = "会话不存在或已被删除") }
             }
             refreshSessions()
         }
@@ -217,7 +234,13 @@ class ChatViewModel(
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
             val wasActive = sessionId == _state.value.sessionId
-            repository.deleteSession(sessionId)
+            val deleted = runCatching { repository.deleteSession(sessionId) }
+            if (deleted.isFailure) {
+                _state.update {
+                    it.copy(error = "删除会话失败：${deleted.exceptionOrNull()?.message ?: "未知错误"}")
+                }
+                return@launch
+            }
             if (wasActive) {
                 // Select the most recently updated remaining session, or clear the
                 // view to an empty state when none remain (a new one is created on
@@ -230,6 +253,7 @@ class ChatViewModel(
                         it.copy(
                             sessionId = session.id,
                             title = session.displayTitle,
+                            mode = ChatMode.normalize(session.mode),
                             messages = session.messages,
                             error = null,
                             activeToolTrace = null,
@@ -377,13 +401,14 @@ class ChatViewModel(
                 com.clawmate.app.overlay.OverlayAgentState.RUNNING,
                 "正在回复…",
             )
-            val sessionId = repository.ensureActiveSession()
-            com.clawmate.app.log.AppLogger.cloud(
-                com.clawmate.app.log.domain.LogLevel.INFO,
-                "Chat",
-                "用户消息已发送 session=$sessionId",
-            )
+            var sessionId = ""
             try {
+                sessionId = repository.ensureActiveSession()
+                com.clawmate.app.log.AppLogger.cloud(
+                    com.clawmate.app.log.domain.LogLevel.INFO,
+                    "Chat",
+                    "用户消息已发送 session=$sessionId",
+                )
                 repository.sendAgentMessage(text).collect { event ->
                     when (event) {
                         is ChatSendEvent.UserMessageAccepted -> {

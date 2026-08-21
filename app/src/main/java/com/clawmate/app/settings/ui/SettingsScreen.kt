@@ -2,7 +2,6 @@ package com.clawmate.app.settings.ui
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,7 +47,8 @@ import com.clawmate.app.settings.SettingsComponent
 import com.clawmate.app.settings.domain.SETTINGS_SECTIONS
 import com.clawmate.app.settings.domain.SettingsSectionId
 import com.clawmate.app.log.ui.LogScreen
-import com.clawmate.app.profile.share.nfc.NfcProfileShareActivity
+import com.clawmate.app.R
+import com.clawmate.app.ui.ClawMateHeader
 
 /**
  * Compose Settings screen — the Android vertical slice of the HarmonyOS 设置 tab
@@ -75,7 +75,16 @@ fun SettingsScreen(context: Context, modifier: Modifier = Modifier) {
 
     Box(modifier = modifier.fillMaxSize().padding(top = 0.dp)) {
         if (state.loading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(SettingsThemeColors.PageBackground),
+            ) {
+                ClawMateHeader(title = "设置中心", iconRes = R.drawable.header_settings)
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
             return@Box
         }
 
@@ -106,63 +115,19 @@ private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: 
             .fillMaxSize()
             .background(SettingsThemeColors.PageBackground)
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 90.dp),
+            .padding(bottom = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            "设置中心",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = SettingsThemeColors.TitleColor,
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 10.dp),
-        )
-        // Phase 31 — explicit, single-entry NFC profile-share boundary. This card
-        // launches the NFC screen only on explicit user tap; nothing auto-enables
-        // NFC on launch, on recomposition, or in the background.
-        NfcShareEntry(context = context)
-        SETTINGS_SECTIONS.forEach { item ->
+        ClawMateHeader(title = "设置中心", iconRes = R.drawable.header_settings)
+        // Keep the five HarmonyOS sections as the primary list. Android-only
+        // extensions are reachable from their owning section below.
+        SETTINGS_SECTIONS.take(5).forEach { item ->
             SectionListItem(
                 item = item,
                 onClick = { vm.selectSection(item.id) },
             )
         }
-    }
-}
-
-@Composable
-private fun NfcShareEntry(context: Context) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .background(SettingsThemeColors.Primary.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
-            .clickable {
-                val intent = Intent(context, NfcProfileShareActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-            }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .background(SettingsThemeColors.Primary, RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("N", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp, end = 10.dp)) {
-            Text("一碰分享（NFC）", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SettingsThemeColors.TitleColor)
-            Text(
-                "通过 NFC 发送或接收 ClawMate 画像（需显式点击开启会话）",
-                fontSize = 12.sp,
-                color = SettingsThemeColors.SecondaryText,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        Text("›", fontSize = 28.sp, color = Color(0xFF8A93A3))
     }
 }
 
@@ -173,8 +138,7 @@ private fun SectionListItem(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth(0.92f)
             .background(Color.White, RoundedCornerShape(18.dp))
             .clickable { onClick() }
             .padding(16.dp),
@@ -220,16 +184,27 @@ private fun SectionDetail(
             .fillMaxSize()
             .background(SettingsThemeColors.PageBackground)
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, bottom = 110.dp),
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.closeSection() }) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "返回设置中心")
+        Row(
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .align(Alignment.CenterHorizontally)
+            .padding(top = 18.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = { vm.closeSection() },
+                modifier = Modifier
+                    .size(42.dp)
+                    .background(Color.White, RoundedCornerShape(14.dp)),
+            ) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "返回设置中心", tint = SettingsThemeColors.TitleColor)
             }
             Column(modifier = Modifier.padding(start = 4.dp)) {
                 Text("设置中心", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SettingsThemeColors.TitleColor)
                 Text(
-                    settingsSectionSubtitleDisplay(section.id),
+                    section.title,
                     fontSize = 12.sp,
                     color = SettingsThemeColors.SecondaryText,
                     modifier = Modifier.padding(top = 2.dp),
@@ -271,7 +246,7 @@ private fun SectionDetail(
         }
 
         when (section.id) {
-            SettingsSectionId.PersonalPrivacy -> PrivacySection(state, vm)
+            SettingsSectionId.PersonalPrivacy -> PrivacySection(state, vm, context)
             SettingsSectionId.DataCollection -> DataCollectionSection(state, vm)
             SettingsSectionId.ModelAgents -> ModelAgentsSection(state, vm, context)
             SettingsSectionId.TaskAutomation -> TaskAutomationSection(state, vm, context)
@@ -318,9 +293,6 @@ private fun SettingsSaveResetBar(saveBusy: Boolean, dirty: Boolean, onSave: () -
         }
     }
 }
-
-private fun settingsSectionSubtitleDisplay(id: SettingsSectionId): String =
-    com.clawmate.app.settings.domain.settingsSectionSubtitle(id)
 
 /** Read app version name/code deterministically, falling back to safe values. */
 @Composable

@@ -6,15 +6,18 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Color tokens (light theme baseline).
-val BlueViolet700 = Color(0xFF5361E0)
-val BlueViolet500 = Color(0xFF6E7BEA)
-val BlueViolet300 = Color(0xFF9BA5F0)
-val BlueViolet200 = Color(0xFFD7DBF7)
+// Color tokens mirrored from HarmonyOS resources and page styles.
+val BlueViolet700 = Color(0xFF8066FF)
+val BlueViolet500 = Color(0xFF6D56E8)
+val BlueViolet300 = Color(0xFFA99BFF)
+val BlueViolet200 = Color(0xFFE7E2FF)
 val Ink = Color(0xFF151A28)
 val DeepInk = Color(0xFF121212)
-val NearWhite = Color(0xFFF7F8FC)
+val NearWhite = Color(0xFFF4F8FF)
 val White = Color(0xFFFFFFFF)
+val TabSelected = Color(0xFF5B5CE2)
+val TabIndicator = Color(0xFFEEF0FF)
+val MutedText = Color(0xFF747B87)
 
 val ClawMateTypography = Typography(
     headlineMedium = TextStyle(

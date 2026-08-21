@@ -28,7 +28,7 @@ import com.clawmate.app.settings.domain.SettingsKeys
  */
 
 @Composable
-fun PrivacySection(state: SettingsUiState, vm: SettingsViewModel) {
+fun PrivacySection(state: SettingsUiState, vm: SettingsViewModel, context: Context) {
     SettingsSectionTitle(
         title = "个人与隐私",
         subtitle = "隐私守护、确认策略与数字分身",
@@ -74,6 +74,25 @@ fun PrivacySection(state: SettingsUiState, vm: SettingsViewModel) {
             placeholder = "文生图模型") { vm.setAvatarModel(it) }
         SettingInput("图片尺寸", state.draft.avatarImageSize,
             placeholder = "图片尺寸，如 2K") { vm.setAvatarSize(it) }
+    }
+
+    SettingsGroupCard(
+        title = "一碰分享（NFC）",
+        subtitle = "Android 显式 NFC 会话适配器；未点击时不会启用或监听",
+    ) {
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "打开 NFC 画像分享",
+                    kind = SettingsActionKind.Primary,
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(context, com.clawmate.app.profile.share.nfc.NfcProfileShareActivity::class.java),
+                        )
+                    },
+                ),
+            ),
+        )
     }
 }
 
@@ -221,6 +240,21 @@ fun DataCollectionSection(state: SettingsUiState, vm: SettingsViewModel) {
             onHide = { vm.hide(SettingsKeys.GALLERY_AMAP_WEB_KEY) },
             onValueChange = { vm.setGalleryAmapWebKey(it) },
             currentValue = state.draft.galleryAmapWebKey,
+        )
+    }
+
+    SettingsGroupCard(
+        title = "微信自动汇总",
+        subtitle = "Android 侧 PC/HDC 采集边界与摘要参数",
+    ) {
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "打开微信自动汇总设置",
+                    kind = SettingsActionKind.Primary,
+                    onClick = { vm.selectSection(com.clawmate.app.settings.domain.SettingsSectionId.WechatAutoSummary) },
+                ),
+            ),
         )
     }
 }
@@ -734,6 +768,21 @@ fun TaskAutomationSection(state: SettingsUiState, vm: SettingsViewModel, context
             fontSize = 11.sp,
             color = SettingsThemeColors.SecondaryText,
             modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+
+    SettingsGroupCard(
+        title = "运行日志",
+        subtitle = "应用内日志过滤、查看、复制与清理",
+    ) {
+        SettingsActionRow(
+            actions = listOf(
+                SettingsAction(
+                    label = "打开运行日志",
+                    kind = SettingsActionKind.Primary,
+                    onClick = { vm.selectSection(com.clawmate.app.settings.domain.SettingsSectionId.RuntimeLogs) },
+                ),
+            ),
         )
     }
 }

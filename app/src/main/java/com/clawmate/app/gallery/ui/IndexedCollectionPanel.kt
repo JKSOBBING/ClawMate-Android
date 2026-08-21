@@ -43,6 +43,7 @@ import com.clawmate.app.gallery.collection.IndexedEventCollectionService
 fun IndexedCollectionPanel(
     vm: CollectionIndexViewModel,
     onOpenGroup: (IndexedCollectionGroup) -> Unit,
+    showTabs: Boolean = true,
 ) {
     val uiState by vm.uiState.collectAsState()
     val selectedTab by vm.selectedTab.collectAsState()
@@ -85,15 +86,17 @@ fun IndexedCollectionPanel(
                 )
             }
 
-            // Scene tabs (clickable, no I/O on switch).
-            LazyRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                items(IndexedEventCollectionService.tabs()) { tab ->
-                    val active = tab.sceneId == selectedTab.sceneId
-                    OutlinedButton(
-                        onClick = { vm.selectTab(tab.sceneId) },
-                        modifier = Modifier.height(32.dp).padding(end = 8.dp),
-                    ) {
-                        Text(tab.label, style = if (active) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium)
+            if (showTabs) {
+                // Scene tabs (clickable, no I/O on switch).
+                LazyRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    items(IndexedEventCollectionService.tabs()) { tab ->
+                        val active = tab.sceneId == selectedTab.sceneId
+                        OutlinedButton(
+                            onClick = { vm.selectTab(tab.sceneId) },
+                            modifier = Modifier.height(32.dp).padding(end = 8.dp),
+                        ) {
+                            Text(tab.label, style = if (active) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }
