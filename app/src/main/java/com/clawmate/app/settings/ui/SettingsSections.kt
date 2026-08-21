@@ -306,7 +306,7 @@ fun ModelAgentsSection(state: SettingsUiState, vm: SettingsViewModel, context: C
                 SettingsAction(
                     label = if (state.draft.cloudPlannerConfigured) "Planner 已配置" else "Planner 未配置",
                     kind = SettingsActionKind.Success,
-                    enabled = state.draft.cloudPlannerConfigured,
+                    enabled = false,
                     onClick = {},
                 ),
             ),
@@ -339,12 +339,12 @@ fun ModelAgentsSection(state: SettingsUiState, vm: SettingsViewModel, context: C
         )
         val status = when {
             state.hdcTesting -> SettingsAction("正在检查连接…", SettingsActionKind.Warning, enabled = false, onClick = {})
-            state.hdcTestConnected -> SettingsAction("HDC 已连接", SettingsActionKind.Success, onClick = {})
+            state.hdcTestConnected -> SettingsAction("HDC 已连接", SettingsActionKind.Success, enabled = false, onClick = {})
             state.hdcTestMessage != null ->
                 SettingsAction("连接失败", SettingsActionKind.Danger, enabled = false, onClick = {})
-            state.draft.hdcConnected -> SettingsAction("已连接", SettingsActionKind.Success, onClick = {})
+            state.draft.hdcConnected -> SettingsAction("已连接", SettingsActionKind.Success, enabled = false, onClick = {})
             state.draft.hdcBridgeConfigured ->
-                SettingsAction("未连接（需测试）", SettingsActionKind.Warning, onClick = {})
+                SettingsAction("未连接（需测试）", SettingsActionKind.Warning, enabled = false, onClick = {})
             else -> SettingsAction("未配置 — DISABLED", SettingsActionKind.Secondary, enabled = false, onClick = {})
         }
         SettingsActionRow(actions = listOf(status))

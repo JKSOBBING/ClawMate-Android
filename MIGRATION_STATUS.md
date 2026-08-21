@@ -3556,3 +3556,10 @@ preventing the previous title/description crowding and clipping.
 Verification: `:app:assembleDebug` BUILD SUCCESSFUL; `adb install -r` succeeded; the summary route
 was opened on the connected device and visually inspected from a fresh launch. The updated cards
 show readable titles and descriptions above the bottom navigation bar.
+
+## 58. Status-only settings actions
+
+Marked Planner and HDC connection state rows as disabled because they report state only. Explicit
+operations remain available through the HDC health test and the opt-in WeChat collection action.
+
+Verification: pending build and connected-device check.
