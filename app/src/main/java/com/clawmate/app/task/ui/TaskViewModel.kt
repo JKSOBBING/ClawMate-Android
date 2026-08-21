@@ -107,7 +107,7 @@ class TaskViewModel(
         _state.update {
             it.copy(
                 expandedTaskId = if (expand) task.id else null,
-                activeResult = null,
+                activeResult = if (expand) null else it.activeResult,
                 stepSummary = emptyList(),
             )
         }
@@ -145,9 +145,8 @@ class TaskViewModel(
         runningJob?.cancel()
         runningJob = viewModelScope.launch {
             _state.update {
-                it.copy(runningTaskId = task.id, error = null, expandedTaskId = task.id, stepSummary = emptyList())
+                it.copy(runningTaskId = task.id, error = null, expandedTaskId = task.id, stepSummary = stepSummaryOf(task))
             }
-            _state.update { it.copy(stepSummary = stepSummaryOf(task)) }
             val result = runCatching {
                 if (!task.enabled) throw IllegalStateException("workflow 未启用")
                 val json = repository.configJson(task)

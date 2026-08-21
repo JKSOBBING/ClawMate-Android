@@ -67,6 +67,7 @@ fun TaskScreen(context: Context, modifier: Modifier = Modifier) {
             error != null && state.tasks.isEmpty() -> TaskStateWithHeader {
                 FullError(vm, error, modifier = Modifier.weight(1f))
             }
+            error != null -> TaskContent(vm, state, context)
             empty != null -> TaskStateWithHeader {
                 EmptyState(vm, empty, modifier = Modifier.weight(1f))
             }

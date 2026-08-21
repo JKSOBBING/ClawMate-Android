@@ -77,6 +77,33 @@ Do not silently remove a feature or pretend that a mock response is real.
   (project creation, device/emulator interaction, UI layout inspection,
   Android doc lookup). Consult its `references/` for device-interaction details.
 
+## Build environment
+
+The Android build environment lives at `~/Android/Sdk` on the DSH host. Because
+the git worktree's `.git` directory is read-only, standard `git fetch` and
+`git pull` inside the worktree fail with "Read-only file system". The build
+command that works:
+
+```bash
+cd /home/yydh/clawmate-task-ui && \
+GRADLE_USER_HOME=/tmp/gradle-home \
+ANDROID_HOME=~/Android/Sdk \
+ANDROID_SDK_HOME=/tmp/android-home \
+./gradlew :app:assembleDebug
+```
+
+### SDK components (verified working)
+
+| Component | Location |
+|-----------|----------|
+| **Java** | `/usr/bin/java` — OpenJDK 17.0.18 |
+| **Android SDK** | `~/Android/Sdk/platforms/android-34` |
+| **Build tools** | `~/Android/Sdk/build-tools/34.0.0`, `35.0.0` |
+| **NDK** | `~/Android/Sdk/ndk/` |
+| **CMake** | `~/Android/Sdk/cmake/` |
+| **Gradle Wrapper** | `/home/yydh/clawmate-task-ui/gradlew` — Gradle 8.9 |
+
+
 ## Verification
 
 At each phase run the strongest checks available. At minimum use Gradle
@@ -99,4 +126,3 @@ The migration is reviewed in phases. Do not start a large unrelated refactor
 while a previous phase has failing checks. Prefer an explicit TODO or adapter
 over speculative infrastructure. Keep the source-to-target mapping current as
 implementation decisions change.
-
