@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -153,8 +155,8 @@ private fun SummaryStatsCard(
         modifier = Modifier
             .fillMaxWidth(0.86f)
             .height(82.dp)
-            .padding(horizontal = 22.dp)
-            .background(Color(0xFFF8FAFE), RoundedCornerShape(16.dp)),
+            .background(Color(0xFFF8FAFE), RoundedCornerShape(16.dp))
+            .padding(start = 22.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -199,11 +201,12 @@ private fun SummaryActionCards(onOpenGallery: () -> Unit, onOpenSettings: () -> 
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SummaryActionCard(
-            icon = "+",
+            icon = "＋",
             title = "新增采集源",
             description = "连接更多平台与数据源",
             color = Color(0xFF725CFF),
             background = Color(0xFFF1EEFF),
+            border = Color(0xFFE5DEFF),
             onClick = onOpenSettings,
         )
         SummaryActionCard(
@@ -212,6 +215,7 @@ private fun SummaryActionCards(onOpenGallery: () -> Unit, onOpenSettings: () -> 
             description = "相册、截图 OCR 与分类整理",
             color = Color(0xFF3F7FEF),
             background = Color(0xFFEDF4FF),
+            border = Color(0xFFDCE9FF),
             onClick = onOpenGallery,
         )
     }
@@ -224,6 +228,7 @@ private fun RowScope.SummaryActionCard(
     description: String,
     color: Color,
     background: Color,
+    border: Color,
     onClick: () -> Unit,
 ) {
     Card(
@@ -231,21 +236,43 @@ private fun RowScope.SummaryActionCard(
         modifier = Modifier.weight(1f).height(100.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, border),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(32.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     icon,
                     color = color,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
-                        .background(background, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                        .size(32.dp)
+                        .background(background, RoundedCornerShape(10.dp)),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
-                Text("›", color = color, modifier = Modifier.padding(start = 4.dp))
+                Text(
+                    title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF151A28),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp),
+                )
+                Text("›", color = color, fontSize = 20.sp)
             }
-            Text(title, fontWeight = FontWeight.Bold, color = Color(0xFF151A28), modifier = Modifier.padding(top = 6.dp))
-            Text(description, fontSize = 11.sp, color = Color(0xFF747C8C), maxLines = 2)
+            Text(
+                description,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                color = Color(0xFF747C8C),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
     }
 }

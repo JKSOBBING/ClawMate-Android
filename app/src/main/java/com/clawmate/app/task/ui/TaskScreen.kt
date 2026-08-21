@@ -51,7 +51,11 @@ import com.clawmate.app.ui.theme.ClawMateDesign
  * batch-run button, mirroring the HarmonyOS execution-list layout.
  */
 @Composable
-fun TaskScreen(context: Context, modifier: Modifier = Modifier) {
+fun TaskScreen(
+    context: Context,
+    modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {},
+) {
     val vm: TaskViewModel = viewModel(
         factory = TaskViewModelFactory(TaskComponent.repository(context), TaskComponent.runner(context)),
     )
@@ -67,11 +71,11 @@ fun TaskScreen(context: Context, modifier: Modifier = Modifier) {
             error != null && state.tasks.isEmpty() -> TaskStateWithHeader {
                 FullError(vm, error, modifier = Modifier.weight(1f))
             }
-            error != null -> TaskContent(vm, state, context)
+            error != null -> TaskContent(vm, state, context, onOpenSettings)
             empty != null -> TaskStateWithHeader {
                 EmptyState(vm, empty, modifier = Modifier.weight(1f))
             }
-            else -> TaskContent(vm, state, context)
+            else -> TaskContent(vm, state, context, onOpenSettings)
         }
     }
 }
@@ -91,14 +95,19 @@ private fun TaskStateWithHeader(
 }
 
 @Composable
-private fun TaskContent(vm: TaskViewModel, state: TaskUiState, context: Context) {
+private fun TaskContent(
+    vm: TaskViewModel,
+    state: TaskUiState,
+    context: Context,
+    onOpenSettings: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(ClawMateDesign.Colors.PageBackground),
     ) {
         ClawMateHeader(title = "自定义任务", iconRes = R.drawable.header_task)
-        TaskExecutionHeaderPanel(tasks = state.tasks, onOpenConfig = { /* TODO: open config/editor view */ })
+        TaskExecutionHeaderPanel(tasks = state.tasks, onOpenConfig = onOpenSettings)
         if (state.error != null) {
             Text(
                 text = state.error,

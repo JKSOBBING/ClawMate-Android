@@ -3487,3 +3487,14 @@ bar. No startup crash was observed during this pass.
 
 Verification: `adb install -r` succeeded; Android CLI screenshots and layout inspection completed
 for the listed routes.
+
+## 52. Collection summary visual cleanup
+
+Aligned the Android summary page's indexed-record panel and action cards with the HarmonyOS
+collection layout. The panel now uses the 86%-width light surface and concise local-index state
+copy; action cards keep icon, title, arrow, and two-line description in the same compact hierarchy,
+preventing the previous title/description crowding and clipping.
+
+Verification: `:app:assembleDebug` BUILD SUCCESSFUL; `adb install -r` succeeded; the summary route
+was opened on the connected device and visually inspected from a fresh launch. The updated cards
+show readable titles and descriptions above the bottom navigation bar.

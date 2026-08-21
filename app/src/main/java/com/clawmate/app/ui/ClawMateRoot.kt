@@ -52,6 +52,7 @@ import com.clawmate.app.profile.avatar.data.ProfileAvatarRepository
 import com.clawmate.app.home.ui.onboarding.FirstLaunchOnboardingScreen
 import com.clawmate.app.task.ui.TaskScreen as WorkflowTaskScreen
 import com.clawmate.app.settings.ui.SettingsScreen
+import com.clawmate.app.settings.domain.SettingsSectionId
 
 /**
  * Bottom-navigation host that mirrors the HarmonyOS main tab set:
@@ -183,6 +184,7 @@ private fun MainTabScaffold(
     // tab as local saved state avoids constructing a navigation graph for every
     // click and keeps a broken optional feature from taking down the shell.
     var selectedRoute by rememberSaveable { mutableStateOf(Destination.Home.route) }
+    var settingsSectionToOpen by rememberSaveable { mutableStateOf<Int?>(null) }
 
     Scaffold(
         containerColor = com.clawmate.app.ui.theme.NearWhite,
@@ -217,8 +219,17 @@ private fun MainTabScaffold(
                     onOpenTasks = { selectedRoute = Destination.Task.route },
                     onOpenSettings = { selectedRoute = Destination.Settings.route },
                 )
-                Destination.Task.route -> WorkflowTaskScreen(LocalContext.current)
-                Destination.Settings.route -> SettingsScreen(LocalContext.current)
+                Destination.Task.route -> WorkflowTaskScreen(
+                    LocalContext.current,
+                    onOpenSettings = {
+                        settingsSectionToOpen = SettingsSectionId.TaskAutomation.ordinalIndex
+                        selectedRoute = Destination.Settings.route
+                    },
+                )
+                Destination.Settings.route -> SettingsScreen(
+                    LocalContext.current,
+                    initialSectionId = settingsSectionToOpen,
+                )
                 else -> HomeScreen(
                     homeRecRepository = homeRecRepository,
                     profileSource = profileSource,

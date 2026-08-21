@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.clawmate.app.gallery.collection.IndexedCollectionGroup
 import com.clawmate.app.gallery.collection.IndexedEventCollectionService
@@ -48,18 +51,25 @@ fun IndexedCollectionPanel(
     val uiState by vm.uiState.collectAsState()
     val selectedTab by vm.selectedTab.collectAsState()
 
-    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Column(Modifier.padding(12.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(0.86f).padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF9FBFF)),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.padding(20.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("已整理记录（本地索引）", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "读取本地 daily-log 索引并按场景分组；标注 local，不调用模型/网络。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "已整理记录",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        "本地索引 · 不调用模型/网络",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF7B8290),
                     )
                 }
                 when (uiState) {
@@ -104,7 +114,7 @@ fun IndexedCollectionPanel(
             when (val current = uiState) {
                 is IndexedCollectionUiState.Idle -> {
                     Text(
-                        "点击「同步」读取本地索引后生成分组。",
+                        "点击同步读取本地记录并生成分组。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
@@ -126,7 +136,7 @@ fun IndexedCollectionPanel(
                     )
                     if (current.groups.isEmpty()) {
                         Text(
-                            "暂无已整理记录 — 生成日志并同步后，将在这里显示可点击的分组。",
+                            "暂无记录，同步后会在这里显示分组。",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 8.dp),
                         )

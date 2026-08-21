@@ -62,7 +62,11 @@ import com.clawmate.app.ui.theme.ClawMateDesign
  * NOT_CONFIGURED / DISABLED — never claimed connected.
  */
 @Composable
-fun SettingsScreen(context: Context, modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    context: Context,
+    modifier: Modifier = Modifier,
+    initialSectionId: Int? = null,
+) {
     val version = rememberAppVersion(context)
     val vm: SettingsViewModel = viewModel(
         factory = SettingsViewModelFactory.forContext(
@@ -73,6 +77,12 @@ fun SettingsScreen(context: Context, modifier: Modifier = Modifier) {
         ),
     )
     val state by vm.state.collectAsState()
+
+    LaunchedEffect(initialSectionId) {
+        initialSectionId
+            ?.let { id -> SettingsSectionId.entries.firstOrNull { it.ordinalIndex == id } }
+            ?.let(vm::selectSection)
+    }
 
     Box(modifier = modifier.fillMaxSize().padding(top = 0.dp)) {
         if (state.loading) {
