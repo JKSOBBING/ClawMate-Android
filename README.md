@@ -1,1053 +1,181 @@
-# ClawMate Android — Avatar Generation Provider (Ph24) + Gallery Background Sync (Ph23) + Gallery Cloud Adapter (Ph21) + Profile Share Import (Ph17) + Profile→Home (Ph16) + Profile/Avatar (Ph12) + OCR (Ph11) + Local Model (Ph10) + Gallery Detail (Ph9) + HDC Bridge (Ph8) + Voice (Ph7) + Home (Ph6) + Settings (Ph5) + Task/Workflow (Ph4) + Agent (Ph3) + Chat (Ph2)
+# ClawMate Android
 
-This is the Android migration target for the ClawMate HarmonyOS app (source of
-truth: `/root/mobiinfra-oh`, reference-only). Phase 1 shipped the skeleton
-(5-tab Compose shell, secrets-free endpoint config). **Phase 2** added the chat /
-cloud-model vertical slice: chat message & session models, an OpenAI-compatible
-`/v1/chat/completions` client (non-streaming + SSE streaming), Room persistence,
-a real `ChatViewModel` and Compose chat screen, and deterministic unit tests.
-**Phase 3** adds a bounded Agent/ReAct vertical slice on top of the same client:
-typed tool-call/tool-result wire models (incl. streaming tool-call deltas), a
-safe Android tool registry with controlled-disabled adapters, a cancellable
-coroutine/Flow ReAct loop with max-step + timeout guards, and minimal chat-UI
-integration to surface tool execution and disabled/error states.
-**Phase 4** adds a bounded Task/Workflow vertical slice on the 任务 tab:
-tolerant workflow JSON parsing (metadata/defaults/context/steps incl. nested
-`loop`/`if` and unknown-step preservation), bundled workflow configs +
-app-private persistence, a real Compose Task screen (scene/filter bar, cards,
-expandable step summary), and a bounded, honest `WorkflowRunner` that reports
-every GUI/HDC/device-control step as `UNSUPPORTED/BLOCKED` (and VLM tools as
-`NOT_CONFIGURED`) instead of fabricating a result.
-**Phase 5** replaces the Settings-tab placeholder with a truthful five-section
-Settings/Configuration vertical slice: a typed DataStore-backed repository with
-safe/default normalization, sensitive-value masking/reveal/edit (masked values
-are never persisted), the `EndpointBridge` seam into the runtime `EndpointConfig`
-the chat/gallery read, and honest NOT_CONFIGURED / DISABLED states for any
-unconfigured endpoint — never claiming connectivity.
-**Phase 6** replaces the Home-tab placeholder and adds a first-launch onboarding
-gate before the 5-tab shell: a real Compose onboarding (three capability
-preview slides + usage guide, 跳过/下一页/进入首页, versioned completion persisted
-to app-private DataStore) and a truthful Home screen (four persona pillars,
-completeness bar, recommendation list with completion toggles + pagination, and
-an honest NOT_CONFIGURED avatar section — avatar generation is DISABLED on
-Android and never fabricated).
-**Phase 7** adds a truthful chat **voice-interaction vertical slice**
-(`chat/voice/`): typed voice domain models / status / metadata with
-deterministic normalization (port of `VoiceInteractionTypes.ets`), ASR
-transcript merge + duplicate suppression (port of
-`HarmonySpeechRecognizerAsrProvider.ets`), an Android `SpeechRecognizer` ASR
-adapter with explicit **permission / unavailable / error / cancel** states and
-**no hidden microphone access** (RECORD_AUDIO is surfaced in the UI and only
-requested on the mic tap), a lifecycle-safe Android `TextToSpeech` adapter
-(speak / pause / stop / replay, typed unavailable/error states), a PCM16→WAV
-builder and MiMO voice presets, and cloud MiMO streaming/TTS kept behind an
-explicit **NOT_CONFIGURED** interface — never claimed configured or faked. The
-chat UI gains mic / listening / transcript and speak / stop / replay controls;
-a real final ASR transcript becomes ordinary editable chat input.
-**Phase 8** adds a truthful **PC HDC bridge adapter** (`task/hdc/`) that lets GUI
-workflow steps talk to the PC-side Python bridge over HTTP — but only when a
-caller explicitly supplies a configured adapter:
-- A typed OkHttp `HdcBridgeClient` for `GET {base}/api/health` and
-  `POST {base}/api/workflow` with normalized URLs, bounded connect/read/call
-  timeouts, cooperative cancellation, tolerant response parsing, and typed
-  transport errors (HTTP / malformed-JSON / TIMEOUT / IO / CANCELLED /
-  INVALID_URL). No `Runtime.exec`, `ProcessBuilder`, shell, `adb`, `hdc`,
-  AccessibilityService, `/api/run_cmd`, or arbitrary command execution —
-  only the safe protocol calls `app_start` / `screenshot` / `gui_action` /
-  `execute_decider_action`.
-- A `WorkflowDeviceAdapter` boundary whose default `DisabledWorkflowDeviceAdapter`
-  keeps every GUI/HDC step `UNSUPPORTED/BLOCKED` (a run is never fabricated as
-  success). `TaskComponent` registers the adapter **explicitly and only after**
-  a live health check reports `ok` + control-ready.
-- A settings **explicit "测试 HDC 健康"** button (activity performed only on
-  click; app launch performs **no network call**). A connected state is reported
-  only after a real successful response; failures keep the bridge
-  NOT_CONFIGURED / DISABLED and show an honest error.
-- Deterministic unit tests (49 new) for tolerant parsing, URL normalization,
-  the disabled adapter, runner integration (SUCCESS / FAILED / BLOCKED), errors,
-  timeout/deadline handling, and cancellation.
+ClawMate Android 是 [ClawMate HarmonyOS](https://github.com/doulujiyao12/mobiinfra-oh)
+的 Android 迁移版本。HarmonyOS 工程位于 `/home/yydh/mobiinfra-oh`，仅作为只读的
+产品、数据契约和交互参考；Android 实现只修改本仓库。
 
-**Phase 9** advances the **Gallery / collection detail + local analysis**
-(汇总 tab). Tapping a photo opens a real detail flow
-(`gallery/ui/GalleryDetailScreen.kt`) that shows only real data: content URI,
-archive date, EXIF capture time / device / dimensions, analysis state, tags /
-summary and collection membership — nothing fabricated. It adds explicit safe
-edits (title / summary / tags) persisted to Room and a **delete-by-item** action
-with confirmation that removes only that single stored row (the photo file and
-its Photo-Picker URI grant are never touched, and groups recompute). Reverse
-geocoding is now a real, **explicitly injected** Android capability
-(`gallery/geocode/`) backed by the platform `android.location.Geocoder` — no
-network key, no endpoint config — with typed unavailable / permission / lookup
-errors; the detail panel exposes a 解析/重试 action and **never claims a location
-when a lookup fails**, persisting a resolved place only after a real success.
-At Phase 9 OCR remained an explicit **NOT_CONFIGURED** boundary; **Phase 11**
-replaces that boundary with a real on-device Chinese OCR adapter (see below).
-Cloud vision stays NOT_CONFIGURED. The capability UI reflects the real Ready /
-NotConfigured / Unsupported states and shows retry/unsupported messages. Room
-schema bumped to v2 (adds `address` / `locationProvider` / `analysisState`) via
-an explicit non-destructive migration. Deterministic unit tests (39 new) cover
-detail mapping, edit/delete persistence, geocoder result/error mapping,
-capability states and group recomputation.
+项目目标不是复刻截图，而是在 Android 平台保留真实的数据流、用户入口和能力边界。
+不支持或未配置的能力会显示 `NOT_CONFIGURED`、`DISABLED` 或 `BLOCKED`，不会用假数据
+冒充成功。
 
-**Phase 10** adds a truthful **local model capability boundary** for the Harmony
-on-device MNN/HiAI LLM (`entry/src/main/cpp/*` + `ModelDownloadConfig.ets` +
-model-scan logic in `pages/Index.ets`):
-- A typed domain (`localmodel/`) with states **NOT_CONFIGURED / UNSUPPORTED /
-  LOADING / READY / ERROR** and typed error kinds. Model inventory is discovered
-  under the app-private `filesDir/model` (legacy) and `filesDir/modelscope/
-  {owner}__{repo}` (ModelScope), requiring `config.json` + a weight file
-  (`.mnn`/`.om`/`.safetensors`/`.weight`) to be considered loadable — ported
-  directly from `Index.ets`.
-- An app-private **path validator** that rejects `..`/`.`/escape/non-whitelisted
-  bases so model files stay in the sandbox and no arbitrary file/dir deletion is
-  ever offered.
-- A **JNI/CMake native adapter** (`app/src/main/cpp/`, built by AGP CMake) that
-  compiles `libclawmate_local_model.so` with the Android NDK (25.2.9519653,
-  CMake 3.22.1) for arm64-v8a / armeabi-v7a / x86_64. Because MNN-for-Android
-  and the OHOS N-API/HiAI runtime are absent it is a **truthful stub** returning
-  typed `UNSUPPORTED`/`NATIVE_LIBRARY_MISSING` results — it never fabricates a
-  loaded model or output.
-- An explicit **"加载/测试" action** in the 模型与智能体 Settings section: the
-  selected model dir is re-validated and READY is reported **only after a real
-  native load returns success**. With the stub this honestly reports
-  NOT_CONFIGURED / UNSUPPORTED / ERROR. Cloud chat paths are unchanged and app
-  launch performs no network and no model load.
-- Deterministic unit tests (38 new) covering state normalization, path
-  validation, inventory scanning, and the no-fake-output guarantee
-  (missing library / missing file mapping).
+## 当前入口
 
-**Phase 11** replaces the gallery's Phase-9 OCR `NOT_CONFIGURED` boundary with a
-**real on-device Chinese OCR adapter** (`gallery/ocr/`) backed by ML Kit
-`com.google.mlkit:text-recognition-chinese:16.0.1` (resolved on Google Maven,
-bundled Chinese + Latin model):
-- `AndroidOcrEngine` opens a picked photo's `content://` URI via the platform
-  `ContentResolver` (picker URI grant — **no broad storage permission**), decodes
-  a **bounded** bitmap (≤2048 px side, honest 64 MB pixel budget), runs Chinese
-  text recognition on a background dispatcher, and maps every outcome to the
-  typed `OcrResult` states (`Text / Empty / Cancelled / ModelDownload /
-  Failed(kind) / Unavailable`) with a stable `OcrErrorKind` taxonomy.
-  Only `OcrResult.Text` carries real recognized text — nothing fabricated.
-- Pure, device-free `OcrMapping`/`OcrBitmapDecode` concentrate the decision logic
-  so the no-fake-output guarantee and the bounded-decode planning are
-  deterministic and unit-tested without a device.
-- The gallery detail panel gains an explicit **Analyze OCR** action with
-  loading/success/empty/error/model-download/unavailable states
-  (`GalleryViewModel.analyzeOcr`); only real recognized text (or a genuine
-  empty) and the `analyzed` status are persisted via `GalleryDao.updateOcr`.
-  Failures / model-download / unavailable persist nothing and never claim text.
-- Cloud vision stays NOT_CONFIGURED and reverse geocoding is unchanged. Live ML
-  Kit runtime / any on-device model handling still require a real device
-  (documented — not claimed as on-device-verified). 27 new deterministic unit
-  tests (407 total green in this worktree).
+应用使用 Compose 五 Tab 外壳：
 
-**Phase 12** is a **coverage audit** plus the highest-value real gap from it: a
-truthful **Profile / Avatar local UI & state** slice (`profile/avatar/`),
-reached from the Home avatar card:
-- A full source-to-target feature matrix comparing the HarmonyOS `ets`
-  inventory against Phases 1–11 (see `MIGRATION_STATUS.md` §10), focusing on
-  Profile/Avatar, AutoAgent, float/edge/log, gallery embedding & monthly
-  insights, and WeChat auto-summary. Every gap is marked Done / Boundary /
-  Portable-pending / Blocked with its exact remaining work.
-- **Local profile UI & state** — typed avatar domain (`profile/avatar/domain/
-  AvatarDomain.kt`) porting the pure `datamanager/avatar/AvatarTypes.ets`
-  contracts, plus a locally edited, device-persisted profile (display name /
-  short summary / gender / age / 吃穿住行 domain summaries & claims) stored in
-  app-private DataStore. This is genuinely on-device, with **no cloud and no
-  secrets**, and exposes a deterministic completeness reducer.
-- **Honest avatar-generation boundary** (`domain/AvatarGenerationGate.kt`): the
-  Home avatar card now opens a real 数字分身 screen that reports
-  `NOT_CONFIGURED` / `CONFIGURED_BUT_NO_PROVIDER` for the cloud image generator
-  (Seedream base URL + API key + wired provider would be needed). It **never
-  fabricates a generated avatar**; the seedream generation and
-  foreground-crop/thumbnail processing remain documented remaining gaps.
-- The Home avatar section changes from a dead disabled button to a working
-  entry point into this page. Profile persistence and the honest boundary are
-  covered by deterministic unit tests. AutoAgent, float/edge overlay, WeChat
-  collection, and (partially) embedding remain honest controlled/blocked states,
-  and gallery monthly insights + WeChat settings normalization were documented
-  as portable-pending at Phase 12 time (both since shipped — see Phase 13 and
-  Phase 15 below).
+| Tab | 当前内容 |
+| --- | --- |
+| 首页 | 首次启动引导、头像/资料、资料完整度、推荐和本地状态 |
+| 汇总 | 图库导入、图库分析、集合、月度洞察、照片详情和本地 OCR |
+| 聊天 | 会话持久化、云端流式回复、附件、工具状态、语音输入输出和错误状态 |
+| 任务 | Workflow 浏览、场景分组、启停状态、批量执行和结果状态 |
+| 设置 | 模型与智能体、隐私、数据采集、任务自动化、存储、日志和可选集成 |
 
-**Phase 13** delivers the portable WeChat auto-summary **settings +
-normalization + validation** slice (previously marked Portable-pending in the
-Phase 12 inventory E1), plus a **typed PC/HDC collection boundary** (E2):
-- A pure port of `utils/wechat/WechatAutoSummaryTypes.ets` into
-  `wechat/domain/WechatAutoSummaryTypes.kt`: the settings keys/defaults, the
-  bounded normalizers (`days` 1..90, `max_contacts` 1..50, `swipe_speed`
-  0..20000, ratio 0.1..0.95, `stable_swipes` 1..10, `max_history_swipes`
-  1..300, `wait` 0..10, `recent_contacts`/`target_contact` mode) and the
-  `validateWechatAutoSummaryRequest` validator returning a user-presentable
-  Chinese error (empty when valid).
-- A **real Settings center section** (微信自动汇总, a sixth section) exposing the
-  fields through the existing DataStore-backed `SettingsRepository` /
-  `SettingsCodec` (`SettingsKeys.WECHAT_*`), with values normalized on change,
-  honest saved/error states, and no fabricated capability.
-- A **typed PC/HDC collection boundary** (`wechat/domain/WechatCollectionGate.kt`)
-  that derives a truthful `BLOCKED` / `NOT_CONFIGURED` state from the Phase-8
-  verified bridge. It **never drives WeChat, never sends arbitrary commands,
-  and `collect()` never fakes a summary** — the Android `WorkflowDeviceAdapter`
-  exposes no safe `wechat_collect` action, so even a verified generic bridge
-  stays BLOCKED. Real collection remains the PC-side Python/HDC service gap.
+## 能力边界
 
-**Phase 14** delivers the portable in-app **Log viewer** (previously marked
-Portable-pending in the Phase 12 inventory C2, based on Harmony
-`pages/LogView.ets` / `utils/AppLogger.ets` / `utils/CloudLogOutput.ets`):
-- A **bounded in-app ring buffer** (`log/data/RingBufferInAppLogRepository.kt`,
-  default 512 records, oldest-evicted FIFO) fed by real app code paths (app
-  launch, settings saved + HDC health-check result, chat send / complete /
-  error, gallery OCR states). It **never fabricates** a record and never
-  pretends to read logcat, a native C++ buffer, or AppStorage strings we do not
-  own.
-- **Sensitive-value redaction on insert** (`log/domain/SensitiveLogRedactor.kt`):
-  `Authorization`/Bearer/Basic, `api_key`, `sk-*`, GitHub `ghp_`/`ghs_` tokens,
-  AWS credentials and generic `password=`/`secret=`/`token=` values are scrubbed
-  before a record is stored, so a raw secret can never be rendered or copied
-  from the viewer.
-- A **Compose Log screen** (`log/ui/LogScreen.kt` + `LogViewModel`) reachable
-  from a new 运行日志 Settings section (`SettingsSectionId.RuntimeLogs`): source
-  tabs (应用 / 云端 Agent / 图库分析 / 任务自动化), severity + free-text filters,
-  Refresh, auto-refresh ticker, auto-scroll, copy visible text, clear-source /
-  clear-all, a live count / capacity footer, and an **honest empty state** that
-  never shows an event that did not happen.
-- **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/log/` +
-  extended `SettingsSectionTest`): `SensitiveLogRedactorTest`,
-  `RingBufferInAppLogRepositoryTest`, `LogFilterTest`, and the seventh section /
-  badge "L".
+已接入 Android 的能力：
 
-**Phase 15** delivers the portable Gallery **monthly insights** (previously
-marked Portable-pending in the Phase 12 inventory D2, based on Harmony
-`utils/gallery/GalleryMonthlyInsights.ets`):
-- A **pure port** (`gallery/insights/GalleryMonthlyInsights.kt`) of the monthly
-  bucketing / tag-count / local-summary / LLM-input builder, mapping directly
-  over the real Room-backed `GalleryPhotoItem`s already stored (Phases 3/9/11).
-  It buckets items into calendar months from `date` (falling back to
-  `createdAt`, then an honest 时间未知 group), computes per-month tag counts
-  (sorted desc, Harmony-stable tie order), produces a deterministic local
-  summary, keeps up to 6 representative items, and builds an LLM-input text
-  block capped at 80 samples — all from **stored data only**. It never scans
-  media and never fabricates an insight; `buildLlmInput` only string-formats the
-  items already loaded.
-- **Observable derivation** (`GalleryRepository.observeMonthlyInsights`) and an
-  in-memory `DefaultGalleryRepository` `map` over `observeItems()`, so insights
-  refresh automatically when items change.
-- A **real 月度洞察 panel** in the existing Gallery screen
-  (`ui/insights/MonthlyInsightsPanel.kt` + `GalleryInsightsViewModel`) with
-  honest Loading / Empty / Error / Loaded states: month chips + per-month total,
-  deterministic category-count bars/chips, the local summary, up to 6
-  representative items (tap to open the detail), and a truthful NOT_CONFIGURED
-  boundary for the cloud AI monthly summary / vector embedding
-  (`insights/GalleryMonthlyInsightCloudState.kt`) — no fabricated summary.
-- **Deterministic unit tests** (`app/src/test/java/com/clawmate/app/gallery/
-  insights/` + `ui/insights/` + a repository derivation test): bucketing
-  (date / createdAt fallback / unknown), newest-month-first and within-month
-  newest-first ordering, tie-order stability, tag cleaning/dedup + category
-  fallback, the 6-representative cap, the 80-line LLM-input cap + determinism +
-  "无" empty block, the ViewModel Loading→Loaded/Empty/Error state machine, and
-  repository-item-driven derivation. 490 unit tests, 0 failures, 0 errors.
+- Room：图库、集合、聊天会话和任务状态持久化。
+- DataStore：设置、首次启动状态和本地资料持久化。
+- OpenAI-compatible HTTP/SSE：云端聊天和部分图库云端能力。
+- Android Photo Picker、MediaStore、EXIF、Geocoder 和 ML Kit 中文 OCR。
+- Android SpeechRecognizer 和 TextToSpeech，权限和不可用状态会显式呈现。
+- Workflow JSON 解析、状态机、取消、超时和受控执行器。
+- JNI/CMake 本地模型适配层。当前只提供诚实的能力边界，未内置 MNN 推理运行时。
 
-**Phase 21** closes the **configurable part** of migration rows **D1** (remote
-gallery embedding) and **D2** (AI month summary) with an explicit, config-driven
-cloud adapter (`gallery/cloud/`) that uses the existing OpenAI-compatible HTTP
-client/config stack *where the contract genuinely matches*:
-- **Remote text embedding** (`GalleryEmbeddingClient`) ports Harmony
-  `CloudModelClient.createEmbedding` / `normalizeEmbeddingUrl` onto the existing
-  OkHttp + kotlinx stack, reusing the existing gallery embedding settings
-  (mode / base URL / key / model) — **no new credentials**.
-- **AI month summary** (`GalleryMonthlySummaryClient`) **reuses the existing
-  OpenAI-compatible `ChatCompletionsClient`** (via the `ChatClient` contract) with
-  the exact Harmony `summarizeGalleryMonth` prompt, behind a new explicit
-  `gallery_ai_summary_enabled` opt-in that reuses the Planner endpoint/model/key.
-- A single `GalleryCloudAdapter` gate + executor reports honest
-  **NOT_CONFIGURED / UNSUPPORTED / ERROR / READY** states, validates
-  endpoint/model/key presence, bounds request (512-character embedding input,
-  bounded LLM-input aggregate) and response (body bytes + vector dimension),
-  redacts secrets from errors, and **never fires a cloud call when not
-  configured**. `huawei_local` embedding stays **UNSUPPORTED** on Android.
-- Wiring into Gallery insights is **only behind explicit settings**: the
-  月度洞察 panel shows the real gate and the `生成/刷新总结` + `生成向量` buttons
-  invoke the cloud only from an explicit user tap (success → READY, failure →
-  redacted ERROR). The deterministic local insight path always remains and never
-  uploads. Device-free tests cover config gating, bounds, parsing/redaction and
-  no-call behaviour.
-**Phase 22** adds the **real but tightly controlled Android AccessibilityService
-action executor** corresponding to the HarmonyOS `MobileGuiTask` / `AgentAction`
-boundary, under a minimal explicit **semantic allowlist** (migration row B1):
-- **Typed action model + allowlist** (`accessibility/SafeAccessibilityAction.kt`):
-  only `click_text`, `click_content_description`, `back`, `scroll_forward`,
-  `scroll_backward`, `global_back`, `global_home`. Everything else is rejected.
-  Text / content-description / package inputs are length-bounded (200 / 200 / 512);
-  **no arbitrary coordinates, no raw key events, no shell/adb/hdc, no screenshots,
-  no hidden input, no cross-app data extraction, no automatic service start.**
-- **Gated executor** (`accessibility/SafeAccessibilityExecutor.kt` +
-  `AndroidSafeAccessibilityExecutor.kt` + service `executeSafeAction`): the
-  service performs an action **only** when invoked through the typed executor,
-  and re-validates the **foreground package against the allowlist before every
-  action** (opt-in + observed system service grant + live package). Results are
-  honest typed outcomes: `NOT_CONFIGURED` / `BLOCKED_SERVICE` /
-  `BLOCKED_PACKAGE` / `UNSUPPORTED` / `ERROR` / `SUCCESS` (SUCCESS only when the
-  platform seam truly performed the action — **no fake success**).
-- **Settings test/demo boundary** (任务与自动化): a read-only panel shows the
-  closed action allowlist, the closed foreground-package allowlist and the live
-  readiness, and a `触发预检` button runs the *same* typed gate/validator through a
-  **no-perform seam** so it reports an honest preflight/rejection and can never
-  trigger a real system/navigation action or fabricate SUCCESS.
-- **All of Phase 19 is preserved**: the coordinate/gesture boundary
-  (`AccessibilityGate`) still reports `BLOCKED`/`NOT_CONFIGURED` for
-  `tap`/`type_text`/`swipe`/`open_app`/`capture_screen`, the overlay boundary is
-  unaffected, gesture injection stays disabled, and no screenshot flag is added.
-  The accessibility config retains `canPerformGestures="false"` and no screenshot
-  flag; `canRetrieveWindowContent="true"` is added only so the safe executor can
-  read the allowlisted foreground window's node tree (read-only, never
-  auto-forwarded, never exfiltrated).
-- **Device-free tests** (21 new): `SafeAccessibilityExecutorTest` (16) +
-  `SettingsSafeAccessibilityExecutorTest` (5) cover allowlist, bounded inputs,
-  package mismatch, disabled/not-configured, and success/failure mapping with no
-  fake success. **623 unit tests, 0 failures, 0 errors.**
+当前不会伪装成已支持的能力：
 
-**Phase 23** realises the **Harmony `GalleryAutoScanner` + `GalleryMemorySync`
-background scan/sync boundary** (migration row D3) as a **serial, opt-in,
-cancellable, bounded background coordinator** that never scans or uploads
-silently:
-- **Serial coordinator** (`gallery/background/GalleryBackgroundCoordinator`) on
-  the existing coroutine + Room stack — **no new WorkManager / JobScheduler /
-  Service dependency** (the smallest existing platform-compatible mechanism).
-  At most one run executes at a time (`Mutex.tryLock` single-flight).
-- **Explicit user setting + runtime media permission**: an opt-in
-  `galleryBackgroundSyncEnabled` setting (off by default, persisted via
-  `SettingsCodec`) **plus** a runtime photo/media-read grant. The
-  `GallerySyncGate` reads them honestly and reports `NOT_CONFIGURED` /
-  `BLOCKED` / `READY`; nothing is scanned until READY. The manifest now merely
-  *declares* `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` (the prerequisite so
-  the gate can truthfully read a grant) — nothing requests or auto-uses them.
-- **Bounded + cancellable + idempotent**: scan limit (`clampScanLimit`), batch
-  cap (`batchSizes`), wall-clock cap (`MAX_WORK_DURATION_MS`), cooperative
-  `cancelActive()`, and Room URI-unique upsert (re-runs never duplicate). A
-  cancelled or time-bound run returns an honest `PARTIAL`.
-- **Never silent, never uploads when unconfigured**: the optional "memory sync"
-  step calls **only** the explicitly configured `GalleryCloudAdapter`
-  (`generateMonthlySummary` on a bounded aggregate of actually-stored content).
-  If no adapter is configured — or nothing meaningful is stored — **no bytes are
-  sent** (`SKIPPED_NOT_CONFIGURED`). No embeddings/AI summaries are invented.
-- **Honest typed states**: `NOT_CONFIGURED` / `BLOCKED` / `READY` / `RUNNING` /
-  `SUCCESS` / `PARTIAL` / `ERROR`; a failed cloud step downgrades a run to
-  `PARTIAL`, and progress is reported through `GallerySyncState.Running`.
-- **Photo Picker least-privilege path preserved and local deterministic
-  gallery insights preserved**: the per-URI Photo Picker flow and the
-  `GalleryMonthlyInsights` local derivation are untouched by this boundary.
-- **Settings control/status**: a 后台图库同步 card in 数据采集 shows the toggle,
-  the live gate status (NOT_CONFIGURED / BLOCKED / READY) and the honest note.
-- **Device-free tests** (new): `GalleryBackgroundCoordinatorTest` +
-  `GallerySyncPolicyTest` + a `SettingsCodecTest` round-trip cover scheduling
-  gate, permission gate, dedup/idempotency, cancellation, bounded batches, cloud
-  no-call behaviour and honest state mapping.
+- HarmonyOS HiAI/N-API 和 MNN 本地推理。
+- PC 侧 HDC、GUI 自动化和 Python 服务，除非显式配置并通过健康检查。
+- 跨应用无障碍操作、任意 shell/adb/hdc 命令执行。
+- 鸿蒙专属的数字人生成、云端 MiMO 语音和部分 WeChat 自动采集流程。
 
-**Phase 24** closes migration row **A2** — the **configured Seedream avatar
-image-generation provider + local asset result path** (`profile/avatar/data/
-generation/`), wired into the 数字分身 screen:
-- **Real provider, faithful HTTP contract** (`AvatarGenerationClient` /
-  `SeedreamAvatarProvider`, ported from Harmony `SeedreamAvatarProvider.ets`
-  onto the existing OkHttp + kotlinx stack): POSTs the exact generate body
-  (`model`, `prompt`, `sequential_image_generation`, `response_format`,
-  optional `output_format` unless the model contains `seedream-4-5`, `size`,
-  `stream`, `watermark`, optional `image`) with `Authorization: Bearer`, honours
-  connect/read timeouts + coroutine cancellation (cancelling the run cancels the
-  live HTTP call), and parses **only** a real `data[0].b64_json` / `data[0].url`
-  image — bounded base64 decode, or a validated http/https URL download with
-  content-type + size gates (`MAX_IMAGE_BYTES`).
-- **Never fabricates, never called unconfigured**: validation (`AvatarUrlValidator`
-  strict http/https + host, no embedded creds; bounded `AvatarProviderLimits`)
-  and the reworked honest gate derive `NOT_CONFIGURED` / `PARTIALLY_CONFIGURED` /
-  `READY`. Generation runs only on an explicit `生成数字分身` tap when READY and
-  the local profile reaches the 20% completeness floor; otherwise **no network
-  call** and an honest error. The api key is never logged, stored, or echoed in
-  any surfaced message (provider-level + ViewModel scrub).
-- **Bounded prompt + explicit consent**: `buildAvatarGenerationPrompt` builds a
-  bounded (`MAX_PROMPT_LENGTH`), deterministic prompt from the local profile;
-  the user action is the recorded text-to-image consent (no photo used).
-- **Local asset result path**: real generated bytes are persisted through the
-  existing app-private `AvatarAssetRepository.persistGeneratedImage` as a
-  `seedream-<seq>` version (provider `"seedream"`), newest-first, displayed via
-  Coil. Run lifecycle is `READY → RUNNING → SUCCESS/ERROR`.
-- **Device-free tests (48 new)**: config gate + no-call, request-body bounds,
-  URL normalization, response parsing (base64 + url fallback), error redaction,
-  cancellation, READY/RUNNING/SUCCESS/ERROR state mapping, and the persistence
-  seam. **696 unit tests, 0 failures, 0 errors**; `assembleDebug` BUILD SUCCESSFUL.
+详细的源代码映射、阶段记录和剩余差异见 [MIGRATION_STATUS.md](MIGRATION_STATUS.md)。
 
-## Layout — features added in Phase 24
+## 构建环境
 
-New generation slice `profile/avatar/data/generation/`:
-```
-app/src/main/java/com/clawmate/app/profile/avatar/data/generation/
-├── AvatarProviderContract.kt     # pure wire models + AvatarProviderLimits (byte caps)
-├── AvatarProvider.kt             # AvatarProvider boundary + typed AvatarProviderException
-├── SeedreamRequestBodyBuilder.kt # exact Seedream body (seedream-4-5 output-format suppression)
-├── SeedreamResponseParser.kt     # data[0].url / b64_json parse + bounded base64 decode
-├── AvatarUrlValidator.kt         # strict http/https + host, content-type acceptance
-├── AvatarGenerationClient.kt     # production OkHttp generate + validated download
-└── SeedreamAvatarProvider.kt     # production AvatarProvider (withDefaultClient)
-```
-Wiring + persistence:
-```
-ProfileAvatarViewModel.kt         # + AvatarProvider injection, generateAvatar(), run states
-ProfileAvatarScreen.kt            # 生成数字分身 action + READY/RUNNING/SUCCESS/ERROR card
-ProfileAvatarHost.kt              # wires SeedreamAvatarProvider.withDefaultClient()
-AvatarGenerationGate.kt           # NOT_CONFIGURED / PARTIALLY_CONFIGURED / READY
-AvatarDomain.kt                   # + AvatarRunState, buildAvatarGenerationPrompt, labels
-AvatarAssetRepository.kt          # + persistGeneratedImage (local result path)
-DiskAvatarAssetRepository.kt      # + seedream-* asset write/validate (shared logic)
-AvatarAssetStorageLogic.kt        # + generatedVersionRecord (seedream) helper
-```
-Device-free tests (`app/src/test/java/com/clawmate/app/profile/avatar/...`):
-`AvatarGenerationClientTest` (MockWebServer), `AvatarUrlValidatorTest`,
-`SeedreamResponseParserTest`, `SeedreamRequestBodyBuilderTest`,
-`AvatarGenerationPromptTest`, `AvatarPersistenceSeamTest`,
-`ProfileAvatarGenerationTest`; `AvatarDomainTest` /
-`ProfileAvatarViewModelTest` / `AvatarAssetRepositoryTest` updated for the new
-honest READY/PARTIALLY_CONFIGURED gate.
+| 工具 | 版本或路径 |
+| --- | --- |
+| Java | OpenJDK 17 |
+| Android SDK | `/home/yydh/Android/Sdk`，platform 34 |
+| Android NDK | `25.2.9519653` |
+| CMake | `3.22.1` |
+| Gradle | Wrapper，Gradle 8.9 |
+| Gradle 缓存 | `/home/yydh/.gradle` |
 
-## Layout — features added in Phase 23
+首次构建前确认 Android SDK、NDK 和 CMake 已安装。Gradle wrapper/daemon 和缓存会写入
+仓库外目录，必要时使用有权限的 shell 执行构建。
 
-```
-app/src/main/java/com/clawmate/app/gallery/background/
-├── GalleryBackgroundState.kt      # GallerySyncState (NOT_CONFIGURED / BLOCKED / READY /
-│                                  #   RUNNING / SUCCESS / PARTIAL / ERROR) + run summary +
-│                                  #   GalleryCloudSyncStatus (RUN / SKIPPED_NOT_CONFIGURED / FAILED)
-├── GallerySyncPolicy.kt           # Pure bounds + batch sizes + scheduling gate (decideRun +
-│                                  #   GallerySchedulingDecision) — device-free
-├── GalleryMediaPermission.kt      # GalleryMediaPermission interface + deterministic GallerySyncGate
-│                                  #   (opt-in + runtime photo-access grant) + GallerySyncGateStatus
-├── GalleryMediaSource.kt          # GalleryMediaSource (scanNewest) + GalleryPhotoInput (Harmony port)
-├── GalleryBackgroundCoordinator.kt# Serial opt-in coordinator: gate + bounded batches + cancellation +
-│                                  #   idempotent Room upsert + cloud-sync ONLY via configured adapter
-└── AndroidGalleryMediaBoundary.kt # AndroidGalleryMediaPermission (ContextCompat) + MediaStore source
-                                  #   (newest-first, refuses without a grant) + FakeGalleryMediaPermission
+## 构建与测试
 
-(mod) app/src/main/AndroidManifest.xml                      # declares READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE (grant prerequisite only)
-(mod) app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt    # + galleryBackgroundSyncEnabled
-(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt   # + GALLERY_BACKGROUND_SYNC_ENABLED
-(mod) app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt    # encode/decode of the opt-in
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt  # + setGalleryBackgroundSyncEnabled
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt   # 后台图库同步 card + live gate status
-
-app/src/test/java/com/clawmate/app/gallery/background/
-├── GalleryBackgroundCoordinatorTest.kt   # gate / permission / dedup / cancellation / bounds /
-│                                         #   cloud no-call / honest status — device-free
-└── GallerySyncPolicyTest.kt              # scheduling gate + coalescing + bounded batches
-(mod) app/src/test/java/com/clawmate/app/settings/SettingsCodecTest.kt    # opt-in round-trip
-```
-
-## Layout — features added in Phase 17
-
-```
-app/src/main/java/com/clawmate/app/profile/share/
-├── ProfileShareTypes.kt            # .mobi-profile wire model (ProfileShareEnvelopeDto /
-│                                   #   ProfileShareSnapshotDto / ProfileShareDomainDto),
-│                                   #   constants (UTD / MIME / size cap / schemaVersion / appId),
-│                                   #   ProfileShareErrorCode + ProfileShareParseResult
-└── ProfileShareImporter.kt         # Pure parse/validate (malformed / oversized /
-                                    #   unsupported-version / missing-field) + deterministic
-                                    #   local-first merge into LocalAvatarProfile
-(mod) app/src/main/java/com/clawmate/app/profile/ProfileShareActivity.kt
-                                    # Reads the content URI (byte-capped), runs the import,
-                                    # persists via DataStoreProfileAvatarRepository, shows an
-                                    # HONEST success/error result dialog (no NFC / no cloud)
-
-app/src/test/java/com/clawmate/app/profile/share/ProfileShareImporterTest.kt
-                                    # 19 device-free tests: parsing, all validation codes,
-                                    #   merge precedence, backward compatibility
-```
-
-**Phase 17** closes the *portable* part of migration row **A4** (Profile knock
-share) that Phase 1 deliberately left behind: the **import/merge pipeline**
-around the existing `ProfileShareActivity` and `.mobi-profile` /
-`application/vnd.mobiinfra.profile+json` intent handling.
-- A pure `ProfileShareImporter` decodes a shared envelope (port of
-  `ProfileKnockShareService.ets` + `buildProfileShareSnapshot` in `Index.ets`)
-  and validates it with stable error codes: **malformed** JSON, **oversized**
-  (byte cap `512 KB`), **unsupported schemaVersion** (not `1`), and
-  **missing-field / unrecognized identity** (no `profileText` body, or neither
-  the UTD `typeId` nor `appId`+version identity). It never silently accepts a
-  bad payload.
-- **Local-first merge precedence**: only the *allowed local profile fields* —
-  the four persona-domain summaries (吃/穿/住/行) — are merged, and only into
-  blank local fields; existing local values are **never overwritten**.
-  `fullDesc` is preferred over `desc`, values are trimmed + capped, unknown
-  domain keys are ignored, and first duplicate wins deterministically.
-- `ProfileShareActivity` now actually imports: it reads the `content://` URI
-  through the `ContentResolver` with a bounded sink (rejects oversized files
-  before buffering), parses + validates, merges into the persisted
-  `DataStoreProfileAvatarRepository` profile, and shows an **honest** success
-  dialog (list of imported dimensions + resulting completeness) or a typed
-  error dialog. `ACTION_SEND` / `EXTRA_STREAM` / `clipData` URIs are handled.
-- **No NFC** (the Harmony "knock-to-knock" approximation), **no cloud**
-  affinity / "同频报告" LLM analysis, and **no fake capability**: the import is
-  purely local and never sends or fabricates anything (19 new device-free unit
-  tests; 521 total, 0 failures).
-
-## Layout — features added in Phase 16
-
-```
-app/src/main/java/com/clawmate/app/home/domain/HomeProfileBuilder.kt           # Pure port of DataManagerFacade.ets
-                                                                            #   homeProfileDomains/homeProfileDomainDescription/
-                                                                            #   homeProfileDomainFullDescription/domainClaimStatements
-app/src/main/java/com/clawmate/app/home/data/ProfileBackedHomeProfileSource.kt # Real HomeProfileSource: persisted local profile → home VM
-(mod) app/src/main/java/com/clawmate/app/ui/ClawMateRoot.kt                   # default profile source → ProfileBackedHomeProfileSource(DataStoreProfileAvatarRepository)
-
-app/src/test/java/com/clawmate/app/home/HomeProfileBuilderTest.kt            # pillar/completeness/claims/empty derivation
-app/src/test/java/com/clawmate/app/home/ProfileBackedHomeProfileSourceTest.kt # real source over the fake profile repository
-```
-
-**Phase 16** finishes the **A1 gap** documented at Phase 12 — the persisted
-local profile now **flows into the real Home recommendation pipeline**:
-- A pure, deterministic `HomeProfileBuilder` maps the four locally-curated
-  吃/穿/住/行 `AvatarDomainSnapshot`s onto the Home pillars (`desc` / `fullDesc` /
-  `claims` / `eventCount`) following the HarmonyOS
-  `datamanager/DataManagerFacade.ets` contracts (`homeProfileDomainDescription` /
-  `homeProfileDomainFullDescription` / `domainClaimStatements`), reusing the
-  existing `defaultHomeDomains()` and `homeProfileCompleteness()`. Because the
-  Android profile is **typed on-device** (not index-derived), a pillar is
-  populated by the content it actually contains — never an invented event count.
-- A real `ProfileBackedHomeProfileSource` reads the app-private DataStore profile
-  (the existing `ProfileAvatarRepository`) and returns the derived home VM. The
-  live app now constructs this source as the default in `ClawMateRoot`, so the
-  home pillars / completeness reflect exactly what the user curated in the
-  数字分身 screen — no longer a hard-coded "暂无数据" shell.
-- **Truthful capability boundaries preserved**: the recommendation list stays
-  empty (there is no indexed-todo content source on Android — the Harmony
-  `homeRecommendations()` pipeline is documented as deferred) and the avatar
-  section stays NOT_CONFIGURED (no generated avatar image is ever invented).
-  An entirely empty profile is still the honest `HomeProfileViewModel.empty`
-  (backward compatible with Phases 1–15). Deterministic tests cover pillar
-  derivation, claims/event counts, completeness, empty/incomplete states and
-  source behaviour.
-
-## Layout — features added in Phase 15
-
-```
-app/src/main/java/com/clawmate/app/gallery/insights/
-├── GalleryMonthlyInsights.kt            # Pure Harmony GalleryMonthlyInsights.ets port:
-│                                        #   build() bucketing / tag-counts / summary / representatives
-│                                        #   + buildLlmInput() (80-sample cap)
-├── GalleryMonthlyInsight.kt             # GalleryMonthInsight / GalleryMonthCategoryCount models
-└── GalleryMonthlyInsightCloudState.kt   # Honest NOT_CONFIGURED boundary for cloud AI summary / embedding
-
-app/src/main/java/com/clawmate/app/gallery/ui/insights/
-├── GalleryInsightsViewModel.kt          # Loading / Empty / Loaded / Error state machine over observeMonthlyInsights
-└── MonthlyInsightsPanel.kt              # 月度洞察 card: month chips, totals, category bars/chips,
-                                         #   local summary, representative items, cloud NOT_CONFIGURED notice
-
-(mod) app/src/main/java/com/clawmate/app/gallery/data/GalleryRepository.kt      # + observeMonthlyInsights()
-(mod) app/src/main/java/com/clawmate/app/gallery/data/DefaultGalleryRepository.kt # pure map over observeItems()
-(mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryScreen.kt              # wire the 月度洞察 panel
-```
-
-## Layout — features added in Phase 21
-
-```
-app/src/main/java/com/clawmate/app/gallery/cloud/
-├── GalleryCloudTypes.kt                    # Typed cloud config + bounds + honest error model
-│                                           #   * GalleryEmbeddingConfig.fromSettings (remote mode + URL/key/model)
-│                                           #   * GalleryMonthlySummaryConfig (explicit galleryAiSummaryEnabled opt-in
-│                                           #     + Planner URL/key/model — no new credentials)
-│                                           #   * normalizeEmbeddingUrl (port of CloudModelClient.normalizeEmbeddingUrl)
-│                                           #   * GalleryCloudBounds (embedding text 512 / dims 4096 / response + summary caps)
-│                                           #   * GalleryCloudErrorRedactor (scrub bearer / sk-* / key= secrets)
-├── GalleryEmbeddingClient.kt               # OpenAI-compatible /v1/embeddings client (OkHttp + kotlinx); bounds input &
-│                                           #   response, redacts errors, returns GalleryEmbeddingResult or GalleryCloudException
-├── GalleryMonthlySummaryClient.kt          # Reuses the existing OpenAI-compatible ChatCompletionsClient (ChatClient)
-│                                           #   + exact Harmony summarizeGalleryMonth prompt → GalleryMonthSummaryResult
-└── GalleryCloudAdapter.kt                  # Config-driven gate + executor: NOT_CONFIGURED / UNSUPPORTED / READY gates;
-                                            #   executors short-circuit to redacted ERROR before I/O when not configured.
-                                            #   Companion.fromSettings builds it from AppSettings + Planner + OkHttp/Chat.
-
-(mod) app/src/main/java/com/clawmate/app/gallery/insights/GalleryMonthlyInsightCloudState.kt   # + Error(message) state
-(mod) app/src/main/java/com/clawmate/app/gallery/ui/insights/GalleryInsightsViewModel.kt      # injectable suspend adapter
-                                            #   provider; gate states in Loaded; explicit generateSummary / embed actions
-(mod) app/src/main/java/com/clawmate/app/gallery/ui/insights/MonthlyInsightsPanel.kt          # 生成/刷新总结 + 生成向量 buttons
-(mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryScreen.kt                          # wire the adapter provider + actions
-(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt                      # GALLERY_AI_SUMMARY_ENABLED
-(mod) app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt                       # galleryAiSummaryEnabled
-(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsNormalizers.kt               # (embeddingMode reused)
-(mod) app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt                       # encode/decode the new key
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt                     # setGalleryAiSummaryEnabled
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt                      # 月度 AI 总结 group (opt-in)
-(mod) app/src/main/java/com/clawmate/app/gallery/GalleryComponent.kt                          # cloudAdapterProvider/buildCloudAdapter
-
-app/src/test/java/com/clawmate/app/gallery/cloud/
-├── GalleryCloudAdapterTest.kt              # config gating + no-call behaviour (NOT_CONFIGURED / UNSUPPORTED / READY;
-│                                           #   executors never hit a client when not configured)
-├── GalleryEmbeddingClientTest.kt           # MockWebServer: URL/auth, 512-char clip, JSON parse, HTTP secret redaction,
-│                                           #   empty-vector EMPTY, body + dimension OVER_BOUNDS
-└── GalleryMonthlySummaryClientTest.kt      # prompt shape/bounds, JSON parsing, raw-text fallback, redacted error, EMPTY
-(mod) app/src/test/java/com/clawmate/app/gallery/ui/insights/GalleryInsightsCloudViewModelTest.kt  # gate states + redacted ERROR path
-(mod) app/src/test/java/com/clawmate/app/settings/SettingsCodecTest.kt                            # galleryAiSummaryEnabled round-trip
-```
-
-## Layout — features added in Phase 14
-
-```
-app/src/main/java/com/clawmate/app/log/
-├── AppLogger.kt                   # Static in-app logger (Harmony AppLogger.ets port): i/w/e/cloud/gallery/workflow
-├── LogComponent.kt                # Process-wide shared repository (manual DI, like Chat/Gallery/Settings components)
-├── domain/
-│   ├── InAppLogTypes.kt           # LogLevel / LogSource / immutable redacted InAppLogEntry (key for LazyColumn)
-│   ├── LogFilter.kt               # Pure source+level+query filter projection (newest-first preserved)
-│   └── SensitiveLogRedactor.kt    # Deterministic secret redaction applied on insert
-├── data/
-│   └── RingBufferInAppLogRepository.kt  # Capacity-bounded FIFO ring buffer + StateFlow for Compose
-└── ui/
-    ├── LogScreen.kt               # Source tabs / severity+query filter / refresh / auto-refresh / auto-scroll
-    │                              #   / copy / clear-source / clear-all / honest empty state / footer counts
-    ├── LogViewModel.kt            # Viewer chrome state + projects the shared buffer through pure filterLogs
-    └── LogViewModelFactory.kt
-
-(mod) app/src/main/java/com/clawmate/app/ClawMateApplication.kt     # init LogComponent + real "App" launch event
-(mod) app/src/main/java/com/clawmate/app/chat/ui/ChatViewModel.kt   # real send / complete / error cloud-agent events
-(mod) app/src/main/java/com/clawmate/app/gallery/ui/GalleryViewModel.kt # real OCR run/empty/model/failed gallery events
-(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt # seventh 运行日志 section (badge "L")
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt  # route the 运行日志 section to LogScreen
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt # settings-saved + HDC health-check events
-
-app/src/test/java/com/clawmate/app/log/
-├── SensitiveLogRedactorTest.kt        # redaction patterns (no raw secret retained)
-├── RingBufferInAppLogRepositoryTest.kt# retention/eviction, scoped & full clear, min-level, redact-on-insert, truncation
-└── LogFilterTest.kt                   # source/level/query, case-insensitive, tag, limit, ordering
-(mod) app/src/test/java/com/clawmate/app/settings/SettingsSectionTest.kt  # seven sections + badge "L"
-```
-
-```
-app/src/main/java/com/clawmate/app/gallery/ocr/
-├── AndroidOcrEngine.kt      # Real ML Kit Chinese OCR adapter (ContentResolver → bounded Bitmap → recognition)
-├── OcrBitmapDecode.kt       # Pure bounded-decode planning (inSampleSize + memory-budget guard)
-└── OcrMapping.kt            # Pure result mapping (real text vs empty / typed failure / no-fake-output)
-
-app/src/main/java/com/clawmate/app/gallery/
-├── (mod) CapabilityEngines.kt        # Typed OcrResult / OcrErrorKind; suspend OcrEngine.recognize
-├── (mod) GalleryComponent.kt         # ocr(context) now returns the real androidOcrEngine adapter
-├── (mod) data/GalleryDao.kt / GalleryRepository.kt / DefaultGalleryRepository.kt  # updateOcr
-├── (mod) model/GalleryModels.kt      # ANALYSIS_STATE_ANALYZED = "analyzed"
-├── (mod) ui/GalleryViewModel.kt      # analyzeOcr + OcrViewState + detail OCR state
-├── (mod) ui/GalleryDetailScreen.kt   # Analyze OCR section (load/success/empty/error/model states)
-├── (mod) ui/GalleryScreen.kt         # wiring onAnalyzeOcr
-└── (mod) ui/GalleryDetailLabels.kt   # honest "已分析（本地 OCR）" label
-
-(modified) app/build.gradle.kts, gradle/libs.versions.toml  # ML Kit text-recognition-chinese dependency
-app/src/test/java/com/clawmate/app/gallery/ocr/            # OcrMappingTest (12) + OcrBitmapDecodeTest (8)
-app/src/test/java/com/clawmate/app/gallery/ui/OcrAnalysisViewModelTest.kt  # 6 tests
-app/src/test/java/com/clawmate/app/gallery/data/GalleryRepositoryEditDeleteTest.kt  # +updateOcr test
-```
-
-## Layout — features added in Phase 12
-
-```
-app/src/main/java/com/clawmate/app/profile/avatar/
-├── domain/
-│   ├── AvatarDomain.kt            # Typed port of datamanager/avatar/AvatarTypes.ets
-│   │                              #   (profile snapshot, domain snapshot, consent, state,
-│   │                              #    version VM, 4 persona domains, completeness, error text)
-│   └── AvatarGenerationGate.kt    # Honest NOT_CONFIGURED / CONFIGURED_BUT_NO_PROVIDER boundary
-├── data/
-│   ├── ProfileAvatarRepository.kt          # persistence boundary
-│   ├── DataStoreProfileAvatarRepository.kt # app-private DataStore (JSON, tolerant decode)
-│   └── FakeProfileAvatarRepository.kt      # deterministic in-memory fake (tests)
-└── ui/
-    ├── ProfileAvatarViewModel.kt  # draft editing + save validation + honest gate wiring
-    ├── ProfileAvatarScreen.kt     # editable local profile + generation status card + snackbar
-    └── ProfileAvatarHost.kt       # self-contained entry (DataStore repo + settings repo)
-
-(mod) app/src/main/java/com/clawmate/app/home/ui/HomeScreen.kt  # avatar card → ProfileAvatarHost
-app/src/test/java/com/clawmate/app/profile/avatar/              # AvatarDomainTest + ProfileAvatarViewModelTest
-```
-
-## Layout — features added in Phase 13
-
-```
-app/src/main/java/com/clawmate/app/wechat/
-└── domain/
-    ├── WechatAutoSummaryTypes.kt    # Pure port of WechatAutoSummaryTypes.ets (keys/defaults/modes,
-    │                                #   request/response/message/conversation types, bounded normalizers,
-    │                                #   validateWechatAutoSummaryRequest)
-    └── WechatCollectionGate.kt      # Typed PC/HDC collection boundary: BLOCKED / NOT_CONFIGURED from the
-                                     #   Phase-8 verified bridge; collect() never dispatches or fakes a summary
-
-(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsKeys.kt    # WECHAT_* keys (+ ALL_KEYS)
-(mod) app/src/main/java/com/clawmate/app/settings/domain/AppSettings.kt     # wechatAutoSummary* / wechatCollection* fields
-(mod) app/src/main/java/com/clawmate/app/settings/domain/SettingsSection.kt # sixth WechatAutoSummary section
-(mod) app/src/main/java/com/clawmate/app/settings/data/SettingsCodec.kt     # encode/decode the WeChat fields
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt   # setters + wechatCollectionGate()/summary request
-(mod) app/src/main/java/com/clawmate/app/settings/ui/SettingsScreen.kt      # section dispatch
-(new) app/src/main/java/com/clawmate/app/settings/ui/WechatSettingsSection.kt # real section UI + live boundary card
-
-app/src/test/java/com/clawmate/app/wechat/  # WechatAutoSummaryTypesTest (15) + WechatSettingsCodecTest (4) + WechatCollectionGateTest (4)
-(mod) app/src/test/java/com/clawmate/app/settings/SettingsSectionTest.kt    # six sections + badge "W"
-```
-
-## Layout — features added in Phase 10
-
-```
-app/src/main/java/com/clawmate/app/localmodel/
-├── LocalModelTypes.kt        # Typed status/error domain + normalization + labels
-├── LocalModelPathValidator.kt# App-private model-dir path validation (no traversal/deletion)
-├── LocalModelInventory.kt    # App-private inventory scan (config.json + weight file) via probe seam
-├── LocalModelCapability.kt   # Honest boundary: READY only on real native load success
-├── LocalModelNative.kt       # JNI binding to the native stub (typed results, no fake output)
-├── LocalModelViewModel.kt    # ViewModel backing the Settings local-model panel
-└── LocalModelPanel.kt        # Settings panel: status + inventory + explicit 加载/测试
-
-app/src/main/cpp/
-├── CMakeLists.txt            # Android CMake build of the native stub
-└── local_model_jni.cpp       # JNI stub: status()/nativeLoad() return typed UNSUPPORTED
-
-(modified) app/build.gradle.kts                     # externalNativeBuild cmake + ndkVersion 25.2.9519653 + abiFilters
-(modified) settings/ui/SettingsSections.kt          # LocalModelPanel wired into the 模型与智能体 section
-app/src/test/java/com/clawmate/app/localmodel/      # 5 deterministric test classes (38 tests)
-```
-
-## Layout — features added in Phase 9
-
-```
-app/src/main/java/com/clawmate/app/gallery/geocode/
-├── LocationModels.kt            # ReverseGeocodeOutcome / ReverseGeocodeErrorKind / GalleryLocationInfo
-├── AddressFormatter.kt          # Pure single-line place formatter (device-free, deterministic)
-├── AndroidGeocoderClient.kt     # Platform android.location.Geocoder client + pure mapping (AddressFields)
-└── AndroidReverseGeocoder.kt    # Explicit injected ReverseGeocoder capability
-
-app/src/main/java/com/clawmate/app/gallery/ui/
-├── GalleryDetailScreen.kt       # Item detail flow (URI/date/EXIF/state/tags/summary/membership + edit/delete + location)
-└── GalleryDetailLabels.kt       # Pure deterministic label mapping
-
-(modified) GalleryViewModel.kt / GalleryScreen.kt / GalleryComponent.kt / CapabilityEngines.kt
-(modified) GalleryModels.kt / GalleryEntities.kt / GalleryDao.kt / GalleryMappers.kt
-(modified) GalleryRepository.kt / DefaultGalleryRepository.kt / gallery database v1→v2 migration
-
-app/src/test/java/com/clawmate/app/gallery/...      (geocode + ui + data edit/delete tests, extended capability test)
-```
-
-## Layout — features added in Phase 8
-
-```
-app/src/main/java/com/clawmate/app/task/hdc/
-├── HdcBridgeModels.kt          # Tolerant typed models + parsing (health/workflow envelopes)
-├── HdcUrlNormalizer.kt         # Deterministic scheme://host[:port]/path normalization
-├── HdcBridgeClient.kt          # Typed client boundary (HdcBridgeResult / HdcBridgeErrorKind)
-├── OkHttpHdcBridgeClient.kt    # OkHttp impl: bounded timeouts, cancellation, typed errors
-├── WorkflowDeviceAdapter.kt    # Safe device-control boundary + default disabled adapter
-└── BridgeBackedWorkflowDeviceAdapter.kt # Health-gated protocol adapter (no run_cmd / no exec)
-
-app/src/main/java/com/clawmate/app/task/TaskComponent.kt          (modified: explicit setDeviceAdapter; default disabled)
-app/src/main/java/com/clawmate/app/task/runner/WorkflowRunner.kt  (modified: gui_action routes through a configured adapter; else BLOCKED)
-app/src/main/java/com/clawmate/app/settings/ui/SettingsViewModel.kt (modified: explicit testHdcHealth() + injected client factory)
-app/src/main/java/com/clawmate/app/settings/ui/SettingsSections.kt / SettingsUiState.kt (modified: explicit health button + honest status)
-
-app/src/test/java/com/clawmate/app/task/hdc/*Test.kt             (5 new test classes)
-app/src/test/java/com/clawmate/app/task/runner/WorkflowRunnerAdapterIntegrationTest.kt (new)
-app/src/test/java/com/clawmate/app/settings/SettingsHdcHealthTest.kt                  (new)
-```
-
-## Layout — features added in Phase 7
-
-```
-app/src/main/java/com/clawmate/app/chat/voice/
-├── VoiceInteractionTypes.kt      # Typed status/metadata + normalization, VoiceSessionController [Phase 7]
-├── VoiceTranscriptLogic.kt       # ASR cumulative/committed merge + duplicate-final suppression
-├── VoiceOrchestratorLogic.kt     # Voice-input start/stop generation guards
-├── VoiceTtsPresets.kt            # MiMO TTS voice whitelist + role presets
-├── PcmWav.kt                     # PCM16 → WAV bytes + chunk concat
-├── ChatVoiceController.kt        # Orchestrator: real ASR input + Android TTS output → chat draft
-├── asr/
-│   └── AndroidSpeechRecognizerAsrAdapter.kt   # android.speech.SpeechRecognizer; permission/unavailable/error/cancel
-└── tts/
-    ├── AndroidTextToSpeechTtsAdapter.kt       # android.speech.TextToSpeech; lifecycle-safe init, speak/pause/stop/replay
-    └── CloudMimoVoiceClient.kt                # MiMO cloud STREAMING/TTS — NOT_CONFIGURED (never faked)
-
-app/src/main/java/com/clawmate/app/chat/ui/ChatViewModel.kt   (modified: hosts ChatVoiceController; voice state/badge + actions)
-app/src/main/java/com/clawmate/app/chat/ui/ChatViewModelFactory.kt (modified: wires ChatVoiceController(context))
-app/src/main/java/com/clawmate/app/chat/ui/ChatScreen.kt      (modified: mic/permission, listening/transcript banner, speak/stop/replay)
-app/src/test/java/com/clawmate/app/chat/voice/*Test.kt        (8 new test classes, 55 tests)
-```
-
-## Layout — features added in Phase 6
-
-```
-app/src/main/java/com/clawmate/app/home/
-├── domain/
-│   ├── OnboardingTypes.kt          # Pure onboarding contract (slides, version key, gate fn) [Phase 6]
-│   ├── HomeDomain.kt               # Four persona pillars (吃/穿/住/行) + completeness
-│   ├── HomeRecommendation.kt       # Recommendation view model / persisted state / colors
-│   ├── HomeProfile.kt              # Profile aggregate + loading/ready/error states
-│   ├── RecommendationListLogic.kt  # Pure pagination / filter / completion reductions
-│   └── AvatarStatus.kt             # Avatar statuses + honest notConfigured section
-├── data/
-│   ├── OnboardingRepository.kt     # + DataStoreOnboardingRepository / fake
-│   ├── HomeRecRepository.kt        # + DataStoreHomeRecRepository / fake (completion flags)
-│   └── HomeProfileSource.kt        # Profile source seam (empty profile until data-manager)
-└── ui/
-    ├── HomeScreen.kt               # Real Compose Home (avatar, pillars, rec list, pagination)
-    ├── HomeViewModel.kt            # + factory (completion toggles, filter, pagination)
-    └── onboarding/
-        ├── FirstLaunchOnboardingScreen.kt  # 3 capability slides + usage guide
-        └── OnboardingViewModel.kt          # + factory (next/skip/finish, versioned completion)
-
-ui/ClawMateRoot.kt  (modified: onboarding gate before the 5-tab root; Home tab → home/ui)
-```
-
-## Layout — features added in Phase 5
-
-```
-app/src/main/java/com/clawmate/app/settings/
-├── SettingsComponent.kt            # Manual DI (DataStore repository)            [Phase 5]
-├── config/EndpointBridge.kt        # Seam: Settings <-> runtime EndpointConfig (mask-guarded)
-├── domain/
-│   ├── SettingsSection.kt          # SettingsSectionId + 5 section descriptors
-│   ├── SettingsKeys.kt             # Typed key inventory (sensitive subset flagged)
-│   ├── AppSettings.kt              # Typed snapshot + configured/connectivity facts
-│   ├── SettingsNormalizers.kt      # Deterministic URL/model/int/double/bool/enum normalizers
-│   └── SensitiveValueUtils.kt      # Mask/isMasked/restore port (SensitiveValueUtils.ets)
-├── data/
-│   ├── SettingsRepository.kt       # Repository interface
-│   ├── SettingsCodec.kt            # Encode/decode + sanitizeForWrite (mask never persisted)
-│   ├── DataStoreSettingsRepository.kt # Preferences-backed store
-│   └── FakeSettingsRepository.kt   # In-memory store used by tests/previews
-└── ui/
-    ├── SettingsScreen.kt           # Section list + detail navigation + save/reset/loading/error
-    ├── SettingsSections.kt         # The five section composables
-    ├── SettingsControls.kt         # Group cards, inputs, sensitive input, toggles, actions
-    ├── SettingsTheme.kt            # SettingsCenterTheme palette
-    ├── SettingsViewModel.kt        # Draft editing, sensitive reveal, save/reset
-    ├── SettingsViewModelFactory.kt
-    └── SettingsUiState.kt          # UI state + StorageSummary
-
-config: app/src/main/java/com/clawmate/app/config/EndpointConfig.kt  (modified:
-        added applyCloudEndpoint, mask-guarded)
-```
-
-## Layout — features added in Phase 4
-
-```
-app/src/main/java/com/clawmate/app/task/
-├── TaskComponent.kt                # Manual DI (repository + bounded runner)      [Phase 4]
-├── model/
-│   ├── WorkflowModels.kt           # WorkflowStep/Definition/Task + metadata/defaults/condition
-│   └── WorkflowSceneConfig.kt      # The 7 collection scenes (from WorkflowSceneConfig.ets)
-├── json/
-│   ├── WorkflowJsonParser.kt       # Tolerant parser (nested if/loop, unknown-step preservation)
-│   └── WorkflowJsonRepair.kt       # Deterministic text repair (fence, truncation, casing, CJK)
-├── data/
-│   ├── WorkflowRepository.kt       # Repository interface + BundledConfigReader
-│   ├── DefaultWorkflowRepository.kt# file-backed, bundles configs into filesDir/workflows
-│   ├── WorkflowTaskIndexCodec.kt   # deterministic task-index.json codec
-│   └── AndroidBundledConfigReader.kt # reads res/raw bundled configs
-├── runner/
-│   ├── WorkflowVariableResolver.kt # ${steps.x.output.y} / ${context.k} / ${loop.index|last}
-│   └── WorkflowRunner.kt           # bounded, honest runner (gui/hdc -> UNSUPPORTED)
-└── ui/
-    ├── TaskViewModel.kt            # scenes/filter, cards, expand, run, states
-    ├── TaskViewModelFactory.kt
-    └── TaskScreen.kt               # Compose Task screen (wired into the 任务 tab)
-
-resource bundled configs: app/src/main/res/raw/default_*.json   (secrets-free)
-```
-
-## Layout — features added in Phase 2
-
-```
-app/src/main/java/com/clawmate/app/chat/
-├── model/ChatModels.kt            # ChatMessage/ChatSession roles, kinds, title/preview rules
-├── cloud/
-│   ├── OpenAiModels.kt            # OpenAI /v1/chat/completions wire models (+ Phase 3 tool-call models)
-│   ├── ChatClient.kt              # ChatClient interface (completion + completionStream)
-│   ├── ChatCompletionsClient.kt   # OkHttp client: non-streaming, SSE streaming, cancellation,
-│   │                              #                          timeouts, HTTP + malformed-event errors
-│   ├── SseParser.kt               # Deterministic SSE framing + chunk mapping (incl. tool-call deltas)
-│   ├── ChatServerConfig.kt        # Secrets-free config + /v1/chat/completions URL normalisation
-│   └── ChatClientTypes.kt         # ChatResult/ChatException error model
-├── agent/                         # Phase 3 Agent/ReAct vertical slice
-│   ├── ToolModels.kt              # ToolCall/ToolDefinition wire + ToolExecutionResult domain
-│   ├── ToolRegistry.kt            # Safe Android tool registry + controlled-disabled adapters
-│   ├── AgentActionParser.kt       # Pure text-JSON action parsing (port of AgentActionParser.ets)
-│   └── AgentLoop.kt               # Cancellable ReAct loop: max-step + timeout guards, typed errors
-├── data/
-│   ├── ChatDatabase.kt            # Room DB (@Entity ChatSession/ChatMessage, ChatDao)
-│   ├── ChatMappers.kt             # domain <-> entity mappers + session-title derivation
-│   ├── ChatRepository.kt          # ChatRepository interface + ChatSendEvent (+ ToolExecuted)
-│   └── DefaultChatRepository.kt   # Room + client-backed repository (sendMessage + sendAgentMessage)
-├── ChatComponent.kt               # Lightweight manual DI for the chat feature
-└── ui/
-    ├── ChatViewModel.kt           # Real ViewModel: send, history, incremental streaming,
-    │                              #                       loading/empty/error/missing-config states
-    ├── ChatViewModelFactory.kt
-    └── ChatScreen.kt              # Compose chat UI (LazyColumn history, input, states, tool status)
-```
-
-The Phase-1 `ui/FeatureScreens.kt` chat placeholder was replaced by the real
-`ChatScreen`; the tab shell (`ui/ClawMateRoot.kt`) now routes the 聊天 tab to it.
-
-## How the pieces connect
-
-1. `EndpointConfig` loads a git-ignored `raw/local_config.properties`
-   (`cloudPlannerBaseUrl`, `cloudPlannerApiKey`, `cloudPlannerModel`).
-2. `ChatServerConfig` normalises the base URL to `/v1/chat/completions`.
-3. `ChatCompletionsClient` posts with OkHttp; the streaming path decodes SSE via
-   `SseEventParser`/`ChatStreamChunkParser` and surfaces a cancellable `Flow`
-   (content deltas and, in Phase 3, streaming tool-call deltas).
-4. `DefaultChatRepository` persists the user message, streams the reply, and
-   persists the final assistant message. Missing-config is a typed
-   `ChatException(CONFIG)`; no assistant message is ever stored unless the model
-   actually produced one. For the **agent path** (`sendAgentMessage`),
-   `AgentLoop` runs the ReAct state machine over the same client: each turn
-   streams content + tool-call fragments; tools run through the safe
-   `ToolRegistry` (controlled-disabled adapters explain any PC bridge/
-   permission requirement); max-step and overall-timeout guards bound the loop.
-5. `ChatViewModel` drives the screen state from streamed deltas plus
-   `ToolExecuted` events; `ChatScreen` renders history, incremental deltas,
-   tool-execution status, empty, loading, error, and missing-config states.
-   Since **Phase 26** it also publishes coarse send/tool/completed/error/cancel
-   transitions into `OverlayStateRegistry`, so the optional status-only overlay
-   surface can show a bounded, sanitized agent-status line.
-
-## Overlay status overlay (Phase 26)
-
-The Harmony two-layer `SYSTEM_FLOAT_WINDOW` overlay (live agent status + edge
-glow, `pages/FloatWindow.ets` + `pages/EdgeFlowWindow.ets`) is ported as a
-**status-only** Android overlay that keeps every safety gate:
-
-- **Bounded status source**: `OverlayStateRegistry` stores a thread-safe,
-  sanitized, ≤160-char status text plus a tiny `OverlayAgentState` enum
-  (`IDLE`/`RUNNING`/`TOOL`/`ERROR`/`COMPLETED`). It never stores screenshots,
-  prompts, tokens, or secrets.
-- **Wired from the live agent loop**: `ChatViewModel.send` publishes
-  running/tool/completed/error and `cancelSend` returns to idle — chat behavior
-  and logging are unchanged.
-- **Real but narrow renderer**: `OverlayCapabilityFlags.rendererConfigured` is
-  `true` only because `OverlayFloatService` now renders that bounded status
-  text and refreshes it while the explicitly started service is alive. The gate
-  to `READY` still requires explicit opt-in **and** the observed
-  `SYSTEM_ALERT_WINDOW` grant.
-- **Explicit start/stop only**: the Settings UI offers a start/stop action that
-  is enabled only at gate `READY`; turning opt-in off stops it. It is never
-  started on app launch or merely on recomposition.
-- **Never edge-flow or GUI control**: the surface is `FLAG_NOT_TOUCHABLE`
-  (never intercepts input), never captures screens, never executes commands,
-  and never claims the Harmony edge-glow shader or agent GUI control (both
-  remain unsupported).
-
-## Build & verify
-
-Prereqs: JDK 17+, Android SDK (compileSdk 34), **Android NDK (the local-model
-native stub pins `ndkVersion = "25.2.9519653"`) + Google CMake**, Gradle 8.9 (a
-wrapper can be generated with `gradle wrapper`).
+在仓库根目录执行：
 
 ```bash
-./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest        # SSE parsing, mapping, tool-call mapping, action parsing,
-                                        # ReAct loop guards, disabled adapters, repository tests,
-                                        # Phase 4: workflow JSON parse/repair, nested steps,
-                                        # repository persistence, unsupported GUI/HDC, runner cancel/bounds
-                                        # Phase 6: onboarding version/section nav, persistence round-trips,
-                                        # recommendation completion + pagination, empty/disabled states
-                                        # Phase 7: voice status/metadata normalization, transcript append,
-                                        # replay guards, ASR merge/duplicate suppression, orchestration
-                                        # guards, TTS presets, unavailable/permission/error mappings,
-                                        # PCM→WAV, MiMO NOT_CONFIGURED truthfulness
-                                        # Phase 8: HDC bridge tolerant parsing, URL normalization,
-                                        # disabled adapter, OkHttp health/workflow mapping, timeouts,
-                                        # cancellation, runner <-> adapter integration, settings
-                                        # explicit health flow (no network on launch)
-                                        # Phase 9: geocoder mapping/error mapping, detail labels,
-                                        # edit/delete persistence, capability states, group recomputation
-                                       # Phase 10: local-model state normalization, path validation,
-                                       # inventory scanning, no-fake-output (missing lib/model) mapping
-                                       # Phase 11: OCR result mapping (real text/empty/typed failure),
-                                       # bounded-bitmap decode planning, Analyze-action persistence
-./gradlew :app:connectedAndroidTest     # instrumented ASR/TTS + ML Kit OCR (device/emulator; not run in this worktree)
+GRADLE_USER_HOME=/home/yydh/.gradle \
+ANDROID_HOME=/home/yydh/Android/Sdk \
+ANDROID_SDK_ROOT=/home/yydh/Android/Sdk \
+ANDROID_SDK_HOME=/tmp/clawmate-android-home \
+./gradlew :app:assembleDebug --console=plain
 ```
 
-In this worktree the Phase-2 through Phase-11 builds and unit tests were actually
-executed with a local JDK 17 / Android SDK (platform 34) / **Android NDK
-25.2.9519653 + CMake 3.22.1** / Gradle 8.9 — commands and results (including the
-Phase-11 commands and exit codes) are recorded in `MIGRATION_STATUS.md` §6 and
-`DSH_PHASE_RESULT.md`. `connectedAndroidTest` was not run because no
-emulator/device is available (the instrumented voice tests are documented as
-unavailable without a device; the platform Geocoder reverse lookup runs on-device
-only and is not faked in unit tests). Device/native local-model smoke tests are
-similarly unavailable here.
+运行 JVM 单元测试：
 
-**Phase 24** build+test evidence in this worktree (JDK 17, Android SDK platform
-34 / build-tools 34.0.0, Gradle 8.9, `--no-daemon --max-workers=1`):
+```bash
+GRADLE_USER_HOME=/home/yydh/.gradle \
+ANDROID_HOME=/home/yydh/Android/Sdk \
+ANDROID_SDK_ROOT=/home/yydh/Android/Sdk \
+ANDROID_SDK_HOME=/tmp/clawmate-android-home \
+./gradlew :app:testDebugUnitTest --console=plain
 ```
-ANDROID_HOME=/opt/deepseek-harness/android-sdk \
-ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk \
-GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home \
-ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
-/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle \
-    --no-daemon --max-workers=1 :app:assembleDebug :app:testDebugUnitTest
+
+Debug APK 输出位置：
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
 ```
-Result: **BUILD SUCCESSFUL** — `app/build/outputs/apk/debug/app-debug.apk` built,
-and `:app:testDebugUnitTest` ran **696 tests, 0 failures, 0 errors** (48 new
-Phase-24 avatar-generation tests across `AvatarGenerationClientTest`
-[MockWebServer], `SeedreamResponseParserTest`, `SeedreamRequestBodyBuilderTest`,
-`AvatarUrlValidatorTest`, `AvatarGenerationPromptTest`,
-`AvatarPersistenceSeamTest`, `ProfileAvatarGenerationTest`, plus gate-state
-updates to `AvatarDomainTest` / `ProfileAvatarViewModelTest` /
-`AvatarAssetRepositoryTest`).
 
-**Phase 26** adds the status-only overlay. The focused overlay/settings unit
-tests run with a single Gradle worker:
+连接 Android 设备后安装：
+
+```bash
+adb devices
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell monkey -p com.clawmate.app 1
 ```
-ANDROID_HOME=/opt/deepseek-harness/android-sdk \
-ANDROID_SDK_ROOT=/opt/deepseek-harness/android-sdk \
-GRADLE_USER_HOME=/opt/deepseek-harness/.gradle-user-home \
-ANDROID_USER_HOME=/opt/deepseek-harness/.android-user-home \
-/opt/deepseek-harness/gradle-dist/gradle-8.9/bin/gradle \
-    --no-daemon --max-workers=1 \
-    :app:testDebugUnitTest \
-    --tests 'com.clawmate.app.overlay.*' \
-    --tests 'com.clawmate.app.settings.SettingsOverlay*' \
-    --tests 'com.clawmate.app.settings.SettingsOverlayServiceControlTest'
+
+真机检查可以使用：
+
+```bash
+android screen capture -o /tmp/clawmate-screen.png
+android layout -o /tmp/clawmate-layout.json
+adb logcat
 ```
-The exact result count is recorded in `DSH_PHASE_RESULT.md`.
 
-## No secrets
+安装、截图和运行检查必须以实际命令输出为准，不要仅根据构建成功推断运行时正常。
 
-Endpoints/keys are not in this tree. Copy
-`app/src/main/res/raw/config_example.properties` to
-`app/src/main/res/raw/local_config.properties` (git-ignored) and fill in real
-values (`cloudPlannerBaseUrl` / `cloudPlannerApiKey` / `cloudPlannerModel`).
-With no configuration the chat tab shows a "尚未配置云端模型" state instead of
-faking a reply. The first-launch onboarding, Home profile/avatar sections and
-the Phase-7 voice interaction read no network or never invent successful data:
-onboarding works on a fresh, configuration-free install; Home reports the honest
-empty / NOT_CONFIGURED (avatar DISABLED) states until real Android data sources
-exist; and voice ASR uses the on-device `SpeechRecognizer` (RECORD_AUDIO surfaced
-and requested only on the mic tap — no fake transcript), with output via the
-on-device `TextToSpeech` engine — cloud MiMO streaming/TTS stays explicitly
-**NOT_CONFIGURED** and never claims to be connected.
+## 云端模型配置
 
-The Phase-8 **PC HDC bridge** is DISABLED by default and makes **no network call
-on app launch**. `TaskComponent` starts with the disabled adapter, so every
-GUI/HDC workflow step stays `BLOCKED` until a user explicitly taps the settings
-"测试 HDC 健康" button; a connected state is reported only after a live
-`GET /api/health` `ok` + control-ready reply, and the bridge-backed adapter
-performs only the safe protocol calls (never `/api/run_cmd`, shell/adb/hdc,
-`ProcessBuilder`, `Runtime.exec`, or AccessibilityService).
+应用默认不携带 endpoint、API key 或本地数据库。配置模板在：
 
-The **local model** capability performs **no network and no model load on app
-launch**; the Settings 模型与智能体 section scans app-private `filesDir` and the
-"加载/测试" action is explicit. Model files must live under `filesDir/model` /
-`filesDir/modelscope` and are validated by an app-private path checker (no
-arbitrary file/dir deletion). Because MNN-for-Android and the OHOS N-API/HiAI
-runtime are not vendored, the native stub returns typed
-NOT_CONFIGURED / UNSUPPORTED — the app never fabricates a loaded model or
-output.
+```text
+app/src/main/res/raw/config_example.properties
+```
 
-The **Phase-21 Gallery cloud adapter** performs **no network on launch and no
-silent upload**: `GalleryCloudAdapter` only reports gate states
-(NOT_CONFIGURED / UNSUPPORTED / READY) until the user (a) explicitly opts in to
-the AI month summary (`gallery_ai_summary_enabled`) with the Planner
-endpoint/model/key configured, and/or (b) selects remote embedding with the
-existing gallery embedding base URL/key/model configured. Even then the summary /
-embedding calls run **only on an explicit `生成/刷新总结` / `生成向量` button tap**.
-The adapter reuses the existing Planner chat endpoint and the existing gallery
-embedding settings — no new credentials, nothing derived from a subscription —
-and redacts secrets from every error. The deterministic local monthly-insight
-path never uploads and always runs.
+本地调试时复制为被 Git 忽略的文件并填写实际值：
+
+```bash
+cp app/src/main/res/raw/config_example.properties \
+   app/src/main/res/raw/local_config.properties
+```
+
+至少需要配置：
+
+```properties
+cloudPlannerBaseUrl=
+cloudPlannerApiKey=
+cloudPlannerModel=
+```
+
+API key、token、数据库、签名文件和设备状态禁止提交。没有配置云端模型时，聊天页会显示
+未配置状态，不会发送请求或生成假的回复。也可以直接在应用的“设置中心 > 模型与智能体”
+中编辑配置；敏感字段会掩码显示。
+
+## Android 主题约定
+
+共享视觉 token 位于：
+
+```text
+app/src/main/java/com/clawmate/app/ui/theme/DesignTokens.kt
+```
+
+主要页面统一使用浅色背景、白色卡片和蓝紫色强调色。设置页与 HarmonyOS 源实现保持以下
+关键尺寸：
+
+- 页面背景：`#F4F8FF`
+- 设置主操作色：`#4F68FF`
+- 紫色强调色：`#765BFF`
+- 主文字：`#11182F`
+- 卡片圆角：`18dp`
+- 控件圆角：`12dp`
+- 设置输入框高度：`42dp`
+- 设置按钮高度：`40dp`
+
+新增页面应优先复用 `ClawMateDesign` 和现有 Compose 组件，不要在页面中重新定义一套
+颜色、圆角或间距。
+
+## 目录结构
+
+```text
+app/src/main/java/com/clawmate/app/
+├── chat/          会话、流式客户端、Agent、语音
+├── gallery/       图库、集合、OCR、月度洞察、云端适配器
+├── home/          首页、推荐、引导和资料
+├── localmodel/    本地模型扫描与 JNI 能力边界
+├── profile/       资料、头像和分享
+├── settings/      设置仓库、配置和设置页面
+├── task/          Workflow、HDC 适配器和执行器
+├── log/           应用内日志查看器
+└── ui/            Tab 外壳、公共页头、主题和导航
+```
+
+## 开发约定
+
+- 使用 Kotlin 和 Jetpack Compose；新页面优先复用现有主题与组件。
+- 网络请求必须有超时、取消、错误映射和显式配置入口。
+- 外部输入、模型输出和导入数据都按不可信数据处理。
+- 每个有意义的阶段保持小提交，并在 `MIGRATION_STATUS.md` 增加简短记录。
+- 不修改 `/home/yydh/mobiinfra-oh`，不提交生成目录、IDE 状态或本地凭据。
+
+## 许可证与上游参考
+
+本仓库是 ClawMate Android 迁移目标。HarmonyOS 上游项目仅用于参考：
+
+<https://github.com/doulujiyao12/mobiinfra-oh>
