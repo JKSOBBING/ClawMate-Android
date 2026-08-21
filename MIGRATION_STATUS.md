@@ -3476,3 +3476,14 @@ use the same background, title, secondary text, and accent roles.
 
 Verification: `:app:assembleDebug` BUILD SUCCESSFUL; `git diff --check` clean. The current APK was
 installed successfully with `adb install -r`; screenshots remain blocked by the device lock screen.
+
+## 51. Core page device verification
+
+With the connected phone unlocked, installed the current debug APK and visually verified the
+Home, Collection Summary, Chat, Task, Settings, and Model & Agents entry pages. The chat
+unconfigured state is readable and actionable, the settings model form uses full-width vertical
+fields, and a scroll to the bottom exposes the final model and HDC controls above the navigation
+bar. No startup crash was observed during this pass.
+
+Verification: `adb install -r` succeeded; Android CLI screenshots and layout inspection completed
+for the listed routes.
