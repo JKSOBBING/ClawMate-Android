@@ -19,7 +19,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.LazyColumn
@@ -79,8 +78,12 @@ import com.clawmate.app.chat.model.ChatMode
 import com.clawmate.app.chat.model.AttachmentSource
 import com.clawmate.app.chat.model.PendingChatAttachment
 import com.clawmate.app.chat.model.PendingAttachmentState
+import com.clawmate.app.chat.voice.DigitalAvatarSize
+import com.clawmate.app.chat.voice.DigitalAvatarVisualState
 import com.clawmate.app.chat.voice.VoiceInteractionStatus
 import com.clawmate.app.chat.voice.VoiceSessionSnapshot
+import com.clawmate.app.chat.voice.chatAvatarRenderModel
+import com.clawmate.app.chat.voice.visualStateForMessage
 import com.clawmate.app.gallery.photo.PickResult
 import com.clawmate.app.gallery.photo.rememberPhotoPicker
 import com.clawmate.app.R
@@ -451,7 +454,7 @@ private fun MessageList(
                     )
                 }
             } else {
-                EmptyChatWelcome(onPrompt = vm::onInputChange)
+                EmptyChatWelcome(onPrompt = vm::onInputChange, voice = voice)
             }
         }
         return
@@ -486,7 +489,7 @@ private fun MessageList(
 }
 
 @Composable
-private fun EmptyChatWelcome(onPrompt: (String) -> Unit) {
+private fun EmptyChatWelcome(onPrompt: (String) -> Unit, voice: VoiceSessionSnapshot) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -494,10 +497,16 @@ private fun EmptyChatWelcome(onPrompt: (String) -> Unit) {
             .padding(horizontal = 28.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.Start,
     ) {
-        Image(
-            painter = painterResource(R.drawable.digital_avatar),
-            contentDescription = "数字分身",
-            modifier = Modifier.size(112.dp),
+        // The welcome "hero" digital avatar — the brand illustration as the
+        // foreground, animated by the *real* voice session (listens/thinks/speaks
+        // pulse the ring + wave bars; idle stays still). No faked motion.
+        DigitalAvatar(
+            size = DigitalAvatarSize.HERO,
+            visualState = DigitalAvatarVisualState.fromVoiceStatus(voice.status),
+            useDigitalAvatar = true,
+            fallbackText = "助",
+            foregroundPainter = painterResource(R.drawable.digital_avatar),
+            modifier = Modifier.padding(bottom = 4.dp),
         )
         Text(
             text = "你好，今天想做什么？",
@@ -594,40 +603,78 @@ private fun MessageBubble(
     vm: ChatViewModel,
 ) {
     val isUser = message.role == ChatMessageRole.USER
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-    ) {
-        Surface(
-            color = if (isUser) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(0.85f),
+
+    if (isUser) {
+        // User messages keep their current right-aligned, avatar-less layout.
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.End,
         ) {
-            Text(
-                text = if (isUser) message.content
-                else message.content + if (message.isStreaming) " ▌" else "",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(12.dp),
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(0.85f),
+            ) {
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
         }
-        // Tool execution traces (agent loop) shown under assistant messages.
-        if (message.trace.isNotEmpty()) {
-            Text(
-                text = message.trace.joinToString("\n"),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
-            )
-        }
-        // Phase-7 voice output controls for assistant messages (Android TTS).
-        if (!isUser && !message.isStreaming && message.content.isNotBlank()) {
-            VoiceBubbleControls(
-                messageId = message.id,
-                text = message.content,
-                voice = voice,
-                vm = vm,
-            )
+        return
+    }
+
+    // Assistant / task / notice messages: in-line digital avatar (port of HarmonyOS
+    // chatAvatarRenderModel). Only the message the voice session is active on animates.
+    val visualState = visualStateForMessage(voice.status, voice.activeMessageId, message.id)
+    val render = chatAvatarRenderModel(message, modeMark = "", visualState = visualState)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        DigitalAvatar(
+            size = DigitalAvatarSize.MESSAGE,
+            visualState = render.visualState,
+            useDigitalAvatar = render.useDigitalAvatar,
+            fallbackText = render.fallbackText,
+            fallbackColorHex = render.fallbackColorHex,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 6.dp),
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = message.content + if (message.isStreaming) " ▌" else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+            // Tool execution traces (agent loop) shown under assistant messages.
+            if (message.trace.isNotEmpty()) {
+                Text(
+                    text = message.trace.joinToString("\n"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp, top = 4.dp),
+                )
+            }
+            // Phase-7 voice output controls for assistant messages (Android TTS).
+            if (!message.isStreaming && message.content.isNotBlank()) {
+                VoiceBubbleControls(
+                    messageId = message.id,
+                    text = message.content,
+                    voice = voice,
+                    vm = vm,
+                )
+            }
         }
     }
 }

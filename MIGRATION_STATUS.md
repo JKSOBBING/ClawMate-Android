@@ -3606,3 +3606,41 @@ Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
 1135 tests passing (0 failures / 0 errors / 0 skipped). On-device visual
 verification is pending — no device was connected at this time, so the rendered
 onboarding slides have not yet been confirmed on a real screen.
+
+## 62. Chat digital avatar parity
+
+HarmonyOS renders an *animated* digital avatar in chat (`DigitalAvatarView.ets`):
+a layered ring / ground shadow / gloss highlight / voice-state wave bars, pulsing
+every 800 ms while the voice session is listening / thinking / speaking, plus a
+tap bounce. Android showed only a static `R.drawable.digital_avatar` in the
+welcome and *no* avatar on message bubbles — the one true visual gap in the
+aligned five-tab core.
+
+Ported it in two layers so the HarmonyOS numbers stay testable:
+- `chat/voice/DigitalAvatarVisual.kt` — a pure (Android-free) contract: the
+  voice-status → visual-state mapping, the per-message render model
+  (user `我` / notice `压` / task `任` / assistant-chat animated `助`), every
+  dp metric, and the derived ring/wave/foreground/shadow formulas with the exact
+  HarmonyOS constants.
+- `chat/ui/DigitalAvatar.kt` — a thin Compose renderer that reads only from that
+  contract. An 800 ms pulse runs **only** while the state is genuinely animated
+  and has content; non-animated targets `snapTo` so a voice that goes quiet
+  always settles. Values are driven with `Animatable` re-targeting from the
+  current value (this Compose BOM predates `animateFloatAsState`).
+
+Wired into `ChatScreen`: the welcome now shows the hero avatar (brand illustration
+foreground, live voice state), and assistant / task / notice bubbles gain the
+in-line message avatar (only the actively-spoken message animates). User messages
+keep their prior right-aligned layout.
+
+Honesty note: the animation is driven purely by the real
+`VoiceSessionSnapshot` — an idle voice renders a still avatar, and there is no
+avatar image on Android, so assistant bubbles honestly fall back to the `助`
+letter (no fabricated/generated face).
+
+Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
+1156 tests passing (0 failures / 0 errors / 0 skipped), including the new
+`DigitalAvatarVisualTest` (voice-state mapping, per-message model, derived
+pulse/wave/ring values, and dp metrics). On-device verification is pending — no
+device was connected, so the pulse/wave rendering has not yet been confirmed on a
+real screen.
