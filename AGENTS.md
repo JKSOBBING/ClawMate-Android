@@ -3,8 +3,9 @@
 ## Scope
 
 This repository is the Android migration target for the HarmonyOS application at
-/root/mobiinfra-oh. The HarmonyOS source is reference-only: do not modify files
-under /root/mobiinfra-oh.
+`~/mobiinfra-oh` (`/home/yydh/mobiinfra-oh`). Upstream source repository:
+https://github.com/doulujiyao12/mobiinfra-oh. The HarmonyOS source is
+reference-only: do not modify files under `~/mobiinfra-oh`.
 
 The target must be a real Android application, not a screenshot mock or a
 minimal demo. Preserve the user-visible product flows and data contracts where
@@ -12,7 +13,7 @@ the Android platform can support them.
 
 ## Working rules
 
-- Work only under /root/ClawMate-Android.
+- Work only under /home/yydh/ClawMate-Android.
 - Use Kotlin and a current Android Gradle project. Prefer Jetpack Compose for new
   UI unless an existing Android dependency makes Views the better choice.
 - Keep commits small and reviewable. Every meaningful phase must end with a
@@ -66,6 +67,15 @@ Do not silently remove a feature or pretend that a mock response is real.
 - Put environment-specific endpoints in a local configuration mechanism and
   provide a safe example configuration.
 - Treat imported data and model output as untrusted input.
+
+## Environment notes
+
+- `adb` is available (`/usr/bin/adb`); a real phone may be attached. Use it to
+  install the debug APK and inspect the live app (logcat, screenshots, UI dumps)
+  when a device is connected.
+- Google's `android` CLI skill is installed at `~/.codex/skills/android-cli/`
+  (project creation, device/emulator interaction, UI layout inspection,
+  Android doc lookup). Consult its `references/` for device-interaction details.
 
 ## Verification
 

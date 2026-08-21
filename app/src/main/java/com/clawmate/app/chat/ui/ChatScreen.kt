@@ -26,15 +26,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -119,6 +122,14 @@ fun ChatScreen(
     if (showLogs) {
         LogScreen(onBack = { showLogs = false })
         return
+    }
+
+    // Re-check the cloud endpoint configuration every time the tab is entered
+    // (composition re-entry after a tab switch): an endpoint saved in the
+    // Settings center is applied to the runtime config on save, so returning
+    // here must surface the configured state without an app restart.
+    LaunchedEffect(Unit) {
+        vm.refreshConfigState()
     }
 
     // Keep the ViewModel's drawer flag in sync with the actual drawer state
@@ -856,10 +867,17 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * Honest, actionable not-configured state shown instead of the input bar when
+ * the cloud planner endpoint is not configured. It never pretends the model is
+ * available and points the user to the real in-app configuration path
+ * (Settings → 模型与智能体, applied to the runtime on save) or the git-ignored
+ * `local_config.properties` file path.
+ */
 @Composable
 private fun MissingConfigPane(onOpenSettings: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

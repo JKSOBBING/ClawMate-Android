@@ -16,7 +16,7 @@ import com.clawmate.app.chat.model.chatAttachmentSendPlan
 import com.clawmate.app.chat.model.toPendingAttachments
 import com.clawmate.app.chat.data.ChatRepository
 import com.clawmate.app.chat.data.ChatSendEvent
-import com.clawmate.app.chat.voice.ChatVoiceController
+import com.clawmate.app.chat.voice.ChatVoiceControllerApi
 import com.clawmate.app.chat.voice.VoiceActionResult
 import com.clawmate.app.chat.voice.VoiceControllerState
 import java.util.UUID
@@ -70,7 +70,7 @@ data class ChatUiState(
  */
 class ChatViewModel(
     private val repository: ChatRepository,
-    private val voiceController: ChatVoiceController,
+    private val voiceController: ChatVoiceControllerApi,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -139,12 +139,23 @@ class ChatViewModel(
     }
 
 
+    /**
+     * Re-checks the cloud endpoint configuration and updates
+     * [ChatUiState.isConfigured]. The screen calls this on every tab entry, so
+     * an endpoint saved in the Settings center (applied to the runtime
+     * [com.clawmate.app.config.EndpointConfig] on save) takes effect on return
+     * to the chat page — no app restart is required.
+     */
+    fun refreshConfigState() {
+        val configured = com.clawmate.app.chat.cloud.ChatServerConfig
+            .isConfigured(com.clawmate.app.config.EndpointConfig.cloudPlannerBaseUrl)
+        _state.update { it.copy(isConfigured = configured) }
+    }
+
     /** Loads the session list and restores the active (most recently selected) session. */
     fun load() {
         viewModelScope.launch {
-            val configured = com.clawmate.app.chat.cloud.ChatServerConfig
-                .isConfigured(com.clawmate.app.config.EndpointConfig.cloudPlannerBaseUrl)
-            _state.update { it.copy(isConfigured = configured) }
+            refreshConfigState()
 
             val sessions = runCatching { repository.sessions() }.getOrDefault(emptyList())
             _state.update { it.copy(sessions = sessions) }

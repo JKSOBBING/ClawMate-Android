@@ -43,6 +43,34 @@ sealed class VoiceActionResult {
 }
 
 /**
+ * The voice surface consumed by [com.clawmate.app.chat.ui.ChatViewModel].
+ * Declared separately from the concrete Android controller so device-free
+ * unit tests can inject a deterministic fake (the real controller needs an
+ * Android [Context] for its ASR/TTS adapters).
+ */
+interface ChatVoiceControllerApi {
+    val state: kotlinx.coroutines.flow.StateFlow<VoiceControllerState>
+
+    fun setHost(
+        activeInputProvider: () -> String,
+        setInputSink: (String) -> Unit,
+        isBusyProvider: () -> Boolean,
+    )
+
+    fun toggleVoiceInput(): VoiceActionResult
+
+    fun stopVoiceInput(): VoiceActionResult
+
+    fun speakMessage(messageId: String, text: String): VoiceActionResult
+
+    fun replayMessage(messageId: String, text: String): VoiceActionResult
+
+    fun stopPlayback()
+
+    fun dispose()
+}
+
+/**
  * Orchestrator driving on-device ASR (input) and Android TTS (output) into the
  * chat session. Port of `ChatVoiceOrchestrator.ets` scoped to the Android
  * adapters.
@@ -60,7 +88,7 @@ sealed class VoiceActionResult {
  */
 class ChatVoiceController(
     private val context: Context,
-) {
+) : ChatVoiceControllerApi {
 
     private val asrAdapter = AndroidSpeechRecognizerAsrAdapter(context)
     private val ttsAdapter = AndroidTextToSpeechTtsAdapter(context)
@@ -71,7 +99,7 @@ class ChatVoiceController(
     private var voicingText: String = ""
 
     private val _state = MutableStateFlow(buildState())
-    val state: StateFlow<VoiceControllerState> = _state.asStateFlow()
+    override val state: StateFlow<VoiceControllerState> = _state.asStateFlow()
 
     /** Host integration seams set by the owning ViewModel/UI. */
     private var activeInput: () -> String = { "" }
@@ -86,7 +114,7 @@ class ChatVoiceController(
     private var voiceInputStartGeneration: Int = 0
     private var voiceInputStoppedGeneration: Int = 0
 
-    fun setHost(
+    override fun setHost(
         activeInputProvider: () -> String,
         setInputSink: (String) -> Unit,
         isBusyProvider: () -> Boolean,
@@ -120,7 +148,7 @@ class ChatVoiceController(
      * stops the input; while voicing it stops playback; otherwise starts a new
      * ASR turn (blocked if the chat/agent loop is busy).
      */
-    fun toggleVoiceInput(): VoiceActionResult {
+    override fun toggleVoiceInput(): VoiceActionResult {
         val status = snapshot().status
         return when (status) {
             VoiceInteractionStatus.LISTENING,
@@ -216,7 +244,7 @@ class ChatVoiceController(
         }
     }
 
-    fun stopVoiceInput(): VoiceActionResult {
+    override fun stopVoiceInput(): VoiceActionResult {
         voiceInputStoppedGeneration = VoiceOrchestratorLogic.voiceInputStopGeneration(
             voiceInputStartGeneration, voiceInputStoppedGeneration,
         )
@@ -312,7 +340,7 @@ class ChatVoiceController(
      * lifecycle-safe engine if needed. Renders a NOT_CONFIGURED explanation when
      * cloud MiMO voice is requested instead (never faked).
      */
-    fun speakMessage(messageId: String, text: String): VoiceActionResult {
+    override fun speakMessage(messageId: String, text: String): VoiceActionResult {
         if (messageId.isEmpty() || text.trim().isEmpty()) return VoiceActionResult.Ok
         val sidStatus = snapshot().status
         // Toggle semantics: speaking the same message pauses/resumes.
@@ -355,7 +383,7 @@ class ChatVoiceController(
     }
 
     /** Replays a previously voiced message (or a freshly supplied one). */
-    fun replayMessage(messageId: String, text: String): VoiceActionResult {
+    override fun replayMessage(messageId: String, text: String): VoiceActionResult {
         val toSay = text.trim().ifEmpty { null }
         val replay = ttsAdapter.replay(toSay)
         return when (replay) {
@@ -372,7 +400,7 @@ class ChatVoiceController(
     }
 
     /** Stops any voice playback and clears the voicing bubble id. */
-    fun stopPlayback() {
+    override fun stopPlayback() {
         playbackGeneration++
         ttsAdapter.stop()
         val wasVoicing = voicingMessageId.isNotEmpty()
@@ -388,7 +416,7 @@ class ChatVoiceController(
     }
 
     /** Frees ASR + TTS resources (call from ViewModel.onCleared). */
-    fun dispose() {
+    override fun dispose() {
         asrAdapter.shutdown()
         ttsAdapter.release()
         sessionController.reset()
