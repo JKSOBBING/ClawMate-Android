@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.clawmate.app.ui.ClawMateInput
 import com.clawmate.app.ui.theme.ClawMateDesign
 
 private val CardRadius = ClawMateDesign.Shape.Card
@@ -138,9 +138,10 @@ fun SettingInput(
                 color = if (enabled) SettingsThemeColors.TitleColor else SettingsThemeColors.SecondaryText,
                 fontSize = 13.sp,
             ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(FieldHeight)
+                    .background(
                     if (enabled) SettingsThemeColors.InputBackground else SettingsThemeColors.InputDisabledBackground,
                     RoundedCornerShape(ControlRadius),
                 ),
@@ -219,6 +220,7 @@ fun SensitiveSettingInput(
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = SettingsThemeColors.TitleColor),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(FieldHeight)
                         .background(SettingsThemeColors.InputBackground, RoundedCornerShape(ControlRadius)),
                 )
             } else {

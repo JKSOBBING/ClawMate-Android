@@ -3563,3 +3563,14 @@ Marked Planner and HDC connection state rows as disabled because they report sta
 operations remain available through the HDC health test and the opt-in WeChat collection action.
 
 Verification: pending build and connected-device check.
+
+## 59. Model settings visual alignment
+
+Matched the Android model settings field height to the HarmonyOS 42dp control
+contract and placed the local-model capability group before remote Planner/Decider
+settings, matching the HarmonyOS information hierarchy. Existing honest disabled
+states remain unchanged.
+
+Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
+1134 tests passing; debug APK install succeeded. Final visual inspection was
+blocked by the connected phone requiring manual unlock after installation.

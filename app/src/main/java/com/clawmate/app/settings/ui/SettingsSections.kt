@@ -267,6 +267,11 @@ fun ModelAgentsSection(state: SettingsUiState, vm: SettingsViewModel, context: C
         onClick = { vm.hide(SettingsKeys.CLOUD_PLANNER_API_KEY) },
     )
 
+    // HarmonyOS presents the local capability boundary before remote services;
+    // keep the same first group so the section's initial viewport has the same
+    // information hierarchy on Android.
+    LocalModelPanel()
+
     SettingsGroupCard(
         title = "云端 Planner/Decider",
         subtitle = "云端智能体服务、模型和连通性测试",
@@ -363,10 +368,6 @@ fun ModelAgentsSection(state: SettingsUiState, vm: SettingsViewModel, context: C
             modifier = Modifier.padding(top = 6.dp),
         )
     }
-
-    // Phase 10 — local model capability boundary. Shows the typed status and an
-    // explicit load/test action; READY only ever follows a real native load.
-    LocalModelPanel()
 
     SettingsGroupCard(
         title = "上下文压缩",
