@@ -3446,3 +3446,14 @@ and 0 skipped; `git diff --check` clean. Latest APK SHA256:
 
 Device/AVD screenshot, task taps, and crash-free runtime checks remain unavailable in this
 environment because `adb` and the Android CLI are not installed.
+
+## 48. Shared visual tokens and worktree synchronization
+
+Added `ClawMateDesign` as the shared Android visual contract for the HarmonyOS-aligned page
+background, surfaces, purple accent, text colors, borders, control/card radii, input/button sizes,
+and spacing scale. The global Material theme and settings theme now consume the shared tokens.
+The gallery and task UI changes from `fix/task-ui` were committed and fast-forwarded into `main`.
+
+Verification (JDK 17.0.19, SDK platform 34, Gradle 8.9): `:app:assembleDebug` BUILD SUCCESSFUL;
+`git diff --check` clean. APK installation via `adb install -r` succeeded on the connected device.
+Visual runtime verification is pending because the device entered its lock screen after install.
