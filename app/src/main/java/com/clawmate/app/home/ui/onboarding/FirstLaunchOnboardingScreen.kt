@@ -1,6 +1,7 @@
 package com.clawmate.app.home.ui.onboarding
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,12 +28,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.clawmate.app.R
 import com.clawmate.app.home.data.OnboardingRepository
+import com.clawmate.app.home.domain.FIRST_LAUNCH_ONBOARDING_SLIDE_AGENT
+import com.clawmate.app.home.domain.FIRST_LAUNCH_ONBOARDING_SLIDE_AVATAR
+import com.clawmate.app.home.domain.FIRST_LAUNCH_ONBOARDING_SLIDE_DATA_HOME
 import com.clawmate.app.home.domain.FIRST_LAUNCH_ONBOARDING_SLIDES
 import com.clawmate.app.home.domain.FIRST_LAUNCH_USAGE_GUIDE_ITEMS
 import com.clawmate.app.home.domain.FirstLaunchOnboardingSlide
@@ -53,6 +60,14 @@ private fun parseColorStrict(hex: String): Long {
     val h = hex.removePrefix("#")
     val v = h.toLong(16)
     return if (h.length == 6) (0xFF000000 or v) else v
+}
+
+/** Map a slide's [FirstLaunchOnboardingSlide.mediaResourceName] to its bundled hero illustration. */
+private fun onboardingHeroDrawable(mediaResourceName: String?): Int? = when (mediaResourceName) {
+    FIRST_LAUNCH_ONBOARDING_SLIDE_DATA_HOME -> R.drawable.onboarding_data_home
+    FIRST_LAUNCH_ONBOARDING_SLIDE_AVATAR -> R.drawable.onboarding_avatar
+    FIRST_LAUNCH_ONBOARDING_SLIDE_AGENT -> R.drawable.onboarding_agent
+    else -> null
 }
 
 /**
@@ -157,6 +172,7 @@ fun FirstLaunchOnboardingScreen(
             colors = ButtonDefaults.buttonColors(containerColor = onboardingColor(slide.accentColor)),
             modifier = Modifier
                 .fillMaxWidth(0.84f)
+                .padding(bottom = 34.dp)
                 .height(56.dp),
         ) {
             Text(
@@ -200,6 +216,15 @@ private fun PreviewSlidePage(slide: FirstLaunchOnboardingSlide, modifier: Modifi
                         RoundedCornerShape(74.dp),
                     ),
             )
+            val heroDrawable = onboardingHeroDrawable(slide.mediaResourceName)
+            if (heroDrawable != null) {
+                Image(
+                    painter = painterResource(id = heroDrawable),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         Text(

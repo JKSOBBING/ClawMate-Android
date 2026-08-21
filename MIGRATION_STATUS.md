@@ -3587,3 +3587,22 @@ Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
 1135 tests passing; debug APK install succeeded and cold launch reached
 `MainActivity` without `AndroidRuntime` errors. The final settings-page screenshot
 was blocked by the connected phone locking again.
+
+## 61. Onboarding hero illustration parity
+
+The three capability preview slides rendered only a flat colored circle even
+though the data contract already carried the HarmonyOS `mediaResourceName`
+(`onboarding_data_home` / `onboarding_avatar` / `onboarding_agent`). The brand
+illustration PNGs had never been copied into Android, so the first-launch hero
+—the visual centerpiece—was missing. Copied the three exact HarmonyOS brand
+bitmaps into `res/drawable/` and rendered the hero image over the soft circle in
+`FirstLaunchOnboardingScreen.PreviewSlidePage`, matching the HarmonyOS `Stack`
+(soft circle behind, `ImageFit.Contain` illustration filling the card). Also gave
+the primary button its HarmonyOS 34dp bottom margin (it previously sat flush to
+the screen edge). The Android-only `跳过` (skip) affordance is an intentional,
+tested addition and is left in place.
+
+Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
+1135 tests passing (0 failures / 0 errors / 0 skipped). On-device visual
+verification is pending — no device was connected at this time, so the rendered
+onboarding slides have not yet been confirmed on a real screen.
