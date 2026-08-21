@@ -79,18 +79,26 @@ Do not silently remove a feature or pretend that a mock response is real.
 
 ## Build environment
 
-The Android build environment lives at `~/Android/Sdk` on the DSH host. Because
-the git worktree's `.git` directory is read-only, standard `git fetch` and
-`git pull` inside the worktree fail with "Read-only file system". The build
-command that works:
+The Android build environment lives at `~/Android/Sdk` on the DSH host. Gradle
+operations may need elevated permissions because the wrapper and daemon write
+outside the repository. Use the persistent Gradle cache at
+`/home/yydh/.gradle`; do not create a project-local cache or commit generated
+Gradle state. The Android SDK and Gradle cache paths are environment-specific
+and must not be copied into application source or configuration files.
+
+The verified build command is:
 
 ```bash
-cd /home/yydh/clawmate-task-ui && \
-GRADLE_USER_HOME=/tmp/gradle-home \
-ANDROID_HOME=~/Android/Sdk \
-ANDROID_SDK_HOME=/tmp/android-home \
+cd /home/yydh/ClawMate-Android && \
+GRADLE_USER_HOME=/home/yydh/.gradle \
+ANDROID_HOME=/home/yydh/Android/Sdk \
+ANDROID_SDK_ROOT=/home/yydh/Android/Sdk \
+ANDROID_SDK_HOME=/tmp/clawmate-android-home \
 ./gradlew :app:assembleDebug
 ```
+
+If the sandbox rejects wrapper/cache access, rerun the same command with
+elevated permissions after confirming the target paths.
 
 ### SDK components (verified working)
 
@@ -101,7 +109,8 @@ ANDROID_SDK_HOME=/tmp/android-home \
 | **Build tools** | `~/Android/Sdk/build-tools/34.0.0`, `35.0.0` |
 | **NDK** | `~/Android/Sdk/ndk/` |
 | **CMake** | `~/Android/Sdk/cmake/` |
-| **Gradle Wrapper** | `/home/yydh/clawmate-task-ui/gradlew` — Gradle 8.9 |
+| **Gradle Wrapper** | `/home/yydh/ClawMate-Android/gradlew` — Gradle 8.9 |
+| **Gradle Cache** | `/home/yydh/.gradle/wrapper/dists/gradle-8.9-bin/` |
 
 
 ## Verification

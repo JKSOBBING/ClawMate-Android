@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Transparent adaptive-icon foreground. The real ClawMate brand mark is drawn
-    full-bleed on the <background> layer (see mipmap-anydpi-v26/ic_launcher.xml),
-    so the foreground intentionally contributes nothing — otherwise the brand
-    would be double-layered or clipped by the launcher safe-zone crop.
+    Transparent adaptive-icon foreground. The exact HarmonyOS application icon
+    is drawn on the background layer so it is not double-layered.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
