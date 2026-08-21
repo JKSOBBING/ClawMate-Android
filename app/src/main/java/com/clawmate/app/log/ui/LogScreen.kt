@@ -27,7 +27,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -51,6 +50,7 @@ import com.clawmate.app.log.domain.InAppLogEntry
 import com.clawmate.app.log.domain.LogFilter
 import com.clawmate.app.log.domain.LogLevel
 import com.clawmate.app.log.domain.LogSource
+import com.clawmate.app.ui.ClawMateInput
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -198,13 +198,12 @@ private fun FilterRow(
                 )
             }
         }
-        OutlinedTextField(
+        ClawMateInput(
             value = filter.query,
             onValueChange = onQuery,
+            placeholder = "过滤关键词…",
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodySmall,
-            placeholder = { Text("过滤关键词…", fontSize = 12.sp, color = Color(0xFF9AA2B1)) },
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }

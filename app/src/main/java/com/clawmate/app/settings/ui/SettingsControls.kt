@@ -109,7 +109,10 @@ fun SettingsFieldLabel(label: String) {
     )
 }
 
-/** Plain single/multi-line input used by most settings fields. */
+/**
+ * Plain single/multi-line input used by most settings fields. Delegates to the
+ * app-wide [ClawMateInput] so every page shares one input treatment.
+ */
 @Composable
 fun SettingInput(
     label: String,
@@ -119,34 +122,14 @@ fun SettingInput(
     singleLine: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        if (label.isNotEmpty()) {
-            Text(
-                label,
-                fontSize = 13.sp,
-                color = SettingsThemeColors.MutedText,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
-        }
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text(placeholder, color = SettingsThemeColors.Disabled, fontSize = 13.sp) },
-            enabled = enabled,
-            singleLine = singleLine,
-            textStyle = androidx.compose.ui.text.TextStyle(
-                color = if (enabled) SettingsThemeColors.TitleColor else SettingsThemeColors.SecondaryText,
-                fontSize = 13.sp,
-            ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(FieldHeight)
-                    .background(
-                    if (enabled) SettingsThemeColors.InputBackground else SettingsThemeColors.InputDisabledBackground,
-                    RoundedCornerShape(ControlRadius),
-                ),
-        )
-    }
+    ClawMateInput(
+        value = value,
+        onValueChange = onValueChange,
+        label = label,
+        placeholder = placeholder,
+        enabled = enabled,
+        singleLine = singleLine,
+    )
     Spacer(Modifier.height(10.dp))
 }
 
@@ -212,16 +195,11 @@ fun SensitiveSettingInput(
         Column(modifier = Modifier.weight(1f)) {
             Text(label, fontSize = 13.sp, color = SettingsThemeColors.MutedText, modifier = Modifier.padding(bottom = 6.dp))
             if (revealed) {
-                OutlinedTextField(
+                ClawMateInput(
                     value = currentValue,
                     onValueChange = { v -> if (!SensitiveValueUtilsMarker.isMasked(v)) onValueChange(v) },
-                    placeholder = { Text(placeholder, color = SettingsThemeColors.Disabled, fontSize = 13.sp) },
+                    placeholder = placeholder,
                     singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = SettingsThemeColors.TitleColor),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(FieldHeight)
-                        .background(SettingsThemeColors.InputBackground, RoundedCornerShape(ControlRadius)),
                 )
             } else {
                 Box(
@@ -229,6 +207,7 @@ fun SensitiveSettingInput(
                         .fillMaxWidth()
                         .height(FieldHeight)
                         .background(SettingsThemeColors.InputDisabledBackground, RoundedCornerShape(ControlRadius))
+                        .border(1.dp, ClawMateDesign.Colors.Border, RoundedCornerShape(ControlRadius))
                         .padding(horizontal = 12.dp)
                         .clickable { onReveal() },
                     contentAlignment = Alignment.CenterStart,

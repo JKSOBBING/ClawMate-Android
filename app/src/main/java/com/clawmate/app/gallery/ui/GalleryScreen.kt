@@ -37,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,6 +68,7 @@ import com.clawmate.app.gallery.photo.rememberPhotoPicker
 import com.clawmate.app.gallery.ui.insights.GalleryInsightsViewModel
 import com.clawmate.app.gallery.ui.insights.MonthlyInsightsPanel
 import com.clawmate.app.settings.SettingsComponent
+import com.clawmate.app.ui.ClawMateInput
 
 private data class CategoryFilter(val label: String, val index: Int, val count: Int)
 
@@ -191,11 +191,11 @@ fun GalleryScreen(
                 onEmbed = { insight -> insightsVm.embedSelectedMonth(insight) },
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
+            ClawMateInput(
                 value = searchQuery,
                 onValueChange = { searchQuery = it; vm.setSearchQuery(it) },
-                label = { Text("搜索图库") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                label = "搜索图库",
+                singleLine = true,
             )
             Spacer(Modifier.height(8.dp))
             when (val s = uiState) {

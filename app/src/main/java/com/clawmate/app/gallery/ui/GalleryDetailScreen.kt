@@ -21,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clawmate.app.gallery.model.GalleryPhotoItem
+import com.clawmate.app.ui.ClawMateInput
 
 /**
  * Gallery item detail flow (Phase 9), opened from the gallery list.
@@ -128,12 +128,11 @@ fun GalleryDetailScreen(
 
             item("edit-title") {
                 SectionTitle("编辑标题")
-                OutlinedTextField(
+                ClawMateInput(
                     value = titleDraft,
                     onValueChange = { titleDraft = it },
-                    label = { Text("标题") },
+                    label = "标题",
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 Button(
                     onClick = { onEditTitle(item.id, titleDraft) },
@@ -143,13 +142,12 @@ fun GalleryDetailScreen(
 
             item("edit-summary") {
                 SectionTitle("编辑摘要")
-                OutlinedTextField(
+                ClawMateInput(
                     value = summaryDraft,
                     onValueChange = { summaryDraft = it },
-                    label = { Text("摘要") },
-                    minLines = 2,
+                    label = "摘要",
+                    singleLine = false,
                     maxLines = 4,
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 Button(
                     onClick = { onEditSummary(item.id, summaryDraft) },
@@ -159,12 +157,11 @@ fun GalleryDetailScreen(
 
             item("edit-tags") {
                 SectionTitle("编辑标签")
-                OutlinedTextField(
+                ClawMateInput(
                     value = tagsDraft,
                     onValueChange = { tagsDraft = it },
-                    label = { Text("标签（用、分隔）") },
+                    label = "标签（用、分隔）",
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 Button(
                     onClick = { onEditTags(item.id, splitTags(tagsDraft)) },

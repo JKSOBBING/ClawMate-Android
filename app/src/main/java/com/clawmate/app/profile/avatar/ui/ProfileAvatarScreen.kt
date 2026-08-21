@@ -27,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -50,6 +49,8 @@ import com.clawmate.app.profile.avatar.data.asset.AvatarImageContentReader
 import com.clawmate.app.profile.avatar.data.asset.AvatarVersionRecord
 import com.clawmate.app.profile.avatar.domain.AvatarGenerationState
 import com.clawmate.app.profile.avatar.domain.LocalAvatarProfile
+import com.clawmate.app.ui.ClawMateInput
+import com.clawmate.app.ui.theme.ClawMateDesign
 
 /**
  * Profile / Avatar screen — the real Android-visible "数字分身" page.
@@ -402,32 +403,31 @@ private fun ProfileEditorCard(
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
 
-            OutlinedTextField(
+            ClawMateInput(
                 value = profile.displayName,
                 onValueChange = onDisplayName,
-                label = { Text("展示名称") },
+                label = "展示名称",
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            ClawMateInput(
                 value = profile.shortSummary,
                 onValueChange = onShortSummary,
-                label = { Text("一句话简介") },
+                label = "一句话简介",
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp),
             )
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                ClawMateInput(
                     value = profile.gender,
                     onValueChange = onGender,
-                    label = { Text("性别") },
+                    label = "性别",
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
-                OutlinedTextField(
+                ClawMateInput(
                     value = profile.age,
                     onValueChange = onAge,
-                    label = { Text("年龄") },
+                    label = "年龄",
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
@@ -440,12 +440,12 @@ private fun ProfileEditorCard(
                 modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
             )
             profile.domains.forEach { domain ->
-                OutlinedTextField(
+                ClawMateInput(
                     value = domain.shortSummary,
                     onValueChange = { onDomainSummary(domain.domain, it) },
-                    label = { Text("${domain.displayName} · ${domain.domain}") },
+                    label = "${domain.displayName} · ${domain.domain}",
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
             }
 
@@ -455,9 +455,9 @@ private fun ProfileEditorCard(
 
             Button(
                 onClick = onSave,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7669FF)),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                shape = RoundedCornerShape(ClawMateDesign.Shape.Control),
+                colors = ButtonDefaults.buttonColors(containerColor = ClawMateDesign.Colors.Accent),
+                modifier = Modifier.fillMaxWidth().height(ClawMateDesign.Size.ButtonHeight).padding(top = 8.dp),
             ) {
                 Text("保存本地画像", fontWeight = FontWeight.Bold)
             }

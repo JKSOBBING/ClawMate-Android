@@ -3574,3 +3574,16 @@ states remain unchanged.
 Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
 1134 tests passing; debug APK install succeeded. Final visual inspection was
 blocked by the connected phone requiring manual unlock after installation.
+
+## 60. Shared input control adoption
+
+Adopted the shared `ClawMateInput` contract across settings, gallery search and
+detail editing, log filtering, and digital-avatar editing. The control keeps the
+HarmonyOS 42dp field height, 12dp radius, input fill, disabled fill, border, and
+label/placeholder treatment in one place; the theme contract test now locks the
+shared dimensions.
+
+Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
+1135 tests passing; debug APK install succeeded and cold launch reached
+`MainActivity` without `AndroidRuntime` errors. The final settings-page screenshot
+was blocked by the connected phone locking again.
