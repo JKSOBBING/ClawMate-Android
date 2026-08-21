@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -100,6 +102,7 @@ fun GalleryScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableIntStateOf(-1) }
     var selectedTimeFilter by remember { mutableIntStateOf(0) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     val scanCoordinator = remember { GalleryComponent.scanCoordinator(context) }
     val scanGateProvider = remember { GalleryComponent.scanGateProvider(context) }
     val scanVm: GalleryScanViewModel = viewModel(
@@ -144,6 +147,25 @@ fun GalleryScreen(
             return
         }
     }
+    val loadedItems = (uiState as? GalleryUiState.Loaded)?.items.orEmpty()
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("清空图库分析") },
+            text = { Text("将删除已导入的图库记录及其分析结果，但不会删除手机原始照片。此操作不可撤销。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        loadedItems.forEach { vm.deleteItem(it.id) }
+                        showClearConfirm = false
+                    },
+                ) { Text("确认清空", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+            },
+        )
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -152,11 +174,11 @@ fun GalleryScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             GalleryPageHeader(onBack = onBack, onOpenSettings = onOpenSettings)
-            val loaded = uiState as? GalleryUiState.Loaded
-            val storedCount = loaded?.items?.size ?: 0
+            val storedCount = loadedItems.size
             GalleryActionToolbar(
                 storedCount = storedCount, syncing = scanState is GalleryScanUiState.Running,
-                onPick = { launchPicker() }, onAnalyze = requestScan, onClear = { },
+                onPick = { launchPicker() }, onAnalyze = requestScan,
+                onClear = { showClearConfirm = true },
             )
             if (scanState !is GalleryScanUiState.Idle) {
                 GalleryProgressStrip(state = scanState, onCancel = { scanVm.cancelActive() })
@@ -240,15 +262,18 @@ private fun GalleryActionToolbar(storedCount: Int, syncing: Boolean, onPick: () 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("选择图片", Color.White, Color(0xFF2F5BEA), onPick, Modifier.weight(1f))
                 ActionButton(if (syncing) "暂停" else "分析全部", Color(0xFF2F5BEA), Color(0xFFEEF3FF), onAnalyze, Modifier.weight(1f))
-                ActionButton("清空分析", Color(0xFFB55A00), Color(0xFFFFF4E8), onClear, Modifier.weight(1f))
+                ActionButton(
+                    "清空分析", Color(0xFFB55A00), Color(0xFFFFF4E8), onClear,
+                    Modifier.weight(1f), enabled = storedCount > 0,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ActionButton(title: String, textColor: Color, bgColor: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(onClick = onClick, modifier = modifier.height(40.dp), colors = ButtonDefaults.buttonColors(containerColor = bgColor), shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
+private fun ActionButton(title: String, textColor: Color, bgColor: Color, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Button(onClick = onClick, enabled = enabled, modifier = modifier.height(40.dp), colors = ButtonDefaults.buttonColors(containerColor = bgColor), shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
         Text(title, fontSize = 13.sp, color = textColor, maxLines = 1)
     }
 }
@@ -327,12 +352,6 @@ private fun GalleryResultsPanel(state: GalleryUiState.Loaded, query: String, sel
                 grouped.forEach { (date, items) ->
                     Text(date, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4C5260), modifier = Modifier.padding(top = if (grouped.keys.first() == date) 6.dp else 14.dp))
                     items.forEach { item -> InsightCard(item = item, onClick = { onOpenItem(item.id) }) }
-                }
-                if (filtered.size > 20) {
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = {}, modifier = Modifier.fillMaxWidth().height(40.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEEF4FF)), shape = RoundedCornerShape(12.dp)) {
-                        Text("加载更多", fontSize = 13.sp, color = Color(0xFF4F68FF))
-                    }
                 }
             }
         }
