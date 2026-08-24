@@ -19,6 +19,9 @@ import com.clawmate.app.chat.data.ChatSendEvent
 import com.clawmate.app.chat.voice.ChatVoiceControllerApi
 import com.clawmate.app.chat.voice.VoiceActionResult
 import com.clawmate.app.chat.voice.VoiceControllerState
+import com.clawmate.app.localmodel.LocalModelCapability
+import com.clawmate.app.localmodel.LocalModelStatus
+import com.clawmate.app.localmodel.LocalModelState
 import java.util.UUID
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +60,14 @@ data class ChatUiState(
      * unsupported/local-only status instead of a fabricated network success.
      */
     val attachmentNote: String? = null,
+    /**
+     * The real on-device local-model capability state for the LOCAL_INFERENCE
+     * mode. Drives the honest "本地推理" not-ready pane (status + message)
+     * instead of the cloud-configured copy. Never fabricated: it is read from
+     * [LocalModelCapability] (disk scan + native adapter), which only reports
+     * READY on a genuine native load.
+     */
+    val localModelStatus: LocalModelState? = null,
 )
 
 /**
@@ -71,6 +82,11 @@ data class ChatUiState(
 class ChatViewModel(
     private val repository: ChatRepository,
     private val voiceController: ChatVoiceControllerApi,
+    /** App-private data dir used to query the real local-model capability. */
+    private val filesDir: String? = null,
+    /** Injectable local-model capability (defaults to the real boundary). */
+    private val localModelCapability: LocalModelCapability =
+        LocalModelCapability(filesDir),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -140,16 +156,61 @@ class ChatViewModel(
 
 
     /**
-     * Re-checks the cloud endpoint configuration and updates
-     * [ChatUiState.isConfigured]. The screen calls this on every tab entry, so
-     * an endpoint saved in the Settings center (applied to the runtime
-     * [com.clawmate.app.config.EndpointConfig] on save) takes effect on return
-     * to the chat page — no app restart is required.
+     * Re-checks the **current mode's** backend and updates
+     * [ChatUiState.isConfigured]. The screen calls this on every tab entry and
+     * on mode switch, so a backend change saved in the Settings center (applied
+     * to the runtime [com.clawmate.app.config.EndpointConfig] on save) takes
+     * effect on return to the chat page — no app restart is required.
+     *
+     * **Mode-aware** (fixes the "本地" tab wrongly showing "云端模型尚未配置"):
+     *  - `CLOUD_AGENT`      → usable when the cloud planner endpoint is configured.
+     *  - `LOCAL_INFERENCE`  → usable only when the real on-device model is READY
+     *    (per [LocalModelCapability]; the JNI stub honestly reports
+     *    NOT_CONFIGURED/UNSUPPORTED, never READY, until a genuine native load).
      */
     fun refreshConfigState() {
-        val configured = com.clawmate.app.chat.cloud.ChatServerConfig
-            .isConfigured(com.clawmate.app.config.EndpointConfig.cloudPlannerBaseUrl)
-        _state.update { it.copy(isConfigured = configured) }
+        val mode = _state.value.mode
+        when (mode) {
+            ChatMode.LOCAL_INFERENCE -> refreshLocalModel()
+            else -> {
+                val configured = com.clawmate.app.chat.cloud.ChatServerConfig
+                    .isConfigured(com.clawmate.app.config.EndpointConfig.cloudPlannerBaseUrl)
+                _state.update { it.copy(isConfigured = configured) }
+            }
+        }
+    }
+
+    /**
+     * Queries the real local-model capability and reflects it in both
+     * [ChatUiState.isConfigured] (READY only) and [ChatUiState.localModelStatus]
+     * (the honest state + message the LOCAL pane renders).
+     *
+     * Because [LocalModelCapability.refresh] never performs a native load
+     * (and therefore never returns READY), we pass the result of a best-effort
+     * [LocalModelCapability.loadAndTest] when a complete model folder is found,
+     * so that a genuinely loadable model produces READY here.
+     */
+    private fun refreshLocalModel() {
+        // 1. Quick scan — no native load yet.
+        val scanned = runCatching { localModelCapability.refresh() }.getOrNull()
+            ?: LocalModelState(
+                status = com.clawmate.app.localmodel.LocalModelStatus.NOT_CONFIGURED,
+                errorKind = com.clawmate.app.localmodel.LocalModelErrorKind.NOT_CONFIGURED,
+                message = "无法读取本地模型状态",
+            )
+        // 2. If the scan found a complete model and the native lib is present,
+        //    attempt a real load so READY can emerge. The stub will report
+        //    UNSUPPORTED because the native lib is absent — honest.
+        val bestState = if (scanned.status == LocalModelStatus.NOT_CONFIGURED
+            && scanned.selectedModelId.isNotBlank()
+        ) {
+            runCatching {
+                localModelCapability.loadAndTest(scanned.selectedModelId)
+            }.getOrNull() ?: scanned
+        } else {
+            scanned
+        }
+        _state.update { it.copy(isConfigured = bestState.isReady, localModelStatus = bestState) }
     }
 
     /** Loads the session list and restores the active (most recently selected) session. */
@@ -202,6 +263,10 @@ class ChatViewModel(
                     attachmentNote = null,
                 )
             }
+            // Mode may have changed (the top-bar 云端/本地 switch calls this with a
+            // different mode); re-evaluate the *new* mode's backend so the pane
+            // reflects local vs cloud readiness, not the stale prior value.
+            refreshConfigState()
             refreshSessions()
         }
     }

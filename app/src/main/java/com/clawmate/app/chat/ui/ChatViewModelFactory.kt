@@ -17,6 +17,10 @@ class ChatViewModelFactory(private val context: Context) : ViewModelProvider.Fac
         }
         val repository: ChatRepository = ChatComponent.repository(context)
         val voiceController = ChatVoiceController(context.applicationContext)
-        return ChatViewModel(repository, voiceController) as T
+        return ChatViewModel(
+            repository = repository,
+            voiceController = voiceController,
+            filesDir = context.filesDir?.path,
+        ) as T
     }
 }

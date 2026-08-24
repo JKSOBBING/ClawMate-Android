@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
@@ -79,6 +80,7 @@ import com.clawmate.app.chat.model.AttachmentSource
 import com.clawmate.app.chat.model.PendingChatAttachment
 import com.clawmate.app.chat.model.PendingAttachmentState
 import com.clawmate.app.chat.voice.DigitalAvatarSize
+import com.clawmate.app.localmodel.LocalModelState
 import com.clawmate.app.chat.voice.DigitalAvatarVisualState
 import com.clawmate.app.chat.voice.VoiceInteractionStatus
 import com.clawmate.app.chat.voice.VoiceSessionSnapshot
@@ -269,7 +271,11 @@ fun ChatScreen(
                     onRemoveAttachment = vm::removePendingAttachment,
                 )
             } else {
-                MissingConfigPane(onOpenSettings = onOpenSettings)
+                MissingConfigPane(
+                    mode = state.mode,
+                    localState = state.localModelStatus,
+                    onOpenSettings = onOpenSettings,
+                )
             }
         }
     }
@@ -915,14 +921,43 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 }
 
 /**
- * Honest, actionable not-configured state shown instead of the input bar when
- * the cloud planner endpoint is not configured. It never pretends the model is
- * available and points the user to the real in-app configuration path
- * (Settings → 模型与智能体, applied to the runtime on save) or the git-ignored
- * `local_config.properties` file path.
+ * Honest, actionable not-ready state shown instead of the input bar when the
+ * **current mode's** backend is not usable. It never pretends the model is
+ * available and points the user to the real in-app configuration path (Settings
+ * → 模型与智能体, applied to the runtime on save).
+ *
+ * Mode-aware: the cloud mode explains the missing cloud endpoint, while the
+ * local mode surfaces the **real** on-device [LocalModelState] (status +
+ * message from [LocalModelCapability]) — it does not recycle the cloud copy
+ * (fixes the "本地" tab wrongly showing "云端模型尚未配置").
  */
 @Composable
-private fun MissingConfigPane(onOpenSettings: () -> Unit) {
+private fun MissingConfigPane(
+    mode: String,
+    localState: LocalModelState?,
+    onOpenSettings: () -> Unit,
+) {
+    val isLocal = mode == ChatMode.LOCAL_INFERENCE
+    val icon = if (isLocal) Icons.Filled.Memory else Icons.Filled.CloudOff
+    val title = if (isLocal) "本地推理不可用" else "云端模型尚未配置"
+    val detail = if (isLocal) {
+        localState?.message?.takeIf { it.isNotBlank() } ?: "当前没有可用的本地推理模型。"
+    } else {
+        "配置完成前不会发送消息。"
+    }
+    val steps: List<String> = if (isLocal) {
+        listOf(
+            "1. 本地推理需要设备端 MNN/LLM 推理库与已下载的模型",
+            "2. 当前构建为 JNI 桩，未内置 MNN 推理运行时",
+            "3. 缺少推理库时会显示“不支持（缺少原生推理库）”",
+        )
+    } else {
+        listOf(
+            "1. 打开设置中心的“模型与智能体”",
+            "2. 填写地址、密钥和模型名",
+            "3. 返回聊天页即可生效，无需重启",
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -940,18 +975,18 @@ private fun MissingConfigPane(onOpenSettings: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.CloudOff,
+                    imageVector = icon,
                     contentDescription = null,
                     tint = Color(0xFF8066FF),
                     modifier = Modifier.size(36.dp),
                 )
                 Text(
-                    text = "云端模型尚未配置",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 10.dp),
                 )
                 Text(
-                    text = "配置完成前不会发送消息。",
+                    text = detail,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                     color = Color(0xFF687386),
@@ -964,9 +999,9 @@ private fun MissingConfigPane(onOpenSettings: () -> Unit) {
                         .padding(top = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("1. 打开设置中心的“模型与智能体”", fontSize = 14.sp, lineHeight = 20.sp)
-                    Text("2. 填写地址、密钥和模型名", fontSize = 14.sp, lineHeight = 20.sp)
-                    Text("3. 返回聊天页即可生效，无需重启", fontSize = 14.sp, lineHeight = 20.sp)
+                    steps.forEach { step ->
+                        Text(step, fontSize = 14.sp, lineHeight = 20.sp)
+                    }
                 }
                 Button(
                     onClick = onOpenSettings,

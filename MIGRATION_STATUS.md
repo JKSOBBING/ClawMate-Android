@@ -3644,3 +3644,48 @@ Verification: `:app:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with
 pulse/wave/ring values, and dp metrics). On-device verification is pending — no
 device was connected, so the pulse/wave rendering has not yet been confirmed on a
 real screen.
+
+## 63. Chat local-mode honest state (fix "本地" tab cloud copy)
+
+The chat top-bar 云端/本地 switch created a mode-mismatched not-ready pane:
+`ChatViewModel.refreshConfigState()` only ever checked the **cloud planner**
+endpoint (`EndpointConfig.cloudPlannerBaseUrl`) regardless of the active mode,
+and `ChatScreen.MissingConfigPane` hard-coded the copy "云端模型尚未配置". So the
+**本地** (`LOCAL_INFERENCE`) tab showed the cloud copy even though its backend is
+the on-device local model, never the cloud planner.
+
+Made config-state mode-aware, keeping the honest capability boundary:
+- `ChatViewModel` now takes an app-private `filesDir` and an injectable
+  `LocalModelCapability` (defaulting to the real boundary). `refreshConfigState`
+  branches on the active mode: `CLOUD_AGENT` keeps the cloud endpoint check;
+  `LOCAL_INFERENCE` queries `LocalModelCapability.refresh()` and sets
+  `isConfigured` **only when the real on-device model is READY**, exposing the
+  honest `LocalModelState` (status + message) in a new
+  `ChatUiState.localModelStatus`. The JNI stub honestly reports
+  NOT_CONFIGURED/UNSUPPORTED (never READY), so the local tab never fakes readiness.
+- `newSession(mode)` (the 云端/本地 switch) now re-runs `refreshConfigState` after
+  updating the mode, so the pane reflects the *new* mode's backend, not the stale
+  prior value.
+- `ChatScreen.MissingConfigPane` now renders per-mode copy: cloud mode keeps the
+  cloud setup steps; local mode shows "本地推理不可用" + the real
+  `LocalModelState.message` (e.g. "缺少 Android 端 MNN/LLM 原生推理库…") plus local
+  capability-boundary steps, and a `Memory` icon. It still routes to the same
+  Settings center.
+
+`ChatViewModelFactory` passes `context.filesDir?.path`. No network, no faked
+output; the local pane is driven entirely by the real disk scan + native adapter.
+
+Also in this working tree (separate agent, valid cleanups): `Icons.AutoMirrored.Filled.ArrowBack`
+replacing deprecated `Icons.Filled.ArrowBack` (Gallery/Settings), typed
+`getParcelableExtra<Uri>(…, Uri::class.java)` in `ProfileShareActivity`, and an
+onboarding `onboardingCompleted` interlock in `ClawMateRoot` to cut the post-completion
+flash to zero.
+
+Verification: `:app:testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL with **1160 tests
+passing (0 failures / 0 errors / 0 skipped)**, including 4 new mode-aware cases in
+`ChatViewModelConfigRefreshTest` (local mode with no model dir → NOT_CONFIGURED +
+honest state; local mode ignores the configured cloud endpoint; local mode becomes
+configured only on a real READY capability; cloud mode unaffected by the local
+capability). `:app:assembleDebug` BUILD SUCCESSFUL. On-device verification is pending —
+the connected phone was detached during this phase, so the 本地-tab pane has not yet
+been visually confirmed on a real screen.
