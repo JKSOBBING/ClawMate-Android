@@ -20,7 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -210,7 +210,7 @@ private fun SectionDetail(
                     .size(42.dp)
                     .background(Color.White, RoundedCornerShape(14.dp)),
             ) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "返回设置中心", tint = SettingsThemeColors.TitleColor)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回设置中心", tint = SettingsThemeColors.TitleColor)
             }
             Column(modifier = Modifier.padding(start = 4.dp)) {
                 Text("设置中心", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SettingsThemeColors.TitleColor)

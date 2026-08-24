@@ -156,10 +156,21 @@ fun ClawMateRoot(
     val onboardingVersion by onboarding.onboardingVersion.collectAsState(initial = "")
     val showOnboarding = com.clawmate.app.home.domain.shouldShowFirstLaunchOnboarding(onboardingVersion)
 
-    if (showOnboarding) {
+    // Phase-68 fix: a local mutable flag forces the transition immediately when
+    // onboarding finishes, without waiting for the DataStore flow re-emission.
+    // This prevents a brief flash where the composition re-evaluates with
+    // showOnboarding == true (stale flow value) after completion.
+    var onboardingCompleted by rememberSaveable { mutableStateOf(false) }
+
+    if (showOnboarding && !onboardingCompleted) {
         FirstLaunchOnboardingScreen(
             repository = onboarding,
-            onFinished = { /* version persisted; flow re-resolves and swaps to tabs */ },
+            onFinished = {
+                // Interlock: persist is confirmed by DataStore flow emission
+                // (which eventually flips showOnboarding), but the local flag
+                // cuts the latency to zero so the shell swaps immediately.
+                onboardingCompleted = true
+            },
         )
     } else {
         MainTabScaffold(

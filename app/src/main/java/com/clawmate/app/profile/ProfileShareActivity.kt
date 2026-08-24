@@ -175,7 +175,7 @@ class ProfileShareActivity : Activity() {
     private fun resolveContentUri(intent: Intent?): Uri? {
         intent?.data?.takeIf { it.scheme == "content" || it.scheme == "file" }?.let { return it }
         // Some senders deliver the body as an EXTRA_STREAM clip instead of data.
-        intent?.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { return it }
+        intent?.getParcelableExtra<Uri>(Intent.EXTRA_STREAM, Uri::class.java)?.let { return it }
         intent?.clipData?.let { clip ->
             for (i in 0 until clip.itemCount) {
                 val u = clip.getItemAt(i)?.uri ?: continue

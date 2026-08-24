@@ -24,7 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -222,7 +222,7 @@ fun GalleryScreen(
 @Composable
 private fun GalleryPageHeader(onBack: () -> Unit, onOpenSettings: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(0.90f).padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回汇总") }
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回汇总") }
         Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
             Text("图库分析", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF11182F))
             Text("相册、截图与文档图片洞察", fontSize = 13.sp, color = Color(0xFF717684), modifier = Modifier.padding(top = 3.dp))
