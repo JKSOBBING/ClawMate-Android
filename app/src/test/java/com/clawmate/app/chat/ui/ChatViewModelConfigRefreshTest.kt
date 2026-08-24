@@ -13,6 +13,7 @@ import com.clawmate.app.localmodel.LocalModelErrorKind
 import com.clawmate.app.localmodel.LocalModelInfo
 import com.clawmate.app.localmodel.LocalModelNative
 import com.clawmate.app.localmodel.LocalModelNativeAdapter
+import com.clawmate.app.localmodel.LocalModelRegistry
 import com.clawmate.app.localmodel.LocalModelStatus
 import com.clawmate.app.localmodel.LocalModelState
 import java.util.Properties
@@ -34,11 +35,11 @@ import org.junit.Test
 
 /**
  * Config-state tests for [ChatViewModel]: [ChatViewModel.refreshConfigState]
- * must mirror the live [EndpointConfig] so that an endpoint saved in the
- * Settings center (applied to the runtime config on save) is picked up when
- * the chat tab is re-entered — no app restart required. A blank endpoint keeps
- * the honest not-configured state (the screen shows the setup pane, never a
- * fake input bar).
+ * must mirror the live [EndpointConfig] for the cloud mode, and the shared
+ * [LocalModelRegistry] state for the local mode. The local tab must reflect the
+ * REAL on-device model capability (never the cloud endpoint), and the chat VM
+ * must only READ the shared local state (never trigger a native load). A blank
+ * endpoint / unloaded model keeps the honest not-configured state.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelConfigRefreshTest {
@@ -48,13 +49,15 @@ class ChatViewModelConfigRefreshTest {
         // Unconfined so the ViewModel's init load() settles synchronously.
         Dispatchers.setMain(UnconfinedTestDispatcher())
         EndpointConfig.load(Properties()) // clean slate: not configured
+        LocalModelRegistry.resetForTest() // clean slate: no shared local state
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        // Never leak a configured endpoint into other tests.
+        // Never leak a configured endpoint or a loaded local model into other tests.
         EndpointConfig.load(Properties())
+        LocalModelRegistry.resetForTest()
     }
 
     private fun setPlannerBaseUrl(baseUrl: String) {
@@ -63,11 +66,36 @@ class ChatViewModelConfigRefreshTest {
         EndpointConfig.load(props)
     }
 
-    private fun viewModel(
-        filesDir: String? = null,
-        capability: LocalModelCapability = LocalModelCapability(filesDir),
-    ): ChatViewModel =
-        ChatViewModel(FakeEmptyRepository(), FakeVoiceController(), filesDir, capability)
+    private fun viewModel(filesDir: String? = null): ChatViewModel =
+        ChatViewModel(FakeEmptyRepository(), FakeVoiceController(), filesDir)
+
+    /**
+     * Installs a controlled [LocalModelCapability] into the shared registry so a
+     * test can deterministically drive the local-mode state, and resets the
+     * registry state to the safe default.
+     */
+    private fun installLocalCapability(
+        filesDir: String?,
+        scan: (String?) -> List<LocalModelInfo> = { emptyList() },
+        nativeSupported: Boolean = false,
+        loadResult: () -> LocalModelNative.NativeLoadResult = {
+            LocalModelNative.NativeLoadResult.Unsupported(
+                LocalModelErrorKind.NATIVE_LIBRARY_MISSING,
+                "no lib",
+            )
+        },
+    ) {
+        LocalModelRegistry.installForTest(
+            LocalModelCapability(
+                filesDir = filesDir,
+                scan = scan,
+                native = object : LocalModelNativeAdapter {
+                    override fun supported(): Boolean = nativeSupported
+                },
+                loadModel = { loadResult() },
+            ),
+        )
+    }
 
     /** Puts the active session into a given mode without a real session store. */
     private fun ChatViewModel.setModeForTest(mode: String) {
@@ -108,8 +136,8 @@ class ChatViewModelConfigRefreshTest {
     }
 
     // ------------------------------------------------------------------
-    // Mode-aware config state: the LOCAL tab must reflect the real
-    // on-device model capability, never the cloud endpoint.
+    // Mode-aware config state: the LOCAL tab must reflect the shared local
+    // model capability, never the cloud endpoint.
     // ------------------------------------------------------------------
 
     @Test
@@ -142,9 +170,12 @@ class ChatViewModelConfigRefreshTest {
 
     @Test
     fun `local mode becomes configured only when a real model is READY`() {
-        // A stub that reports a genuine READY load: the only path to isConfigured=true
-        // in local mode. Proves the local gate is driven by the capability, not a fake.
-        val ready = LocalModelCapability(
+        // A stub that reports a genuine READY load: the only path to
+        // isConfigured=true in local mode. Proves the local gate is driven by
+        // the real capability, not a fake. The load is performed through the
+        // shared registry (as the Settings panel does), then the chat VM reads
+        // the shared state.
+        installLocalCapability(
             filesDir = "/fake",
             scan = {
                 listOf(
@@ -159,17 +190,96 @@ class ChatViewModelConfigRefreshTest {
                     )
                 )
             },
-            native = object : LocalModelNativeAdapter {
-                override fun supported() = true
-            },
-            loadModel = { LocalModelNative.NativeLoadResult.Success("已就绪（测试桩）") }
+            nativeSupported = true,
+            loadResult = { LocalModelNative.NativeLoadResult.Success("已就绪（测试桩）") },
         )
-        val vm = viewModel(filesDir = "/fake", capability = ready)
+        // Simulate the Settings panel performing the explicit load/test.
+        LocalModelRegistry.loadAndTest("/fake", "test-model")
+
+        val vm = viewModel(filesDir = "/fake")
         vm.setModeForTest(ChatMode.LOCAL_INFERENCE)
         vm.refreshConfigState()
 
         assertTrue(vm.state.value.isConfigured)
         assertEquals(LocalModelStatus.READY, vm.state.value.localModelStatus!!.status)
+    }
+
+    @Test
+    fun `a model loaded in settings is visible to the chat tab without re-loading`() {
+        // Cross-component visibility: the chat VM only reads the shared registry
+        // (no load trigger of its own). A load performed "in Settings" must be
+        // visible to the chat tab via the same LocalModelRegistry.state.
+        var loadInvocations = 0
+        installLocalCapability(
+            filesDir = "/fake",
+            scan = {
+                listOf(
+                    LocalModelInfo(
+                        id = "test-model",
+                        label = "测试模型",
+                        path = "/fake/model",
+                        ready = true,
+                        hasConfig = true,
+                        hasWeightFile = true,
+                        statusText = "可加载",
+                    )
+                )
+            },
+            nativeSupported = true,
+            loadResult = {
+                loadInvocations++
+                LocalModelNative.NativeLoadResult.Success("已就绪（测试桩）")
+            },
+        )
+        // Settings panel loads the model.
+        LocalModelRegistry.loadAndTest("/fake", "test-model")
+        assertEquals(1, loadInvocations)
+
+        // Chat tab enters local mode and refreshes — it must NOT trigger a load.
+        val vm = viewModel(filesDir = "/fake")
+        vm.setModeForTest(ChatMode.LOCAL_INFERENCE)
+        vm.refreshConfigState()
+
+        assertEquals("chat refresh must not load", 1, loadInvocations)
+        assertTrue(vm.state.value.isConfigured)
+        assertEquals(LocalModelStatus.READY, vm.state.value.localModelStatus!!.status)
+    }
+
+    @Test
+    fun `local refresh alone never loads a model`() {
+        // The chat tab's refreshLocalModel is read-only: even with a complete,
+        // loadable model on disk, merely refreshing (no Settings load) must not
+        // invoke the native load, and must report NOT_CONFIGURED (not loaded).
+        var loadInvocations = 0
+        installLocalCapability(
+            filesDir = "/fake",
+            scan = {
+                listOf(
+                    LocalModelInfo(
+                        id = "test-model",
+                        label = "测试模型",
+                        path = "/fake/model",
+                        ready = true,
+                        hasConfig = true,
+                        hasWeightFile = true,
+                        statusText = "可加载",
+                    )
+                )
+            },
+            nativeSupported = true,
+            loadResult = {
+                loadInvocations++
+                LocalModelNative.NativeLoadResult.Success("已就绪（测试桩）")
+            },
+        )
+        val vm = viewModel(filesDir = "/fake")
+        vm.setModeForTest(ChatMode.LOCAL_INFERENCE)
+        vm.refreshConfigState()
+
+        assertEquals("refresh must not load", 0, loadInvocations)
+        // A complete model that is not yet loaded is NOT_CONFIGURED (honest), not READY.
+        assertFalse(vm.state.value.isConfigured)
+        assertEquals(LocalModelStatus.NOT_CONFIGURED, vm.state.value.localModelStatus!!.status)
     }
 
     @Test

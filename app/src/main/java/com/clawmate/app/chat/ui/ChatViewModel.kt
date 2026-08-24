@@ -82,11 +82,8 @@ data class ChatUiState(
 class ChatViewModel(
     private val repository: ChatRepository,
     private val voiceController: ChatVoiceControllerApi,
-    /** App-private data dir used to query the real local-model capability. */
+    /** App-private data dir used to query the shared local-model registry. */
     private val filesDir: String? = null,
-    /** Injectable local-model capability (defaults to the real boundary). */
-    private val localModelCapability: LocalModelCapability =
-        LocalModelCapability(filesDir),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -181,36 +178,31 @@ class ChatViewModel(
     }
 
     /**
-     * Queries the real local-model capability and reflects it in both
-     * [ChatUiState.isConfigured] (READY only) and [ChatUiState.localModelStatus]
-     * (the honest state + message the LOCAL pane renders).
+     * Reflects the shared local-model state in both [ChatUiState.isConfigured]
+     * (READY only) and [ChatUiState.localModelStatus] (the honest state + message
+     * the LOCAL pane renders).
      *
-     * Because [LocalModelCapability.refresh] never performs a native load
-     * (and therefore never returns READY), we pass the result of a best-effort
-     * [LocalModelCapability.loadAndTest] when a complete model folder is found,
-     * so that a genuinely loadable model produces READY here.
+     * **Read-only by design.** It only calls [LocalModelRegistry.refresh] (a disk
+     * scan merged with the shared loaded state) and never triggers a native load.
+     * Loading is a deliberate, user-driven action that belongs to the Settings
+     * "本地模型" panel (its "加载/测试" button), which publishes the result to the
+     * same shared [LocalModelRegistry.state] this reads. So a model loaded in
+     * Settings is now visible here without the chat tab re-loading it — and
+     * tapping 本地 in the chat tab has no load side effect. The honest
+     * consequence: until a model is actually loaded, the local tab reports
+     * NOT_CONFIGURED / UNSUPPORTED and is not usable — never a faked READY.
      */
     private fun refreshLocalModel() {
-        // 1. Quick scan — no native load yet.
-        val scanned = runCatching { localModelCapability.refresh() }.getOrNull()
+        val scanned = runCatching {
+            com.clawmate.app.localmodel.LocalModelRegistry.refresh(filesDir)
+            com.clawmate.app.localmodel.LocalModelRegistry.state.value
+        }.getOrNull()
             ?: LocalModelState(
-                status = com.clawmate.app.localmodel.LocalModelStatus.NOT_CONFIGURED,
+                status = LocalModelStatus.NOT_CONFIGURED,
                 errorKind = com.clawmate.app.localmodel.LocalModelErrorKind.NOT_CONFIGURED,
                 message = "无法读取本地模型状态",
             )
-        // 2. If the scan found a complete model and the native lib is present,
-        //    attempt a real load so READY can emerge. The stub will report
-        //    UNSUPPORTED because the native lib is absent — honest.
-        val bestState = if (scanned.status == LocalModelStatus.NOT_CONFIGURED
-            && scanned.selectedModelId.isNotBlank()
-        ) {
-            runCatching {
-                localModelCapability.loadAndTest(scanned.selectedModelId)
-            }.getOrNull() ?: scanned
-        } else {
-            scanned
-        }
-        _state.update { it.copy(isConfigured = bestState.isReady, localModelStatus = bestState) }
+        _state.update { it.copy(isConfigured = scanned.isReady, localModelStatus = scanned) }
     }
 
     /** Loads the session list and restores the active (most recently selected) session. */

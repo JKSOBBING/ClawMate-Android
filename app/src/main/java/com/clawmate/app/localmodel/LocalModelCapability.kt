@@ -16,7 +16,8 @@ package com.clawmate.app.localmodel
  * deterministically without real files or a real .so.
  */
 class LocalModelCapability(
-    private val filesDir: String?,
+    /** The app-private data dir this capability scans (exposed for the registry). */
+    val filesDir: String?,
     private val scan: (String?) -> List<LocalModelInfo> = { LocalModelInventory.scan(it) },
     private val native: LocalModelNativeAdapter = RealNativeAdapter,
     private val loadModel: (String) -> LocalModelNative.NativeLoadResult = { LocalModelNative.loadModel(it) },

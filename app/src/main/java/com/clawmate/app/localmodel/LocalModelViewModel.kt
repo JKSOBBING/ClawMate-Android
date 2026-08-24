@@ -22,42 +22,46 @@ class LocalModelViewModel(
     private val filesDir: String?,
 ) : ViewModel() {
 
-    private val capability = LocalModelCapability(
-        filesDir = filesDir,
-        scan = { LocalModelInventory.scan(it) },
-        native = RealNativeAdapter,
-        loadModel = { LocalModelNative.loadModel(it) },
-    )
-
+    // Loads/refreshes/unloads all go through the shared [LocalModelRegistry] so
+    // the chat tab and this Settings panel observe the SAME loaded state. The
+    // native load is global (LocalModelNative object); the registry is the
+    // single source of truth for the Kotlin-side LocalModelState.
     private val _ui = MutableStateFlow(LocalModelUiState())
     val ui: StateFlow<LocalModelUiState> = _ui.asStateFlow()
+
+    init {
+        // Reflect the shared state on creation so an already-loaded model shows
+        // READY here even if it was loaded in a previous panel instance.
+        _ui.update { it.copy(state = LocalModelRegistry.state.value) }
+    }
 
     /** Perform a fast, disk-only inventory scan and surface its state. */
     fun refresh() {
         viewModelScope.launch {
             _ui.update { it.copy(refreshing = true) }
-            val state = capability.refresh()
-            _ui.update { it.copy(refreshing = false, state = state) }
+            LocalModelRegistry.refresh(filesDir)
+            _ui.update { it.copy(refreshing = false, state = LocalModelRegistry.state.value) }
         }
     }
 
     /**
      * Explicit load/test action for a specific model id. Runs the real
-     * validated load; READY is reported only when the native adapter returns
-     * success. Errors surface as typed UNSUPPORTED / ERROR.
+     * validated load via the shared registry; READY is reported only when the
+     * native adapter returns success. Errors surface as typed UNSUPPORTED /
+     * ERROR. The resulting state is shared with the chat tab.
      */
     fun loadTest(modelId: String) {
         viewModelScope.launch {
             _ui.update { it.copy(loadTestBusy = true) }
-            val state = capability.loadAndTest(modelId)
-            _ui.update { it.copy(loadTestBusy = false, state = state) }
+            LocalModelRegistry.loadAndTest(filesDir, modelId)
+            _ui.update { it.copy(loadTestBusy = false, state = LocalModelRegistry.state.value) }
         }
     }
 
     /** After a successful load, unload native state (no-op in the stub). */
     fun unload() {
-        LocalModelNative.unload()
-        _ui.update { it.copy(state = it.state.copy(status = LocalModelStatus.NOT_CONFIGURED, message = "已卸载本地模型")) }
+        LocalModelRegistry.unload()
+        _ui.update { it.copy(state = LocalModelRegistry.state.value) }
     }
 
     class Factory(private val filesDir: String?) : ViewModelProvider.Factory {
