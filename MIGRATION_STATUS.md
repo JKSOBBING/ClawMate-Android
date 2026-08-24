@@ -3689,3 +3689,44 @@ configured only on a real READY capability; cloud mode unaffected by the local
 capability). `:app:assembleDebug` BUILD SUCCESSFUL. On-device verification is pending —
 the connected phone was detached during this phase, so the 本地-tab pane has not yet
 been visually confirmed on a real screen.
+
+## Phase: shared LocalModelRegistry singleton (local tab = real local state, no load-on-switch)
+
+The previous phase made the chat config pane mode-aware but each component still
+owned its own `LocalModelCapability`: Settings "加载/测试" could load a model in one
+instance while the chat tab's separate instance kept reporting NOT_CONFIGURED, and
+`ChatViewModel.refreshLocalModel()` could not distinguish "not configured" from
+"loaded" across components. This phase unifies them behind one shared singleton.
+
+- **New `localmodel/LocalModelRegistry.kt`** — `object` holding a single
+  `LocalModelCapability` (bound by `filesDir` via `bindFor`) plus a shared
+  `MutableStateFlow<LocalModelState>`. `refresh(filesDir)` stays a read-only disk
+  scan and never triggers a native load; it preserves a current READY state when the
+  loaded model is still in the scanned inventory, and drops it when the model
+  disappears. `loadAndTest(filesDir, modelId)` performs the real native load and is
+  the only path that can reach READY; `unload()` calls `LocalModelNative.unload()`
+  and resets to NOT_CONFIGURED. `installForTest`/`resetForTest` are the test seams.
+- **`LocalModelCapability.filesDir`** is now a public `val` (was `private`) so the
+  registry can detect an already-bound instance and avoid re-creating it.
+- **`LocalModelViewModel` (Settings)** drops its private capability; `refresh()`,
+  `loadTest()`, and `unload()` all delegate to the registry, so Settings and chat
+  observe the same `LocalModelState`.
+- **`ChatViewModel`** loses the `localModelCapability` constructor param
+  (keeps `filesDir`). `refreshLocalModel()` is now strictly read-only: it calls
+  `LocalModelRegistry.refresh(filesDir)` and reads `LocalModelRegistry.state.value`
+  into `ChatUiState.localModelStatus` — switching to the 本地 tab can never trigger
+  a native load, and the pane renders the honest `NOT_CONFIGURED`/`DISABLED`/READY
+  state from the capability layer (never the cloud copy).
+- **Tests**: new `LocalModelRegistryTest` (6 cases: refresh never loads; loadAndTest
+  READY only on genuine native Success; missing native lib → UNSUPPORTED; READY
+  stays visible across refreshes; unload clears; stale READY dropped when the model
+  file disappears). `ChatViewModelConfigRefreshTest` rewritten to drive the shared
+  registry (9 cases), including "local mode becomes configured only when a real
+  model is READY" (a registry `loadAndTest` makes the chat VM see READY) and
+  "local refresh alone never loads a model".
+
+Verification: `:app:assembleDebug` + `:app:testDebugUnitTest --rerun-tasks` BUILD
+SUCCESSFUL with **1168 tests passing (0 failures / 0 errors / 0 skipped)**.
+On-device visual confirmation of the 本地 tab is still pending (no device attached).
+
+Commit: 312f233
