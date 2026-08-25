@@ -88,8 +88,9 @@ import com.clawmate.app.chat.voice.chatAvatarRenderModel
 import com.clawmate.app.chat.voice.visualStateForMessage
 import com.clawmate.app.gallery.photo.PickResult
 import com.clawmate.app.gallery.photo.rememberPhotoPicker
-import com.clawmate.app.R
+import com.clawmate.app.ui.theme.ClawMateDesign
 import com.clawmate.app.log.ui.LogScreen
+import com.clawmate.app.R
 
 /**
  * Compose chat screen for the cloud-model vertical slice (Phase 2) extended
@@ -295,12 +296,12 @@ private fun ChatActionStrip(onOpenTasks: () -> Unit) {
             modifier = Modifier
                 .height(34.dp)
                 .clickable(onClick = onOpenTasks),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E5EA)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClawMateDesign.Colors.Border),
         ) {
             Text(
                 "下发任务",
                 fontSize = 12.sp,
-                color = Color(0xFF222222),
+                color = ClawMateDesign.Colors.Text,
                 modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
             )
         }
@@ -315,7 +316,7 @@ private fun ChatModeTabs(
 ) {
     Row(
         modifier = Modifier
-            .background(Color(0xFFF4F6FA), RoundedCornerShape(16.dp))
+            .background(ClawMateDesign.Colors.Input, RoundedCornerShape(16.dp))
             .padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -325,7 +326,7 @@ private fun ChatModeTabs(
                     .width(46.dp)
                     .height(28.dp)
                     .background(
-                        if (mode == option) Color(0xFF111827) else Color.Transparent,
+                        if (mode == option) ClawMateDesign.Colors.Text else Color.Transparent,
                         RoundedCornerShape(14.dp),
                     )
                     .clickable(enabled = enabled) { onSelect(option) },
@@ -335,7 +336,7 @@ private fun ChatModeTabs(
                     if (option == ChatMode.LOCAL_INFERENCE) "本地" else "云端",
                     fontSize = 12.sp,
                     fontWeight = if (mode == option) FontWeight.Bold else FontWeight.Normal,
-                    color = if (mode == option) Color.White else Color(0xFF5D6472),
+                    color = if (mode == option) ClawMateDesign.Colors.Surface else ClawMateDesign.Colors.TextMuted,
                 )
             }
         }
@@ -518,13 +519,13 @@ private fun EmptyChatWelcome(onPrompt: (String) -> Unit, voice: VoiceSessionSnap
             text = "你好，今天想做什么？",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF111827),
+            color = ClawMateDesign.Colors.Text,
             modifier = Modifier.padding(top = 10.dp),
         )
         Text(
             text = "我可以帮你整理信息、执行任务",
             style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFF6F7787),
+            color = ClawMateDesign.Colors.TextMuted,
             modifier = Modifier.padding(top = 6.dp),
         )
         Column(modifier = Modifier.padding(top = 18.dp)) {
@@ -573,14 +574,14 @@ private fun ChatPromptCard(
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .background(Color(0xFFF2F5FF), RoundedCornerShape(14.dp)),
+                    .background(ClawMateDesign.Colors.PrimaryContainer, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("·", color = Color(0xFF8066FF), fontWeight = FontWeight.Bold)
+                Text("·", color = ClawMateDesign.Colors.PrimaryStrong, fontWeight = FontWeight.Bold)
             }
             Column(modifier = Modifier.padding(start = 12.dp)) {
-                Text(title, fontWeight = FontWeight.Bold, color = Color(0xFF111827))
-                Text(description, color = Color(0xFF7B8392), style = MaterialTheme.typography.bodySmall)
+                Text(title, fontWeight = FontWeight.Bold, color = ClawMateDesign.Colors.Text)
+                Text(description, color = ClawMateDesign.Colors.TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -842,7 +843,7 @@ private fun InputBar(
                     .weight(1f)
                     .heightIn(min = 40.dp, max = 120.dp)
                     .padding(start = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF4B5563)),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = ClawMateDesign.Colors.Text),
                 maxLines = 4,
                 decorationBox = { innerTextField ->
                     Box(
@@ -851,7 +852,7 @@ private fun InputBar(
                         if (value.isBlank()) {
                             Text(
                                 "输入消息…",
-                                color = Color(0xFF7B8392),
+                                color = ClawMateDesign.Colors.TextSecondary,
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                         }
@@ -868,8 +869,8 @@ private fun InputBar(
                 modifier = Modifier.size(width = 82.dp, height = 40.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (value.isBlank() && pendingAttachments.isEmpty()) Color(0xFF5968FF) else Color(0xFF111827),
-                    disabledContainerColor = Color(0xFFAEB7C8),
+                    containerColor = if (value.isBlank() && pendingAttachments.isEmpty()) ClawMateDesign.Colors.Primary else ClawMateDesign.Colors.Text,
+                    disabledContainerColor = ClawMateDesign.Colors.Disabled,
                 ),
             ) {
                 if (value.isBlank() && pendingAttachments.isEmpty()) {
@@ -967,7 +968,7 @@ private fun MissingConfigPane(
         Surface(
             color = Color.White,
             shape = RoundedCornerShape(18.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E6EF)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClawMateDesign.Colors.Border),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
@@ -977,7 +978,7 @@ private fun MissingConfigPane(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color(0xFF8066FF),
+                    tint = ClawMateDesign.Colors.PrimaryStrong,
                     modifier = Modifier.size(36.dp),
                 )
                 Text(
@@ -989,7 +990,7 @@ private fun MissingConfigPane(
                     text = detail,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
-                    color = Color(0xFF687386),
+                    color = ClawMateDesign.Colors.TextMuted,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 6.dp),
                 )
@@ -1007,7 +1008,7 @@ private fun MissingConfigPane(
                     onClick = onOpenSettings,
                     modifier = Modifier.padding(top = 16.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8066FF)),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClawMateDesign.Colors.PrimaryStrong),
                 ) {
                     Icon(Icons.Filled.Settings, contentDescription = null)
                     Text("  打开设置中心")
