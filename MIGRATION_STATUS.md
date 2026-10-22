@@ -3730,3 +3730,23 @@ SUCCESSFUL with **1168 tests passing (0 failures / 0 errors / 0 skipped)**.
 On-device visual confirmation of the 本地 tab is still pending (no device attached).
 
 Commit: 312f233
+
+## 2026-10-23 — Windows validation baseline
+
+- Branch: `codex/android-migration`; Android base `7f76afb`; Harmony reference
+  `clawmate_dev` at `cd69b68` (read-only). PR creation awaits the user's review.
+- Fixed local-model path comparison to use host-independent separators while
+  preserving literal traversal and duplicate-separator rejection. Relative model
+  resolution validates before canonicalization. This does not add MNN inference.
+- Fixed the inventory test's in-memory filesystem to use host-native absolute
+  paths; added a regression for absolute inventory paths, sibling directories,
+  traversal and duplicate separators.
+- Executed `:app:testDebugUnitTest :app:assembleDebug` with the project Gradle
+  wrapper and local dev-package init script: **BUILD SUCCESSFUL**, 1169 tests,
+  0 failures. This resolves the 20 failures observed on the untouched Windows
+  baseline. `git diff --check` passed.
+- Device PKB110 / Android 16: `adb install -r` returned `Success`; cold launch
+  returned `Status: ok` (552 ms). Chat cloud and local states were inspected:
+  unconfigured cloud and unavailable native inference remain explicit.
+- Local SDK paths, proxy settings, screenshots and build logs stay outside Git.
+- Commit subject: `fix: make model path validation portable across hosts`.

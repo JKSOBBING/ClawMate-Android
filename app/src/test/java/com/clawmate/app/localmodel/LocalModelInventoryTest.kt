@@ -30,7 +30,7 @@ class LocalModelInventoryTest {
         assertTrue(models[0].hasConfig)
         assertTrue(models[0].hasWeightFile)
         assertTrue(models[0].ready)
-        assertTrue(models[0].path.startsWith("/data/files/model"))
+        assertTrue(models[0].path.startsWith(File("/data/files/model").absolutePath))
     }
 
     @Test
@@ -96,7 +96,7 @@ class LocalModelInventoryTest {
         private val dirs = mutableSetOf<String>()
 
         fun addFile(path: String, size: Long) {
-            files[path] = size
+            files[File(path).absolutePath] = size
             var parent = File(path).parent
             while (parent != null && parent.isNotEmpty()) {
                 dirs.add(parent)
@@ -107,19 +107,19 @@ class LocalModelInventoryTest {
         }
 
         override fun listEntries(dir: File): List<String> {
-            val prefix = dir.absolutePath.trimEnd('/') + "/"
+            val prefix = dir.absolutePath.trimEnd(File.separatorChar) + File.separator
             val result = LinkedHashSet<String>()
             files.keys.forEach { p ->
                 val suffix = p.removePrefix(prefix)
                 if (suffix != p) {
-                    val first = suffix.substringBefore('/')
+                    val first = suffix.substringBefore(File.separatorChar)
                     if (first.isNotEmpty()) result.add(first)
                 }
             }
             dirs.forEach { p ->
                 val suffix = p.removePrefix(prefix)
                 if (suffix != p && suffix.isNotEmpty()) {
-                    val first = suffix.substringBefore('/')
+                    val first = suffix.substringBefore(File.separatorChar)
                     if (first.isNotEmpty()) result.add(first)
                 }
             }

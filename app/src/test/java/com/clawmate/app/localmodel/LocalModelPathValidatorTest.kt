@@ -68,6 +68,15 @@ class LocalModelPathValidatorTest {
         assertNull(LocalModelPathValidator.resolveModelDir(filesDir, null))
     }
 
+    @Test
+    fun `host absolute inventory paths share the same sandbox boundary`() {
+        val model = File(filesDir, "model").absolutePath
+        assertTrue(LocalModelPathValidator.isValidModelDir(filesDir, model))
+        assertFalse(LocalModelPathValidator.isValidModelDir(filesDir, File(filesDir + "-other", "model").absolutePath))
+        assertFalse(LocalModelPathValidator.isValidModelDir(filesDir, model + File.separator + ".." + File.separator + "model"))
+        assertFalse(LocalModelPathValidator.isValidModelDir(filesDir, model + File.separator + File.separator + "nested"))
+    }
+
     private fun assertEqualsNotNull(expectedTail: String, filesDir: String?, resolved: String?) {
         assertTrue("resolved should not be null", resolved != null)
         assertTrue("resolved ends with $expectedTail", resolved!!.endsWith("/$expectedTail"))
