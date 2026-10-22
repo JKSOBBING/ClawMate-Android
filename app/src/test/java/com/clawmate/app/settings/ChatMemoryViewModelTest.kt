@@ -97,7 +97,7 @@ class ChatMemoryViewModelTest {
         vm.refreshIndex()
         advanceUntilIdle()
         assertNull(vm.state.value.error)
-        assertTrue(vm.state.value.notice!!.contains("0 条事件"))
+        assertTrue(vm.state.value.notice!!.contains("未找到可索引事件"))
     }
 
     @Test fun `cancel stops pending sync and permits a later action`() = runTest {
