@@ -31,7 +31,7 @@ class ChatImageSendTest {
             val dao = FakeEmptyDao()
             var currentConfig = config
             val repo = DefaultChatRepository(dao, noCalls(), config.copy(baseUrl = "https://old.invalid"), imageStore = store,
-                imageClientProvider = { currentConfig to ChatCompletionsClient(OkHttpClient(), currentConfig) })
+                connectionProvider = { currentConfig to ChatCompletionsClient(OkHttpClient(), currentConfig) })
             val priorDestination = repo.imageUploadInfo()
             currentConfig = config.copy(apiKey = "updated-fixture-key")
             assertNotEquals(priorDestination, repo.imageUploadInfo())
