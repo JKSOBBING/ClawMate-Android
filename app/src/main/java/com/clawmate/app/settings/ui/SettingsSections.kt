@@ -104,6 +104,8 @@ fun DataCollectionSection(state: SettingsUiState, vm: SettingsViewModel) {
         onClick = { vm.hide(SettingsKeys.GALLERY_API_KEY) },
     )
 
+    ChatMemorySettingsCard()
+
     SettingsGroupCard(
         title = "图库分析",
         subtitle = "图库大模型服务与字段级请求策略",
