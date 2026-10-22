@@ -19,6 +19,7 @@ data class WorkflowScene(
 )
 
 object WorkflowSceneConfig {
+    const val PERSONAL_INFO_SCENE_ID = 12
 
     /** The Task page's 7 collection scenes (source: WORKFLOW_SCENES). */
     val scenes: List<WorkflowScene> = listOf(
@@ -30,6 +31,18 @@ object WorkflowSceneConfig {
         WorkflowScene(5, "social", "社交", "#D9467D"),
         WorkflowScene(6, "travel", "差旅", "#0EA5E9"),
     )
+
+    /** Memory categories also used by chat extraction; Task tabs stay unchanged. */
+    val memoryScenes: List<WorkflowScene> = scenes + listOf(
+        WorkflowScene(8, "gallery-document", "文档", "#64748B"),
+        WorkflowScene(9, "gallery-health", "健康", "#10B981"),
+        WorkflowScene(10, "gallery-work", "办公", "#2563EB"),
+        WorkflowScene(11, "gallery-other", "图库", "#9333EA"),
+        WorkflowScene(PERSONAL_INFO_SCENE_ID, "personal-info", "个人信息", "#4F6FA8"),
+    )
+
+    fun memoryLabel(sceneId: Int): String =
+        memoryScenes.firstOrNull { it.sceneId == if (sceneId == 7) 1 else sceneId }?.label ?: label(sceneId)
 
     fun sceneById(sceneId: Int): WorkflowScene =
         scenes.firstOrNull { it.sceneId == sceneId } ?: scenes.first()
