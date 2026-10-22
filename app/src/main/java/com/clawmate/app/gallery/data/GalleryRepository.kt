@@ -73,6 +73,9 @@ interface GalleryRepository {
      */
     suspend fun updateOcr(id: String, ocrText: String, analysisState: String): Boolean
 
+    /** Atomic cloud metadata replacement; false means this adapter did not save. */
+    suspend fun saveVisionAnalysis(id: String, expectedUri: String, analysis: com.clawmate.app.gallery.vision.GalleryVisionAnalysis): Boolean = false
+
     /**
      * Delete a single item **by id** (keeps its content-URI record semantics:
      * [deleteItem] removes only the stored item row, never a broad file / URI

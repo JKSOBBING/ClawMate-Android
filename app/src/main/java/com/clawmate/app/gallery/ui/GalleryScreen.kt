@@ -89,7 +89,16 @@ fun GalleryScreen(
             reverseGeocoder = GalleryComponent.reverseGeocoder(context),
         ),
     )
-    val uiState by vm.state.collectAsState()
+    val baseUiState by vm.state.collectAsState()
+    val visionVm: com.clawmate.app.gallery.vision.GalleryVisionViewModel = viewModel(
+        key = "gallery-vision", factory = remember(context, repository) { galleryVisionFactory(context, repository) },
+    )
+    val vision by visionVm.state.collectAsState()
+    val uiState = (baseUiState as? GalleryUiState.Loaded)?.let { loaded ->
+        loaded.copy(capability = loaded.capability.copy(vision = if (vision.configured)
+            com.clawmate.app.gallery.analysis.CapabilityState.Ready("图库图片模型已配置，需在详情确认分析") else
+            com.clawmate.app.gallery.analysis.CapabilityState.NotConfigured))
+    } ?: baseUiState
     val selectedId by vm.selectedItemId.collectAsState()
     val detail by vm.detail.collectAsState()
     val insightsVm: GalleryInsightsViewModel = viewModel(
@@ -110,6 +119,7 @@ fun GalleryScreen(
     )
     val scanState by scanVm.state.collectAsState()
     LaunchedEffect(Unit) {
+        visionVm.refreshConfiguration()
         val optedIn = runCatching {
             SettingsComponent.repository(context).snapshot().galleryBackgroundSyncEnabled
         }.getOrDefault(false)
@@ -143,6 +153,7 @@ fun GalleryScreen(
                 onDelete = { id -> vm.deleteItem(id) },
                 onResolveLocation = { id -> vm.resolveLocation(id) },
                 onAnalyzeOcr = { id -> vm.analyzeOcr(id) },
+                visionContent = { item -> GalleryVisionPanel(item, visionVm, onOpenSettings) },
             )
             return
         }

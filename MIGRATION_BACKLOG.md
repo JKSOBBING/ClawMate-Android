@@ -16,7 +16,7 @@ feature below starts from zero. Detailed evidence and completed checks are in
 | F04 | `query_events` personal memory agent tool | `datamanager/DataManagerQueryEventsTool.ets` | Implemented; unit/build and 2 connected-device query tests pass |
 | F05 | Image attachment transmission to a vision-capable cloud model | `pages/chat/ChatAttachmentPolicy.ets`, `pages/Index.ets` | Bounded image preparation/request encoding complete; chat attachment/history integration pending |
 | F06 | Markdown, code, safe links, full-message copying | `components/MarkdownView.ets`, `pages/chat/ChatMessageList.ets` | Implemented; unit/build and 4 device renderer/whole-message clipboard tests pass |
-| F07 | Gallery cloud vision analyzer | `utils/gallery/GalleryAnalyzer.ets` | Shared image preparation/vision HTTP foundation complete; actual analyzer/UI/persistence integration in progress |
+| F07 | Gallery cloud vision analyzer | `utils/gallery/GalleryAnalyzer.ets` | Single-photo explicit upload, real HTTP, preview and transactional save complete; unit/build and 3 device tests pass; batch orchestration and real provider validation pending |
 | F08 | Gallery question answering | `pages/gallery/GalleryPage.ets`, `utils/gallery/GallerySearchService.ets` | Pending; keyword search exists |
 | F09 | Unified gallery → daily-log → index refresh | `utils/gallery/GalleryMemorySync.ets`, `datamanager/DataManagerFacade.ets` | All 12 memory summary categories/legacy mapping complete; unified gallery/global refresh orchestration pending |
 | F10 | Workflow config viewing, JSON editing, creation/deletion, graph editor | `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets` | Viewer `b930746`; JSON editing complete; creation/deletion and graph UI pending |
