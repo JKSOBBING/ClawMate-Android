@@ -1,6 +1,7 @@
 package com.clawmate.app.chat.ui
 
 import android.Manifest
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
@@ -63,6 +65,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -74,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clawmate.app.chat.model.ChatMessage
 import com.clawmate.app.chat.model.ChatMessageRole
+import com.clawmate.app.chat.model.ChatMessageKind
 import com.clawmate.app.chat.model.ChatSession
 import com.clawmate.app.chat.model.ChatMode
 import com.clawmate.app.chat.model.AttachmentSource
@@ -250,7 +256,6 @@ fun ChatScreen(
                     onDismiss = vm::clearError,
                 )
             }
-
             ChatActionStrip(onOpenTasks = onOpenTasks)
             VoiceStatusBanner(voice.session)
 
@@ -622,11 +627,18 @@ private fun MessageBubble(
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(0.85f),
             ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(12.dp),
-                )
+                if (!message.isStreaming) {
+                    ChatMarkdownText(message.content, Modifier.padding(12.dp), MaterialTheme.colorScheme.onPrimaryContainer)
+                } else {
+                    Text(
+                        text = message.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+            if (!message.isStreaming && message.content.isNotBlank()) {
+                CopyMessageButton(message.content)
             }
         }
         return
@@ -658,11 +670,16 @@ private fun MessageBubble(
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
-                    text = message.content + if (message.isStreaming) " ▌" else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(12.dp),
-                )
+                if (!message.isStreaming && message.role == ChatMessageRole.ASSISTANT && message.kind == ChatMessageKind.CHAT) {
+                    ChatMarkdownText(message.content, Modifier.padding(12.dp))
+                } else {
+                    // Preserve immediate streaming updates and exact notice text.
+                    Text(
+                        text = message.content + if (message.isStreaming) " ▌" else "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
             }
             // Tool execution traces (agent loop) shown under assistant messages.
             if (message.trace.isNotEmpty()) {
@@ -675,14 +692,35 @@ private fun MessageBubble(
             }
             // Phase-7 voice output controls for assistant messages (Android TTS).
             if (!message.isStreaming && message.content.isNotBlank()) {
-                VoiceBubbleControls(
-                    messageId = message.id,
-                    text = message.content,
-                    voice = voice,
-                    vm = vm,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CopyMessageButton(message.content)
+                    VoiceBubbleControls(
+                        messageId = message.id,
+                        text = message.content,
+                        voice = voice,
+                        vm = vm,
+                    )
+                }
             }
         }
+    }
+}
+
+/** Copy the stored complete original, independent of visual formatting/selection. */
+@Composable
+private fun CopyMessageButton(text: String) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    TextButton(onClick = {
+        try {
+            clipboard.setText(AnnotatedString(text))
+            Toast.makeText(context, "已复制消息", Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {
+            Toast.makeText(context, "复制失败，请重试或选中部分文字复制", Toast.LENGTH_SHORT).show()
+        }
+    }) {
+        Icon(Icons.Filled.ContentCopy, contentDescription = "复制整条消息", modifier = Modifier.size(16.dp))
+        Text("复制", modifier = Modifier.padding(start = 4.dp), style = MaterialTheme.typography.labelSmall)
     }
 }
 

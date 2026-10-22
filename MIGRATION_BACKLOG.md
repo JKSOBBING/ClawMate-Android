@@ -15,7 +15,7 @@ feature below starts from zero. Detailed evidence and completed checks are in
 | F03 | Chat → daily-log long-term memory synchronization | `datamanager/ChatMemorySync.ets`, `ChatMemoryExtraction.ets` | Pending |
 | F04 | `query_events` personal memory agent tool | `datamanager/DataManagerQueryEventsTool.ets` | Implemented; unit tests pass; device tests await installer security verification |
 | F05 | Image attachment transmission to a vision-capable cloud model | `pages/chat/ChatAttachmentPolicy.ets`, `pages/Index.ets` | Pending; picker exists |
-| F06 | Markdown, code, safe links, full-message copying | `components/MarkdownView.ets`, `pages/chat/ChatMessageList.ets` | Pending |
+| F06 | Markdown, code, safe links, full-message copying | `components/MarkdownView.ets`, `pages/chat/ChatMessageList.ets` | Implemented; unit/build checks pass; device rendering/copy checks pending security verification |
 | F07 | Gallery cloud vision analyzer | `utils/gallery/GalleryAnalyzer.ets` | Pending; current adapter reports unconfigured |
 | F08 | Gallery question answering | `pages/gallery/GalleryPage.ets`, `utils/gallery/GallerySearchService.ets` | Pending; keyword search exists |
 | F09 | Unified gallery → daily-log → index refresh | `utils/gallery/GalleryMemorySync.ets`, `datamanager/DataManagerFacade.ets` | Pending; separate components exist |
