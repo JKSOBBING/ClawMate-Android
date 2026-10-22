@@ -43,6 +43,7 @@ object ChatMappers {
             trace = message.trace,
             collapsed = message.collapsed,
             createdAt = message.createdAt,
+            imagePaths = message.imagePaths,
         )
 
     fun fromEntity(entity: ChatMessageEntity): ChatMessage =
@@ -55,6 +56,7 @@ object ChatMappers {
             collapsed = entity.collapsed,
             createdAt = entity.createdAt,
             streamingVersion = 0,
+            imagePaths = entity.imagePaths,
         )
 }
 

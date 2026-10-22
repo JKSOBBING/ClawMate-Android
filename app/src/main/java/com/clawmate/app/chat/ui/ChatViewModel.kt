@@ -29,6 +29,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+
+data class ChatImageSendConsent(val text: String, val attachments: List<PendingChatAttachment>,
+    val sessionId: String, val destination: com.clawmate.app.chat.data.ChatImageUploadInfo)
 
 /** UI state for the chat screen. */
 data class ChatUiState(
@@ -50,16 +56,15 @@ data class ChatUiState(
     val drawerOpen: Boolean = false,
     /**
      * Pending image attachments for the current composer turn (in-memory / UI
-     * projection only — never persisted to Room, and never written into the
-     * model context or cloud wire; see ChatAttachmentPolicy).
+     * projection only). The confirmed send prepares pixels and persists only
+     * app-private prepared-file references; source URIs never enter the wire.
      */
     val pendingAttachments: List<PendingChatAttachment> = emptyList(),
     /**
-     * Honest user-facing note about a just-attempted send. When the user sends
-     * with images but no real upload API exists, this carries the
-     * unsupported/local-only status instead of a fabricated network success.
+     * Actionable attachment preparation/configuration/capability feedback.
      */
     val attachmentNote: String? = null,
+    val imageConsent: ChatImageSendConsent? = null,
     /**
      * The real on-device local-model capability state for the LOCAL_INFERENCE
      * mode. Drives the honest "本地推理" not-ready pane (status + message)
@@ -84,6 +89,7 @@ class ChatViewModel(
     private val voiceController: ChatVoiceControllerApi,
     /** App-private data dir used to query the shared local-model registry. */
     private val filesDir: String? = null,
+    private val prepareImage: (suspend (String) -> com.clawmate.app.image.PreparedChatImage)? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -253,6 +259,7 @@ class ChatViewModel(
                     activeToolTrace = null,
                     pendingAttachments = emptyList(),
                     attachmentNote = null,
+                    imageConsent = null,
                 )
             }
             // Mode may have changed (the top-bar 云端/本地 switch calls this with a
@@ -283,6 +290,7 @@ class ChatViewModel(
                         activeToolTrace = null,
                         pendingAttachments = emptyList(),
                         attachmentNote = null,
+                        imageConsent = null,
                     )
                 }
             } else {
@@ -300,6 +308,10 @@ class ChatViewModel(
      * switches the UI to the next available session (or an empty new one).
      */
     fun deleteSession(sessionId: String) {
+        if (_state.value.isSending) {
+            _state.update { it.copy(error = "请先停止当前回复，再删除会话。") }
+            return
+        }
         viewModelScope.launch {
             val wasActive = sessionId == _state.value.sessionId
             val deleted = runCatching { repository.deleteSession(sessionId) }
@@ -327,6 +339,7 @@ class ChatViewModel(
                             activeToolTrace = null,
                             pendingAttachments = emptyList(),
                             attachmentNote = null,
+                            imageConsent = null,
                         )
                     }
                     refreshSessions()
@@ -340,6 +353,7 @@ class ChatViewModel(
                             activeToolTrace = null,
                             pendingAttachments = emptyList(),
                             attachmentNote = null,
+                            imageConsent = null,
                         )
                     }
                     refreshSessions()
@@ -356,7 +370,7 @@ class ChatViewModel(
     }
 
     fun onInputChange(text: String) {
-        _state.update { it.copy(inputText = text) }
+        _state.update { it.copy(inputText = text, imageConsent = null) }
     }
 
     // ------------------------------------------------------------------
@@ -399,7 +413,7 @@ class ChatViewModel(
 
     /** Clears all pending attachments (e.g. when starting/selecting a session). */
     fun clearPendingAttachments() {
-        _state.update { it.copy(pendingAttachments = emptyList(), attachmentNote = null) }
+        _state.update { it.copy(pendingAttachments = emptyList(), attachmentNote = null, imageConsent = null) }
     }
 
     /** Dismisses the attachment send-status note. */
@@ -416,16 +430,31 @@ class ChatViewModel(
      * Sends the current input through [ChatRepository.sendMessage], streaming
      * the assistant reply into [ChatUiState.messages] as it arrives.
      *
-     * Phase 45 — the send path first distinguishes plain-text from image
-     * attachment sends (ChatAttachmentPolicy). When the user sends with images
-     * but the app has no real upload / multimodal attachment API
-     * ([AttachmentUploadCapability.NONE]), the send is NOT performed over the
-     * network: a typed local-only/unsupported note is surfaced and the images
-     * stay pending — no fake network success. Plain-text sends are unchanged.
+     * Images use explicit consent and ordinary multimodal streaming chat when
+     * the adapter is configured. Unavailable adapters keep selections pending;
+     * no selected image may silently fall through to text-only or task execution.
      */
     fun send() {
+        if (_state.value.isSending || _state.value.imageConsent != null) return
         val text = _state.value.inputText.trim()
         val attachments = _state.value.pendingAttachments
+        if (attachments.isNotEmpty() && prepareImage != null) {
+            if (_state.value.mode == ChatMode.LOCAL_INFERENCE) {
+                _state.update { it.copy(attachmentNote = "本地推理尚不支持图片输入，请切换到云端聊天。") }
+                return
+            }
+            if (attachments.size > com.clawmate.app.chat.cloud.ChatImageBounds.MAX_IMAGES) {
+                _state.update { it.copy(attachmentNote = "单次最多发送4张图片，请先移除多余图片。") }
+                return
+            }
+            val destination = repository.imageUploadInfo()
+            if (destination == null) {
+                _state.update { it.copy(attachmentNote = "请先在设置中保存支持图片输入的云端聊天地址和模型，图片仍保留在待发送列表。") }
+                return
+            }
+            _state.update { it.copy(imageConsent = ChatImageSendConsent(text, attachments, it.sessionId, destination), attachmentNote = null) }
+            return
+        }
         val plan = chatAttachmentSendPlan(
             text = text,
             attachments = attachments,
@@ -451,17 +480,27 @@ class ChatViewModel(
             return
         }
 
-        // Forward-looking: a real upload API. Not reachable with NONE (today).
-        // Defensive: fall back to the plain-text send so a future flip that
-        // cannot attach images still never fabricates an image upload.
-        if (text.isEmpty() || _state.value.isSending) return
-        sendText(text)
+        // No adapter may silently discard selected images and send only text.
     }
 
-    private fun sendText(text: String) {
+    fun dismissImageConsent() { _state.update { it.copy(imageConsent = null) } }
+
+    fun confirmImageSend() {
+        val consent = _state.value.imageConsent ?: return
+        dismissImageConsent()
+        if (_state.value.isSending || _state.value.mode != ChatMode.CLOUD_AGENT ||
+            _state.value.sessionId != consent.sessionId || _state.value.inputText.trim() != consent.text ||
+            _state.value.pendingAttachments != consent.attachments || repository.imageUploadInfo() != consent.destination) {
+            _state.update { it.copy(attachmentNote = "发送内容、会话或服务设置已改变，请重新点击发送并确认。") }
+            return
+        }
+        sendText(consent.text.ifBlank { com.clawmate.app.chat.model.CHAT_IMAGE_ATTACHMENT_ONLY_PROMPT }, consent.attachments, consent.destination)
+    }
+
+    private fun sendText(text: String, images: List<PendingChatAttachment> = emptyList(), destination: com.clawmate.app.chat.data.ChatImageUploadInfo? = null) {
         sendingJob?.cancel()
+        _state.update { it.copy(isSending = true, error = null, agentRunning = images.isEmpty()) }
         sendingJob = viewModelScope.launch {
-            _state.update { it.copy(isSending = true, error = null, agentRunning = true) }
             // Phase 26 — publish the coarse "running" state to the live overlay
             // status registry before any agent output streams. This is a pure
             // observation side-channel; chat behavior/logging are unchanged.
@@ -477,7 +516,19 @@ class ChatViewModel(
                     "Chat",
                     "用户消息已发送 session=$sessionId",
                 )
-                repository.sendAgentMessage(text).collect { event ->
+                val send = if (images.isEmpty()) repository.sendAgentMessage(text) else {
+                    val prepare = checkNotNull(prepareImage)
+                    val prepared = images.map { image ->
+                        val reference = image.reference as? com.clawmate.app.chat.model.AttachmentReference.ContentUri
+                            ?: throw IllegalArgumentException("请重新选择图片")
+                        prepare(reference.uri)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    check(repository.imageUploadInfo() == destination) { "服务配置已改变，请重新确认图片发送" }
+                    repository.sendImageMessage(text, prepared)
+                }
+                send.collect { event ->
+                    currentCoroutineContext().ensureActive()
                     when (event) {
                         is ChatSendEvent.UserMessageAccepted -> {
                             _state.update {
@@ -486,6 +537,8 @@ class ChatViewModel(
                                     messages = it.messages + event.message,
                                     inputText = "",
                                     isConfigured = true,
+                                    pendingAttachments = it.pendingAttachments.filterNot { pending -> images.any { image -> image.id == pending.id } },
+                                    attachmentNote = null,
                                 )
                             }
                         }
@@ -571,7 +624,10 @@ class ChatViewModel(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: ChatException) {
+                currentCoroutineContext().ensureActive()
                 // Roll back the tentative assistant bubble (if any) and show the error.
                 com.clawmate.app.log.AppLogger.cloud(
                     com.clawmate.app.log.domain.LogLevel.ERROR,
@@ -596,6 +652,7 @@ class ChatViewModel(
                     )
                 }
             } catch (e: com.clawmate.app.chat.agent.AgentException) {
+                currentCoroutineContext().ensureActive()
                 // Phase 26 — publish the honest "error" state to the overlay.
                 com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
                     com.clawmate.app.overlay.OverlayAgentState.ERROR,
@@ -614,6 +671,7 @@ class ChatViewModel(
                 }
             } catch (e: Exception) {
                 // Phase 26 — publish the honest "error" state to the overlay.
+                currentCoroutineContext().ensureActive()
                 com.clawmate.app.overlay.OverlayStateRegistry.updateAgentStatus(
                     com.clawmate.app.overlay.OverlayAgentState.ERROR,
                     "发送失败",
@@ -623,7 +681,9 @@ class ChatViewModel(
                         isSending = false,
                         agentRunning = false,
                         activeToolTrace = null,
-                        error = "发送失败：${e.message ?: "未知错误"}",
+                        error = if (images.isEmpty()) "发送失败：${e.message ?: "未知错误"}" else
+                            "图片准备或发送失败，请检查图片权限、网络和模型设置后重试。未接受的附件仍保留在待发送列表。",
+                        messages = it.messages.filterNot { message -> message.isStreaming && message.role == ChatMessageRole.ASSISTANT },
                     )
                 }
             }
@@ -638,7 +698,8 @@ class ChatViewModel(
             com.clawmate.app.overlay.OverlayAgentState.IDLE,
             "",
         )
-        _state.update { it.copy(isSending = false, agentRunning = false, activeToolTrace = null) }
+        _state.update { it.copy(isSending = false, agentRunning = false, activeToolTrace = null, error = null,
+            messages = it.messages.filterNot { message -> message.isStreaming && message.role == ChatMessageRole.ASSISTANT }) }
     }
 
     fun clearError() {

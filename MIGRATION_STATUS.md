@@ -4260,3 +4260,48 @@ Commit: 312f233
 - This phase covers one selected photo. Batch analysis, unified gallery memory
   orchestration (F09) and configured-provider quality remain pending.
 - Commit subject: `feat: analyze gallery photos with consent and saved previews`.
+
+## 2026-10-23 — F05b: real image chat streaming and private attachment history
+
+- Connected the existing camera/album selection to explicit destination/model
+  consent and real ordinary multimodal SSE. Only confirmed images are read and
+  prepared; no image enters task/tool execution. Current saved runtime settings
+  are read for this path, with a private fingerprint detecting endpoint/key/model
+  changes before send. Display/log labels omit credentials and source paths.
+- Reuses the bounded EXIF-free preparation/client encoding from `cedce87`.
+  Sending supports up to four images/1 MiB each. The source's nine-selection
+  composer remains, but excess images trigger an actionable removal message;
+  none are silently truncated. Image-only turns use the source default prompt.
+  Unsupported local mode, missing config, unreadable images and cancelled consent
+  retain the draft/selection without a request. Model HTTP/protocol/partial/empty/
+  tool-call errors never become a saved successful assistant answer.
+- Accepted prepared images are retained under app-private UUID names, with only
+  those names stored in Room v2. Added explicit v1→v2 migration with no destructive
+  fallback. History shows actual local thumbnails and unreadable-file feedback;
+  deleting the session cleans its prepared files. A failed initial DB write
+  cleans the unaccepted batch; provider failure retains the accepted user turn.
+- Harmony `ChatSessionTypes.ets` preserves image paths but builds later context
+  from text. Android follows that behavior and explicitly labels older picture
+  turns as not carrying pixels in the current request; the UI asks users to
+  reattach pictures for visual follow-up. Source grants, EXIF, image bytes and
+  private filenames never enter later model context. No background re-upload.
+- Busy session deletion now asks the user to stop the reply first. Stop removes
+  unpersisted streaming fragments; cancelled image readers/late errors cannot
+  overwrite a newer successful turn. Text/tool request serialization is retained.
+- Initial and intermediate full checks passed (4m 9s / 3m 59s). After the final
+  cancellation guard, offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, 3m 47s; **1302 unit tests,
+  0 failures, 0 errors**. Eleven new tests cover actual local HTTP/SSE, current
+  config, file ownership, failure/partial output, gates and cancellation races.
+  `git diff --check` passed. All build logs remain outside Git.
+- PKB110 / Android 16: both staged installs **Success**. The image migration/send
+  tests plus existing chat-memory Room and main-navigation regressions were
+  **OK (4 tests)**, 54.452 seconds. Real v1 SQLite migration preserves old text,
+  traces/custom title and survives reopening; a test-owned image runs through
+  actual preparation, native consent, fixture-backed streaming, thumbnail display
+  and deletion. Tests use isolated databases/owned files. No real provider was
+  called and no private user photo was selected.
+- Manual production chat entry opens with the honest deferred-local-model state;
+  cold launch **Status: ok**, 477 ms. UI/screenshot evidence is outside Git.
+  Configured-provider multimodal support/recognition quality remains unverified.
+- Commit subject: `feat: send confirmed chat images and preserve private history`.

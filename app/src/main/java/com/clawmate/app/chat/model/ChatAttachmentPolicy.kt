@@ -5,29 +5,20 @@ package com.clawmate.app.chat.model
  *
  * This is the Android port of HarmonyOS
  * `entry/src/main/ets/pages/chat/ChatAttachmentPolicy.ets`, scoped to the
- * genuine, non-breaking capability we can ship in Phase 45:
+ * selection and capability boundary:
  *
  *  1. Selection   — a normalised list of user-tapped image `content://` URI
  *     *references* (or app-private copied-file names), never raw paths, tokens
  *     or other unauthorized data. The reference is opaque to logging: only a
  *     stable, index-based label is ever surfaced.
- *  2. No upload yet — the existing `com.clawmate.app.chat.cloud.ChatClient` is
- *     an OpenAI-compatible **text** completion client. Its wire
- *     `ChatMessageWire.content` is a plain string, and the adapted Harmony
- *     multimodal content (base64 `image_url` parts) is **not** modelled here.
- *     Because there is no real, safe upload/attachment endpoint, the send seam
- *     must NOT fabricate a network round-trip: it reports an honest
- *     local-pending / unsupported status instead.
- *  3. Forward-compatible seam — [AttachmentUploadCapability] drives the send
- *     decision so that the day a real multimodal/upload API lands, only the
- *     capability provider flips and the UI distinguishes plain-text vs image
- *     sends without changing its contracts.
+ *  2. The configured Android adapter prepares bounded, metadata-free pixels
+ *     only after upload consent, then sends real image_url content parts through
+ *     ordinary streaming chat. Tools/tasks never consume attachments.
+ *  3. Adapters without that pipeline retain the explicit local-only fallback.
  *
  * Design constraints honoured from ChatModels.kt / Room schema: attachments are
- * kept as a **memory / UI projection** (a pending selection owned by the
- * composer); the Room `ChatMessageEntity` / `ChatMessage` schema is left
- * untouched so no migration is forced. Selected content URIs are never written
- * into the model context, the cloud wire, or app logs.
+ * pending selections stay in memory. Accepted images use bare private-file names
+ * in Room; selected content URIs never enter model context, wire or app logs.
  */
 
 /** Maximum number of images that may be attached to a single chat turn. */
@@ -97,19 +88,15 @@ val PendingChatAttachment.isLocalOnly: Boolean
     get() = state == PendingAttachmentState.UPLOAD_UNSUPPORTED
 
 /**
- * What the cloud send path can actually do with images. Currently the app has
- * **no real image upload / multimodal attachment API** (the chat client is a
- * text-only OpenAI-compatible completions client and the wire message carries
- * only a plain-string content). [NONE] is the only value wired today.
+ * Whether an adapter has a real multimodal send pipeline. The production Android
+ * path additionally requires configuration, bounded image preparation and consent.
  */
 enum class AttachmentUploadCapability {
     /** No real upload / multimodal attachment path exists — image sends must stay local. */
     NONE,
 
     /**
-     * A real multimodal/upload path exists (forward-looking; not yet available).
-     * When this is ever supplied, the UI can pass attachment references through
-     * to the send chain to build OpenAI content parts.
+     * A real multimodal path exists. A separate confirmation must precede I/O.
      */
     SUPPORTED,
 }
@@ -131,7 +118,7 @@ sealed interface AttachmentSendPlan {
 
     /**
      * A real upload path exists and the images can be attached to the request.
-     * Kept so the send chain only flips the provider; it is not reachable today.
+     * References still need explicit consent and preparation before transmission.
      */
     data class AttachImages(
         val attachments: List<PendingChatAttachment>,
@@ -181,8 +168,7 @@ fun chatMessageTextForSendWithAttachments(
  * for the latter, reports the honest capability outcome. This is where the app
  * refuses to fake a network success for attachments it cannot upload.
  *
- * @param capability the currently-available upload capability (always
- *   [AttachmentUploadCapability.NONE] today).
+ * @param capability the upload capability offered by this adapter.
  */
 fun chatAttachmentSendPlan(
     text: String,
