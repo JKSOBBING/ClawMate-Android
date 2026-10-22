@@ -4049,3 +4049,25 @@ Commit: 312f233
   displays “未找到可索引事件，请先同步聊天或采集足迹后重试。” as expected.
   Screenshot/UI evidence: `empty-index-actionable-result` outside Git.
 - Commit subject: `fix: explain empty chat memory index refresh results`.
+
+## 2026-10-23 — F09a: complete memory categories in summary
+
+- Summary now uses all source memory categories from `WorkflowSceneConfig.ets`:
+  0–6 and 8–12. The original four tabs/IDs/colors keep their order, and the existing
+  horizontal scroller exposes life/social/travel/document/health/work/gallery/
+  personal-info categories. Legacy takeout scene 7 maps to 1. Recognized newer
+  scenes no longer fall into shopping; truly unknown scenes retain prior fallback.
+- Selected colors come from the same category map. Chat daily-log file partitions
+  use friendly “云端聊天” / “本地聊天” source labels and can share a grouping
+  across overflow files instead of exposing storage filenames in that label.
+- Three new grouping regressions and updated category/color contract tests passed
+  in the combined candidate: offline unit/main/test APK build **BUILD SUCCESSFUL**,
+  **1239 unit tests, 0 failures, 0 errors**; `git diff --check` passed.
+- PKB110 / Android 16: main/test installs **Success**. Category and clipboard
+  instrumented suite **OK (2 tests)**, 76.962 seconds; category test scrolls to
+  “个人信息”, selects it, and scrolls back to “外卖”. Normal auxiliary-app launch
+  prompts were allowed for this run only. No security challenge was bypassed.
+  Manual production summary also scrolls to and selects personal info; cold launch
+  **Status: ok**, 488 ms. Screenshots/UI dumps saved outside Git.
+- This completes category parity, not F09's unified global/gallery orchestration.
+- Commit subject: `feat: expose all memory categories in summary collections`.

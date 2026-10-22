@@ -1,6 +1,7 @@
 package com.clawmate.app.gallery.collection
 
 import com.clawmate.app.datamanager.LocalConsolidationTypes.IndexedEvent
+import com.clawmate.app.task.model.WorkflowSceneConfig
 
 /**
  * Phase-44 **deterministic local collector** that groups the real indexed
@@ -27,22 +28,20 @@ import com.clawmate.app.datamanager.LocalConsolidationTypes.IndexedEvent
  */
 object IndexedEventCollectionService {
 
-    /** The set of scene ids offered as clickable summary tabs (Harmony subset). */
-    private val SUPPORTED_SCENE_IDS = intArrayOf(0, 1, 2, 3)
+    /** All source memory categories, including personal information and gallery scenes. */
+    private val SUPPORTED_SCENE_IDS = WorkflowSceneConfig.memoryScenes.map { it.sceneId }.toSet()
 
     /** Internal bucket key delimiter (must not appear in normalized free text). */
     private const val KEY_SEP = '\u001f'
+    private val chatLogSource = Regex("app-chat__(cloud|local)__(?:[0-6]|[89]|1[0-2])(?:__[1-9]\\d*)?\\.md")
 
     /**
      * The ordered list of clickable tabs rendered in the 汇总 screen. Only real,
-     * known workflows scenes are offered; unknown scene ids fall back to "生活".
+     * known memory scenes are offered; unknown scene ids retain the general fallback.
      */
-    fun tabs(): List<IndexedCollectionTab> = listOf(
-        IndexedCollectionTab(sceneId = 0, tabId = "shopping", label = "购物"),
-        IndexedCollectionTab(sceneId = 1, tabId = "takeout", label = "外卖"),
-        IndexedCollectionTab(sceneId = 2, tabId = "entertainment", label = "娱乐"),
-        IndexedCollectionTab(sceneId = 3, tabId = "chat", label = "聊天"),
-    )
+    fun tabs(): List<IndexedCollectionTab> = WorkflowSceneConfig.memoryScenes.map {
+        IndexedCollectionTab(sceneId = it.sceneId, tabId = it.tabId, label = it.label)
+    }
 
     /** Find a tab by scene id; falls back to the first tab. */
     fun tabForScene(sceneId: Int): IndexedCollectionTab {
@@ -138,7 +137,7 @@ object IndexedEventCollectionService {
     }
 
     private fun bucketKey(event: IndexedEvent, sceneId: Int): String {
-        val source = firstText(event.sources, sourceDisplayName(event.sourceStateFile)).ifEmpty { "本地日志" }
+        val source = displaySource(firstText(event.sources, sourceDisplayName(event.sourceStateFile)).ifEmpty { "本地日志" })
         val domain = firstText(event.domains, "other")
         val entity = firstEntityName(event)
         val keyword = firstKeyword(event)
@@ -187,9 +186,10 @@ object IndexedEventCollectionService {
         return "idx_${tabForScene(sceneId).tabId}_" + Integer.toHexString(sig.hashCode()).take(8)
     }
 
-    private fun normalizeSceneId(sceneId: Int): Int = sceneId.takeIf { it in SUPPORTED_SCENE_IDS } ?: 0
+    private fun normalizeSceneId(sceneId: Int): Int = (if (sceneId == 7) 1 else sceneId).takeIf { it in SUPPORTED_SCENE_IDS } ?: 0
 
     private fun normalizeSceneIds(sceneIds: List<Int>): List<Int> = sceneIds
+        .map { if (it == 7) 1 else it }
         .filter { it in SUPPORTED_SCENE_IDS }
         .distinct()
         .sorted()
@@ -197,7 +197,7 @@ object IndexedEventCollectionService {
     private fun dominantSource(events: List<IndexedEvent>): String {
         val counts = HashMap<String, Int>()
         for (event in events) {
-            val s = firstText(event.sources, sourceDisplayName(event.sourceStateFile)).ifEmpty { "本地日志" }
+            val s = displaySource(firstText(event.sources, sourceDisplayName(event.sourceStateFile)).ifEmpty { "本地日志" })
             counts[s] = (counts[s] ?: 0) + 1
         }
         return counts.maxByOrNull { it.value }?.key ?: "本地日志"
@@ -217,6 +217,10 @@ object IndexedEventCollectionService {
 
     private fun sourceDisplayName(sourceStateFile: String): String =
         normalize(sourceStateFile.substringAfterLast('/')).ifBlank { "本地日志" }
+
+    private fun displaySource(value: String): String = chatLogSource.matchEntire(value)?.let {
+        if (it.groupValues[1] == "local") "本地聊天" else "云端聊天"
+    } ?: value
 
     private fun firstEntityName(event: IndexedEvent): String {
         val m = event.entityMentions.firstOrNull { normalize(it.name).isNotEmpty() }?.name

@@ -13,10 +13,10 @@ class CollectionSummaryUiContractTest {
     @Test
     fun `summary scenes retain harmony order and labels`() {
         assertEquals(
-            listOf("购物", "外卖", "娱乐", "聊天"),
+            listOf("购物", "外卖", "娱乐", "聊天", "生活", "社交", "差旅", "文档", "健康", "办公", "图库", "个人信息"),
             IndexedEventCollectionService.tabs().map { it.label },
         )
-        assertEquals(listOf(0, 1, 2, 3), IndexedEventCollectionService.tabs().map { it.sceneId })
+        assertEquals((0..6).toList() + (8..12).toList(), IndexedEventCollectionService.tabs().map { it.sceneId })
     }
 
     @Test
@@ -25,6 +25,8 @@ class CollectionSummaryUiContractTest {
         assertEquals(Color(0xFF39BFA3), summarySceneColor(1))
         assertEquals(Color(0xFF8066FF), summarySceneColor(2))
         assertEquals(Color(0xFF4B8BFF), summarySceneColor(3))
+        assertEquals(Color(0xFF4F6FA8), summarySceneColor(12))
+        assertEquals(summarySceneColor(1), summarySceneColor(7))
     }
 
     @Test
