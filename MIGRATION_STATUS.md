@@ -4124,3 +4124,38 @@ Commit: 312f233
   “查看可用流程” opens the actual 11-workflow page. Cold launch **Status: ok**,
   472 ms. No external-app workflow or real provider request was run.
 - Commit subject: `feat: generate grounded home task suggestions with evidence`.
+
+## 2026-10-23 — F02a: independent casual emotional-support chat
+
+- Ported the casual-entry flow and prompt rules from `HomeComfortSection.ets`,
+  `HomeEmotionalSupport.ets` and `HomeComfortChatStore.ets` at `cd69b68`. Source
+  conversations are in-memory for the current application/concern batch, not
+  ordinary persisted chat. The Android Home entry/dialog explains this lifetime
+  and the saved-cloud-model send scope. It does not read Room, profiles or inferred
+  concern context, and does not run any tools.
+- Added a real compatible completion client (non-streaming as in this source
+  flow), twelve-turn / 700-character context bounds, input limits, cancellation,
+  visible 1600-character reply truncation and reasoning-block removal. Prompt
+  rules emphasize listening/corrections, avoid diagnoses, sensitive inference,
+  medication advice and unsolicited task reminders, and prioritize real-world
+  help for immediate danger. No default model reply is fabricated.
+- UI supports native selectable messages, draft retention, failure/retry without
+  duplicating user messages, stop/close and restart. Generation tokens and
+  cancellation prevent a late old reply/error from replacing a new conversation.
+  Retrying also preserves any newly typed unsent draft. Ordinary chat data is
+  independent and untouched.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1266 unit tests,
+  0 failures, 0 errors**. Eleven new tests cover prompt/role boundaries, paragraph/
+  Unicode/reasoning handling, actual local HTTP, partial-output refusal, missing
+  config, retry/drafts/cancellation and late responses. `git diff --check` passed.
+- PKB110 / Android 16: both APK installs **Success**;
+  `HomeComfortDeviceTest` **OK (2 tests)**, 64.442 seconds. Fixture-backed real
+  Compose controls verify send/display/restart and unconfigured draft/settings
+  behavior. Manual production Home opens the actual dialog with readable scope,
+  lifecycle and input controls; empty send is disabled. Cold launch **Status: ok**,
+  520 ms. Screenshots/UI dumps saved outside Git; no real provider call made.
+- F02's grounded concern/topic suggestions are still pending. This commit only
+  opens casual user-initiated support, without inferring any user's emotions from
+  their records or automatically transmitting background data.
+- Commit subject: `feat: add independent home emotional support conversation`.

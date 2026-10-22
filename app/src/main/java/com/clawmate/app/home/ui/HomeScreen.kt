@@ -232,6 +232,7 @@ private fun HomeContent(
         // Harmony-aligned first viewport, rather than inserting an extra card
         // between the source page's completeness and recommendation blocks.
         HomeTaskSuggestionsSection(profile.domains, onOpenTasks, onOpenSettings)
+        HomeComfortSection(onOpenSettings)
 
         ProfileGenerationSection(
             profileGeneration = profileGeneration,
