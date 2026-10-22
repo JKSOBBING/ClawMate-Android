@@ -33,6 +33,13 @@ class WorkflowJsonRepairTest {
     }
 
     @Test
+    fun `repair preserves punctuation in ASCII strings and quoted literal text`() {
+        val raw = """{"message":"点击“我的”，输入：TRUE，路径\\\"a\""} """.trim()
+        assertEquals(raw, WorkflowJsonRepair.normalizeCjkJsonPunctuation(raw))
+        assertEquals("""{"message":"TRUE，NONE"}""", WorkflowJsonRepair.normalizeJsonText("{“message”：“TRUE，NONE”}"))
+    }
+
+    @Test
     fun `repairs literal casing`() {
         assertEquals("true", WorkflowJsonRepair.repairJsonLiteralCasing("TRUE"))
         assertEquals("null", WorkflowJsonRepair.repairJsonLiteralCasing("None"))

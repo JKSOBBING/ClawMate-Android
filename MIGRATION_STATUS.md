@@ -3802,3 +3802,26 @@ Commit: 312f233
   original JSON before attempting repair; some bundled task titles currently fall
   back to filenames because of this existing bug.
 - Commit subject: `feat: edit and persist validated workflow JSON`.
+
+## 2026-10-23 — preserve workflow text during JSON parsing
+
+- Device validation exposed that the existing global punctuation repair changed
+  Chinese string contents and broke legitimate smart quotes in the bundled Alipay
+  and Eleme configs. Parse original input before syntax-repair fallback; retain
+  uppercase-literal tolerance outside strings. The fallback now normalizes only
+  structural delimiters, preserving quoted punctuation and escaped quotes.
+- Added regressions for raw/fenced Chinese content, uppercase literals and all
+  eleven bundled workflows (original descriptions and step counts). Updated the
+  daily-log integration assertion that explicitly expected the old punctuation
+  corruption: both runner output and persisted logs must now preserve the source.
+- The first full run found that outdated assertion (1186 tests, 1 failure).
+  Final `:app:testDebugUnitTest :app:assembleDebug` run after the fixes:
+  **BUILD SUCCESSFUL**, **1187 tests, 0 failures, 0 errors**.
+  `git diff --check` passed.
+- PKB110 / Android 16: final APK installation `Success`, cold launch `Status: ok`
+  (508 ms). The original Alipay config containing `“我的”` can be edited/saved and
+  yields the real Chinese task title, which survives restart. Test whitespace was
+  restored from the dev-app backup. No automated third-party app task was run.
+- Existing persisted fallback titles are preserved until the user saves a config;
+  new task initialization now derives titles correctly from the bundled metadata.
+- Commit subject: `fix: preserve quoted workflow text during JSON repair`.

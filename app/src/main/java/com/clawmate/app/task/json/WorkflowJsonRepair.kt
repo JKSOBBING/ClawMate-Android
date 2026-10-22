@@ -20,8 +20,8 @@ object WorkflowJsonRepair {
     fun normalizeJsonText(raw: String): String {
         var text = raw.trim()
         text = stripFencing(text)
-        text = repairJsonLiteralCasing(text)
         text = normalizeCjkJsonPunctuation(text)
+        text = repairJsonLiteralCasing(text)
         text = extractFirstJsonObjectText(text)
         text = closeTruncatedJson(text)
         return text.trim()
@@ -68,11 +68,38 @@ object WorkflowJsonRepair {
         return if (end > start) text.substring(start, end + 1) else text.substring(start)
     }
 
-    /** Normalises full-width/CJK punctuation used in casual JSON. */
-    fun normalizeCjkJsonPunctuation(text: String): String =
-        text.replace('“', '"').replace('”', '"')
-            .replace("，", ",")
-            .replace("：", ":")
+    /** Normalise delimiters only; punctuation inside quoted content is data. */
+    fun normalizeCjkJsonPunctuation(text: String): String = buildString {
+        var inString = false
+        var smartQuoted = false
+        var escaped = false
+        for (ch in text) {
+            if (inString) {
+                if (escaped) {
+                    append(ch)
+                    escaped = false
+                } else if (ch == '\\') {
+                    append(ch)
+                    escaped = true
+                } else if ((!smartQuoted && ch == '"') || (smartQuoted && (ch == '”' || ch == '“'))) {
+                    append('"')
+                    inString = false
+                    smartQuoted = false
+                } else append(ch)
+            } else {
+                when (ch) {
+                    '"', '“', '”' -> {
+                        append('"')
+                        inString = true
+                        smartQuoted = ch != '"'
+                    }
+                    '，' -> append(',')
+                    '：' -> append(':')
+                    else -> append(ch)
+                }
+            }
+        }
+    }
 
     /**
      * Repairs incorrect JSON literal casing outside of strings

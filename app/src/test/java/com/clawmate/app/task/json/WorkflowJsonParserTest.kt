@@ -113,4 +113,42 @@ class WorkflowJsonParserTest {
         val def = WorkflowJsonParser.parseOrDefault(json)
         assertEquals(3L, def.steps[0].times)
     }
+
+    @Test
+    fun `valid Chinese punctuation and escaped quotes remain unchanged`() {
+        val raw = """{"metadata":{"description":"订单：咖啡，打开“我的”"},"steps":[
+            {"id":1,"type":"gui_task","task_description":"点击“我的”，输入：\\path\\ \"test\""}]}"""
+        val result = WorkflowJsonParser.parse(raw)
+        assertTrue("$result", result is WorkflowJsonParser.Result.Ok)
+        val definition = (result as WorkflowJsonParser.Result.Ok).definition
+        assertEquals("订单：咖啡，打开“我的”", definition.metadata?.description)
+        assertEquals("点击“我的”，输入：\\path\\ \"test\"", definition.steps.single().taskDescription)
+        assertEquals(raw, definition.rawText)
+        val fenced = WorkflowJsonParser.parse("```json\n$raw\n```") as WorkflowJsonParser.Result.Ok
+        assertEquals(definition.steps.single().taskDescription, fenced.definition.steps.single().taskDescription)
+    }
+
+    @Test
+    fun `original-first parsing retains nonstandard literal casing tolerance`() {
+        val raw = """{"metadata":{"name":"TRUE，NONE"},"defaults":{"use_qwen3":TRUE},"steps":[]}"""
+        val result = WorkflowJsonParser.parse(raw) as WorkflowJsonParser.Result.Ok
+        assertEquals(true, result.definition.defaults?.useQwen3)
+        assertEquals("TRUE，NONE", result.definition.metadata?.name)
+    }
+
+    @Test
+    fun `all shipped workflow configs parse with original descriptions and step counts`() {
+        val directory = java.io.File("src/main/res/raw")
+        com.clawmate.app.task.data.DefaultConfigs.entries.forEach { entry ->
+            val raw = directory.resolve(entry.fileName).readText()
+            val original = kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
+            val metadata = original["metadata"] as kotlinx.serialization.json.JsonObject
+            val expected = (metadata["description"] as kotlinx.serialization.json.JsonPrimitive).content
+            val result = WorkflowJsonParser.parse(raw)
+            assertTrue("${entry.fileName}: $result", result is WorkflowJsonParser.Result.Ok)
+            val definition = (result as WorkflowJsonParser.Result.Ok).definition
+            assertEquals(entry.fileName, expected, definition.metadata?.description)
+            assertEquals(entry.fileName, (original["steps"] as kotlinx.serialization.json.JsonArray).size, definition.steps.size)
+        }
+    }
 }
