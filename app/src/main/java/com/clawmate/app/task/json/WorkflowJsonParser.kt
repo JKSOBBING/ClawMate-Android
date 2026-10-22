@@ -23,8 +23,8 @@ import kotlinx.serialization.json.longOrNull
  * [WorkflowStep.raw] so they can be honestly surfaced as unsupported by the
  * runner rather than silently dropped.
  *
- * Input passes through [WorkflowJsonRepair] first so malformed JSON is repaired
- * before being parsed; a single corrupt config card must never crash the whole
+ * Original JSON is parsed first; [WorkflowJsonRepair] is only a fallback for
+ * malformed input. A single corrupt config card must never crash the whole
  * Task screen, so deeply broken input degrades to an [Err] carrying a message.
  */
 object WorkflowJsonParser {
@@ -46,11 +46,16 @@ object WorkflowJsonParser {
 
     /** Parses raw workflow JSON text, tolerating malformed input. */
     fun parse(rawText: String): Result {
-        val cleaned = WorkflowJsonRepair.normalizeJsonText(rawText)
         val root: JsonElement? = try {
-            json.parseToJsonElement(cleaned)
-        } catch (t: Throwable) {
-            return Result.Err("invalid JSON: ${t.message?.take(160) ?: "parse failure"}")
+            // Preserve the existing uppercase-literal tolerance. This helper
+            // never touches quoted data; valid JSON remains byte-for-byte text.
+            json.parseToJsonElement(WorkflowJsonRepair.repairJsonLiteralCasing(rawText.trim()))
+        } catch (_: Exception) {
+            try {
+                json.parseToJsonElement(WorkflowJsonRepair.normalizeJsonText(rawText))
+            } catch (t: Exception) {
+                return Result.Err("invalid JSON: ${t.message?.take(160) ?: "parse failure"}")
+            }
         }
         val obj = root as? JsonObject
             ?: return Result.Err("workflow root must be a JSON object")

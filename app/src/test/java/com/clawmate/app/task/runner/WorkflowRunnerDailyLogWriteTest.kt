@@ -48,9 +48,9 @@ class WorkflowRunnerDailyLogWriteTest {
 
     @Test
     fun `successful run with a real summary writes a parseable entry and returns path`() = runBlocking {
-        // Full-width punctuation in the workflow config is normalised by the
-        // existing WorkflowJsonRepair when the JSON is decoded (：「，→ : ,).
-        val repaired = "今日新闻要点:AI 峰会召开,行业关注模型落地。"
+        // Authored punctuation is data: both execution and daily-log storage
+        // must preserve it rather than applying syntax repair inside the text.
+        val original = "今日新闻要点：AI 峰会召开，行业关注模型落地。"
         val def = parse(
             """
             { "metadata": { "name": "daily-news-summary", "description": "查看每日新闻要点" },
@@ -62,14 +62,14 @@ class WorkflowRunnerDailyLogWriteTest {
         )
         val result = fileRunner().run(def)
         assertEquals(RunStatus.SUCCESS, result.status)
-        assertEquals(repaired, result.resultSummary)
+        assertEquals(original, result.resultSummary)
         assertTrue(result.dailyLogPath.isNotEmpty())
 
         // Round-trips through the exact reader the Home「generation」button uses.
         val scan = DailyLogEventSourceFactory.overDirectory(tmp.root).load()
         assertEquals(0, scan.errorCount)
         assertEquals(1, scan.entries.size)
-        assertEquals(repaired, scan.entries[0].text)
+        assertEquals(original, scan.entries[0].text)
         assertEquals("daily-news-summary", scan.entries[0].workflowMetadata["name"])
         assertEquals("查看每日新闻要点", scan.entries[0].workflowMetadata["description"])
         assertEquals("2026-08-17", scan.entries[0].sourceDate)
