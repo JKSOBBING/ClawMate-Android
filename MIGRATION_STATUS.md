@@ -4071,3 +4071,19 @@ Commit: 312f233
   **Status: ok**, 488 ms. Screenshots/UI dumps saved outside Git.
 - This completes category parity, not F09's unified global/gallery orchestration.
 - Commit subject: `feat: expose all memory categories in summary collections`.
+
+## 2026-10-23 — F06: whole-message clipboard device verification
+
+- Exposed the existing shared copy composable internally for device verification;
+  behavior is unchanged. A real Compose click now tests the actual Android
+  clipboard with a >6000-character fixture containing original Markdown, code,
+  Chinese text, a final marker and an emoji. The entire original equals the copied
+  text; it is not limited to rendered/selected text or the generic tool text cap.
+- The test restores the pre-existing clipboard in a finally block and never logs
+  its contents, including on assertion failure. It does not alter chat history.
+- Combined candidate build/unit checks: **BUILD SUCCESSFUL**, **1239 unit tests,
+  0 failures, 0 errors**. PKB110 / Android 16 category/copy suite **OK (2 tests)**;
+  the copy test passed. Together with the earlier three native renderer tests this
+  completes the pending four F06 device component checks. No cloud call needed.
+  `git diff --check` passed; logs remain outside Git.
+- Commit subject: `test: verify complete chat message copy on Android clipboard`.

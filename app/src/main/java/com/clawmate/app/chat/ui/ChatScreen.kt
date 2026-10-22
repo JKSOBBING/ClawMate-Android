@@ -708,7 +708,7 @@ private fun MessageBubble(
 
 /** Copy the stored complete original, independent of visual formatting/selection. */
 @Composable
-private fun CopyMessageButton(text: String) {
+internal fun CopyMessageButton(text: String) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     TextButton(onClick = {
