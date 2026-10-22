@@ -3911,3 +3911,31 @@ Commit: 312f233
 - Device log is saved outside Git as `f04-f06-device-tests.log`. Future installs
   continue to use staged APK copies to avoid locking Gradle packaging outputs.
 - Commit subject: `docs: record connected-device query and Markdown checks`.
+
+## 2026-10-23 — F03a: bounded chat-memory extraction contract
+
+- Ported the pure preparation/prompt/validation contract from
+  `datamanager/ChatMemoryExtraction.ets` at `cd69b68`. Only completed user chat
+  messages from the last seven days become inputs. Stable session/message/part
+  receipts prevent repeated extraction; local dates and chat modes stay attached.
+- Long messages split at 5000 characters without breaking Unicode surrogate pairs.
+  Batches have eight-part / 16000 serialized-character bounds. At most two bounded
+  context messages are included; tool traces, task/system messages and assistant
+  reasoning blocks are excluded. Context is explicitly not an independent source
+  of facts. Imported user text is serialized as data, separate from model policy.
+- Strict result validation requires exactly one result for every input, valid
+  memory categories, bounded nonblank facts and matching identifiers. Missing,
+  duplicated or fabricated references fail instead of being marked processed.
+  Added the source memory categories 8–12 and legacy 7→1 label handling; workflow
+  execution tabs remain 0–6.
+- An initial test compilation caught use of the derived `isStreaming` getter as a
+  constructor argument; corrected the fixture to use `streamingVersion`.
+  Final offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1209 unit tests,
+  0 failures, 0 errors**, including ten new extraction regressions.
+  `git diff --check` passed.
+- This is a foundation slice, not completed F03: no new UI, database reads,
+  memory writes or model calls are wired yet. Device sync verification follows
+  with the persistence/client/user-action slices. Existing F04/F06 device checks
+  used their independently staged committed APKs.
+- Commit subject: `feat: prepare and validate bounded chat memory extraction`.
