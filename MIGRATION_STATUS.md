@@ -3939,3 +3939,35 @@ Commit: 312f233
   with the persistence/client/user-action slices. Existing F04/F06 device checks
   used their independently staged committed APKs.
 - Commit subject: `feat: prepare and validate bounded chat memory extraction`.
+
+## 2026-10-23 — F03b: restartable chat-memory persistence and export
+
+- Ported `datamanager/ChatMemorySync.ets` at `cd69b68`: facts and processing
+  receipts commit together, including successful empty results. Previous committed
+  facts are exported first, even when the originating messages have aged out.
+  Partial batch progress survives later failures; network failures are not split
+  or amplified. Only invalid structured output permits individual-part fallback.
+- Added a strict versioned checkpoint at `workflows/chat-memory/state.json` and
+  app-private daily logs grouped by day/mode/scene, with source-compatible metadata.
+  Flush-before-replace writes, canonical path checks, strict corruption errors and
+  a per-directory coroutine mutex prevent false acknowledgement and duplicate
+  concurrent extraction. Cancellation propagates before committing a model reply.
+  Storage bounds fail explicitly rather than resetting or discarding receipts.
+- Android adapter: the daily-log parser admits only 60 entries per document.
+  Fixed-size overflow files (`app-chat__cloud__12__2.md`, etc.) preserve existing
+  file/entry references. A 121-fact regression verifies all entries parse without
+  errors and existing file contents remain stable when more facts arrive.
+- The first build found a suspend-function fixture default that needed a lambda
+  wrapper. Final offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1221 unit tests,
+  0 failures, 0 errors**, including 12 new restart/failure/concurrency regressions.
+  `git diff --check` passed.
+- PKB110 / Android 16: both staged candidate APK installs returned **Success**.
+  `ChatMemoryDeviceTest` returned **OK (1 test)**: real Android-file persistence,
+  recreation without repeated extraction, local consolidation/index refresh and
+  successful `query_events` lookup. It uses a clearly labelled extractor fixture
+  and test-owned cache; no cloud-provider claim or user database mutation.
+  Device log: `f03b-device-tests.log` outside Git.
+- F03 still needs its production model client, Room reader and explicit UI action;
+  this commit does not enable background chat reading or cloud requests.
+- Commit subject: `feat: persist and recover chat memory synchronization`.

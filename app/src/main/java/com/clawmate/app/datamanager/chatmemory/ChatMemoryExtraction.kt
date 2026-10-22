@@ -2,6 +2,7 @@ package com.clawmate.app.datamanager.chatmemory
 
 import com.clawmate.app.chat.model.ChatMessageKind
 import com.clawmate.app.chat.model.ChatMessageRole
+import com.clawmate.app.chat.model.ChatMode
 import com.clawmate.app.chat.model.ChatSession
 import com.clawmate.app.task.model.WorkflowSceneConfig
 import java.time.Instant
@@ -64,7 +65,7 @@ object ChatMemoryExtraction {
                         val ref = json.encodeToString(listOf(session.id, message.id, part.toString()))
                         if (seen.add(ref)) result += ChatMemoryInput(
                             ref, Instant.ofEpochMilli(message.createdAt).atZone(zone).toLocalDate().toString(),
-                            session.mode, text, context.toList(),
+                            ChatMode.normalize(session.mode), text, context.toList(),
                         )
                     }
                 }
