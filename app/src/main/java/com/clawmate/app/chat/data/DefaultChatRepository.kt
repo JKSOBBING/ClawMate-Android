@@ -44,6 +44,7 @@ class DefaultChatRepository(
      * defaults are used. The budget itself is pure and makes no network calls.
      */
     private val settingsRepository: com.clawmate.app.settings.data.SettingsRepository? = null,
+    private val toolRegistry: com.clawmate.app.chat.agent.ToolRegistry = com.clawmate.app.chat.agent.createDefaultToolRegistry(),
 ) : ChatRepository {
 
     @Volatile
@@ -151,7 +152,7 @@ class DefaultChatRepository(
         val wireHistory = buildResult.messages.toMutableList()
         val loop = agentLoop ?: com.clawmate.app.chat.agent.AgentLoop(
             client = client,
-            registry = com.clawmate.app.chat.agent.createDefaultToolRegistry(),
+            registry = toolRegistry,
         )
 
         // 1. Persist the user message immediately.

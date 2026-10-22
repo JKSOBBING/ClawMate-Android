@@ -206,6 +206,13 @@ object LocalConsolidationTypes {
         val source: String = "",
         val keyword: String = "",
         val limit: Int = 0,
+        val keywords: List<String> = emptyList(),
+        val keywordOperator: String = "and",
+        val domains: List<String> = emptyList(),
+        val entities: List<String> = emptyList(),
+        val startDate: String = "",
+        val endDate: String = "",
+        val includeTodoDeadlineInTimeRange: Boolean = false,
     )
 
     /** Query result (mirrors Harmony `QueryResult`). */

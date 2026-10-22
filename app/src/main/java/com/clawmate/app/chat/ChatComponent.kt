@@ -44,12 +44,21 @@ object ChatComponent {
         client ?: ChatCompletionsClient(httpClient, ChatServerConfig.fromEndpointConfig())
             .also { client = it }
 
+    /** Agent tools with the read-only app-private event index bound for Android. */
+    fun tools(context: Context): com.clawmate.app.chat.agent.ToolRegistry =
+        com.clawmate.app.chat.agent.createDefaultToolRegistry().apply {
+            register(com.clawmate.app.chat.agent.createQueryEventsTool(
+                com.clawmate.app.datamanager.DailyLogLocalIndex(context.applicationContext.filesDir),
+            ))
+        }
+
     /** The single injectable [ChatRepository] used by the ChatViewModel. */
     fun repository(context: Context): ChatRepository =
         repository ?: DefaultChatRepository(
             dao = dao(context),
             client = client(),
             config = ChatServerConfig.fromEndpointConfig(),
+            toolRegistry = tools(context),
             settingsRepository = com.clawmate.app.settings.data.DataStoreSettingsRepository(
                 context.applicationContext,
             ),
