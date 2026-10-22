@@ -2,6 +2,7 @@ package com.clawmate.app.chat.cloud
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 
@@ -43,6 +44,8 @@ data class ChatMessageWire(
     @SerialName("tool_call_id") val toolCallId: String? = null,
     @SerialName("tool_calls") val toolCalls: List<ToolCallWire>? = null,
     val name: String? = null,
+    /** Request-only prepared image data; encoded by the shared HTTP client, never by persisted text JSON. */
+    @Transient val imageUrls: List<String> = emptyList(),
 )
 
 /** OpenAI `tools[].function` schema for one callable tool. */
