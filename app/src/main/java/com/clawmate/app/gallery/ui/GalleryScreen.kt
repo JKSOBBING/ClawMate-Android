@@ -94,6 +94,10 @@ fun GalleryScreen(
         key = "gallery-vision", factory = remember(context, repository) { galleryVisionFactory(context, repository) },
     )
     val vision by visionVm.state.collectAsState()
+    val questionVm: com.clawmate.app.gallery.question.GalleryQuestionViewModel = viewModel(
+        key = "gallery-question", factory = remember(context, repository) { galleryQuestionFactory(context, repository) },
+    )
+    val questionState by questionVm.state.collectAsState()
     val uiState = (baseUiState as? GalleryUiState.Loaded)?.let { loaded ->
         loaded.copy(capability = loaded.capability.copy(vision = if (vision.configured)
             com.clawmate.app.gallery.analysis.CapabilityState.Ready("图库图片模型已配置，需在详情确认分析") else
@@ -202,6 +206,7 @@ fun GalleryScreen(
                 onEmbed = { insight -> insightsVm.embedSelectedMonth(insight) },
             )
             Spacer(Modifier.height(8.dp))
+            GalleryQuestionPanel(questionVm, { id -> vm.selectItem(id) }, onOpenSettings)
             ClawMateInput(
                 value = searchQuery,
                 onValueChange = { searchQuery = it; vm.setSearchQuery(it) },
@@ -221,7 +226,7 @@ fun GalleryScreen(
                 )
             }
         }
-        ExtendedFloatingActionButton(
+        if (questionState.question.isBlank() && questionState.answer == null && !questionState.busy) ExtendedFloatingActionButton(
             onClick = { launchPicker() },
             icon = { Icon(Icons.Filled.Add, contentDescription = "选择图片") },
             text = { Text("选择图片") },
