@@ -117,6 +117,8 @@ class FakeEmptyDao : ChatDao {
     override suspend fun session(sessionId: String): ChatSessionEntity? = sessions.firstOrNull { it.id == sessionId }
     override suspend fun messagesFor(sessionId: String): List<ChatMessageEntity> =
         messages[sessionId]?.sortedBy { it.createdAt } ?: emptyList()
+    override suspend fun memoryMessagesFor(sessionId: String, cutoff: Long, now: Long): List<ChatMessageEntity> =
+        messagesFor(sessionId).filter { it.createdAt in cutoff..now && it.kind == "chat" && it.role in listOf("user", "assistant") }
     override suspend fun deleteMessagesFor(sessionId: String) { messages.remove(sessionId) }
     override suspend fun deleteSession(sessionId: String) {
         sessions.removeAll { it.id == sessionId }

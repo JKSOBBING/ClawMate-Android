@@ -12,7 +12,7 @@ feature below starts from zero. Detailed evidence and completed checks are in
 |---|---|---|---|
 | F01 | Executable home task suggestions | `pages/home/HomePage.ets` | Pending |
 | F02 | Emotional support chat entry and prompt | `pages/home/HomePage.ets`, `pages/Index.ets` | Pending |
-| F03 | Chat → daily-log long-term memory synchronization | `datamanager/ChatMemorySync.ets`, `ChatMemoryExtraction.ets` | Extraction and restartable persistence complete; 1 device sync/index/query test passes; production cloud/Room/UI wiring in progress |
+| F03 | Chat → daily-log long-term memory synchronization | `datamanager/ChatMemorySync.ets`, `ChatMemoryExtraction.ets` | Extraction, restartable persistence, production cloud client and Room reader complete; device storage/query and Room tests pass; explicit UI in progress |
 | F04 | `query_events` personal memory agent tool | `datamanager/DataManagerQueryEventsTool.ets` | Implemented; unit/build and 2 connected-device query tests pass |
 | F05 | Image attachment transmission to a vision-capable cloud model | `pages/chat/ChatAttachmentPolicy.ets`, `pages/Index.ets` | Pending; picker exists |
 | F06 | Markdown, code, safe links, full-message copying | `components/MarkdownView.ets`, `pages/chat/ChatMessageList.ets` | Implemented; unit/build and 3 device renderer tests pass; whole-message UI copy check pending |

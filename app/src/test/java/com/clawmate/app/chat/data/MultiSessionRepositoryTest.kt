@@ -288,6 +288,8 @@ class MultiSessionRepositoryTest {
         override suspend fun messagesFor(sessionId: String): List<ChatMessageEntity> =
             (handler(Op.ObserveMessages(sessionId)) as? List<*>)?.map { it as ChatMessageEntity }
                 ?: emptyList()
+        override suspend fun memoryMessagesFor(sessionId: String, cutoff: Long, now: Long): List<ChatMessageEntity> =
+            messagesFor(sessionId).filter { it.createdAt in cutoff..now && it.kind == "chat" && it.role in listOf("user", "assistant") }
         override suspend fun deleteMessagesFor(sessionId: String) {
             handler(Op.DeleteMessages(sessionId))
         }

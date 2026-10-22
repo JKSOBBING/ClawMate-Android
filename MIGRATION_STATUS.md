@@ -3971,3 +3971,30 @@ Commit: 312f233
 - F03 still needs its production model client, Room reader and explicit UI action;
   this commit does not enable background chat reading or cloud requests.
 - Commit subject: `feat: persist and recover chat memory synchronization`.
+
+## 2026-10-23 — F03c: real model client and read-only Room adapter
+
+- Added an OpenAI-compatible completion client using the existing HTTP transport
+  and saved model configuration. Requests contain bounded system/data messages,
+  no tools, and explicit connect/read/call timeouts. Invalid, truncated or
+  tool-bearing responses get at most three attempts; network, access and
+  cancellation failures propagate immediately. A single surrounding JSON fence
+  is accepted without changing any JSON string contents. Invalid responses are
+  never echoed into a later request.
+- Added a Room transaction reader and date/kind/role-filtered DAO query. It reads
+  only recent completed user/assistant chat, preserving source mode and order;
+  history and the database schema remain unchanged. Updated existing test DAO
+  implementations for the new query.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1228 unit tests,
+  0 failures, 0 errors**. Seven new tests cover bounded retries, malformed/partial
+  output, unexpected tools, cancellation, missing config and an actual compatible
+  HTTP request against local MockWebServer. This is protocol verification, not a
+  real provider availability/quality claim. `git diff --check` passed.
+- PKB110 / Android 16: main/test staged APK installs **Success**;
+  `ChatMemoryRoomDeviceTest` **OK (1 test)**. It uses an independent in-memory
+  Room database and checks date/kind filtering, local mode and unchanged history
+  counts. The user's persisted chat database is not opened by this test.
+- No production model request is triggered yet: the explicit consent/settings
+  action is the next slice. No endpoints, keys or private database files added.
+- Commit subject: `feat: connect chat memory to cloud completion and Room`.
