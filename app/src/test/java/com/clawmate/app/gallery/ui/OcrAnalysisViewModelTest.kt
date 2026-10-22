@@ -160,6 +160,16 @@ class OcrAnalysisViewModelTest {
         assertEquals("旧结果", (ocr as OcrViewState.Success).text)
     }
 
+    @Test
+    fun cloudAnalysisWithoutOcrDoesNotClaimAnEmptyOcrResult() = runTest {
+        repo = FakeOcrRepo(item("a").copy(analysisState = GalleryPhotoItem.ANALYSIS_STATE_CLOUD_ANALYZED))
+        val vm = GalleryViewModel(repo, engine(OcrResult.Empty), noOpVision, noOpGeocoder)
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.selectItem("a")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.detail.value?.ocr is OcrViewState.Idle)
+    }
+
     private fun item(id: String) = GalleryPhotoItem(
         id = id,
         uri = "content://media/picker/$id",

@@ -19,9 +19,9 @@ import com.clawmate.app.gallery.model.GalleryPhotoItem
  *     and never fabricates text. ML Kit's runtime + model download (via Play
  *     services) still require a real device to exercise; that is documented, and
  *     the deterministic mapping is covered by device-free unit tests.
- *   - Cloud vision (MiniCPM-V multimodal model): requires an endpoint/key that is
- *     not configured and no client is wired — NOT implemented, explicit
- *     NOT_CONFIGURED (unchanged).
+ *   - Cloud vision uses the configured gallery model through the explicit-consent
+ *     GalleryVisionViewModel/Client pipeline. This older synchronous capability
+ *     interface remains an unavailable fallback; it never invents a result.
  *   - Reverse geocoding: Harmony uses AMap Web Service (keyed). On Android the
  *     same concept is served by the platform [android.location.Geocoder] with no
  *     key; the Android adapter is wired as an explicit injected capability (see
@@ -40,7 +40,7 @@ sealed class CapabilityState {
     /** The platform cannot support this capability in this build. */
     data object Unsupported : CapabilityState()
 
-    /** The capability is implemented and produced a real result. */
+    /** Adapter is available for an explicit attempt; this is not proof of remote service success. */
     data class Ready(val description: String) : CapabilityState()
 }
 

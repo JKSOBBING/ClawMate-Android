@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -56,6 +57,17 @@ interface GalleryDao {
 
     @Query("UPDATE gallery_items SET analysisState = :state WHERE id = :id")
     suspend fun updateAnalysisState(id: String, state: String): Int
+
+    @Transaction
+    suspend fun applyVisionAnalysis(id: String, expectedUri: String, analysis: com.clawmate.app.gallery.vision.GalleryVisionAnalysis): Boolean {
+        val existing = getItem(id) ?: return false
+        if (existing.uri != expectedUri) return false
+        upsert(existing.copy(title = analysis.title, category = analysis.category, summary = analysis.summary,
+            details = GalleryMappers.listToJson(analysis.details), tags = GalleryMappers.listToJson(analysis.tags),
+            keywords = GalleryMappers.listToJson(analysis.keywords), rawModelText = analysis.rawText,
+            analysisState = com.clawmate.app.gallery.model.GalleryPhotoItem.ANALYSIS_STATE_CLOUD_ANALYZED))
+        return true
+    }
 
     @Query("DELETE FROM gallery_items")
     suspend fun clear()

@@ -32,8 +32,9 @@ import com.clawmate.app.gallery.ocr.androidOcrEngine
  *    runs real recognition only on an explicit user action. It never fabricates
  *    text and reports typed success/empty/cancel/model-download/error/unavailable
  *    states. ML Kit's runtime + model download require a real device.
- *  - Cloud vision stays on the explicit NOT_CONFIGURED implementation (no key /
- *    endpoint configured) — no fake analysis is produced.
+ *  - Cloud vision is wired by galleryVisionFactory to the saved gallery model,
+ *    with explicit upload consent and preview-before-save. The legacy synchronous
+ *    capability below remains an unavailable fallback.
  *  - Reverse geocoding is a real, *explicitly injected* Android capability backed
  *    by the platform [android.location.Geocoder] (no key). [reverseGeocoder] builds
  *    the Android adapter; a caller/tests may inject [UnconfiguredCapabilities] to
@@ -71,7 +72,7 @@ object GalleryComponent {
     /** Real on-device ML Kit Chinese OCR adapter (Phase 11). */
     fun ocr(context: Context): OcrEngine = androidOcrEngine(context)
 
-    /** Cloud vision stays explicitly NOT_CONFIGURED (no endpoint/key). */
+    /** Legacy synchronous fallback; the real suspend client is wired by galleryVisionFactory. */
     val vision: CloudVisionAnalyzer get() = UnconfiguredCapabilities.vision
 
     /** Real Android reverse geocoder (platform Geocoder), implicitly injected. */

@@ -57,6 +57,9 @@ data class GalleryPhotoItem(
 
         /** A user-triggered on-device OCR action completed (real text or empty). */
         const val ANALYSIS_STATE_ANALYZED = "analyzed"
+
+        /** A user-confirmed cloud vision result was explicitly saved. */
+        const val ANALYSIS_STATE_CLOUD_ANALYZED = "cloud_analyzed"
     }
 }
 

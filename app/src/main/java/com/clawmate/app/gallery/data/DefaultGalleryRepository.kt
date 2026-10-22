@@ -44,6 +44,9 @@ class DefaultGalleryRepository(
     override suspend fun getItem(id: String): GalleryPhotoItem? =
         dao.getItem(id)?.let(GalleryMappers::fromEntity)
 
+    override suspend fun saveVisionAnalysis(id: String, expectedUri: String,
+        analysis: com.clawmate.app.gallery.vision.GalleryVisionAnalysis): Boolean = dao.applyVisionAnalysis(id, expectedUri, analysis)
+
     override suspend fun upsert(item: GalleryPhotoItem): GalleryPhotoItem {
         val existing = dao.getByUri(item.uri)
         val toStore = existing?.let { e ->

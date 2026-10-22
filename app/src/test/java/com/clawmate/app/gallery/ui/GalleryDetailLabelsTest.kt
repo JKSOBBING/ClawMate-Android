@@ -28,6 +28,7 @@ class GalleryDetailLabelsTest {
         assertTrue(GalleryDetailLabels.analysisStateLabel("none").contains("未分析"))
         assertTrue(GalleryDetailLabels.analysisStateLabel("unsupported").contains("不支持"))
         assertTrue(GalleryDetailLabels.analysisStateLabel("analyzed").contains("已分析"))
+        assertEquals("已分析（云端视觉）", GalleryDetailLabels.analysisStateLabel("cloud_analyzed"))
         assertEquals("分析中", GalleryDetailLabels.analysisStateLabel("analyzing"))
         assertEquals("状态未知", GalleryDetailLabels.analysisStateLabel("mystery"))
     }
@@ -35,6 +36,7 @@ class GalleryDetailLabelsTest {
     @Test
     fun onlyAnalyzedCountsAsRealAnalysis() {
         assertTrue(GalleryDetailLabels.isAnalyzed("analyzed"))
+        assertTrue(GalleryDetailLabels.isAnalyzed("cloud_analyzed"))
         assertFalse(GalleryDetailLabels.isAnalyzed("none"))
         assertFalse(GalleryDetailLabels.isAnalyzed(""))
     }

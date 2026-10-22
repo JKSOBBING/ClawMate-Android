@@ -4226,3 +4226,37 @@ Commit: 312f233
 - This is shared infrastructure, not completed F05/F07: no attachment send UI,
   gallery model analysis, automatic uploads or provider-recognition claim yet.
 - Commit subject: `feat: prepare bounded Android images for multimodal requests`.
+
+## 2026-10-23 — F07b: single-photo cloud vision, preview and persistence
+
+- Added a real gallery-model client using the saved gallery endpoint/key/model,
+  independently of the planner. Photo detail now asks for explicit upload consent
+  naming the destination and model before reading/preparing pixels or calling the
+  service. Only compressed pixels and up to 3000 UTF-16 units of existing OCR
+  (without splitting a surrogate pair) are sent; EXIF/GPS, file paths and keys
+  are excluded from the request body. Missing configuration is actionable.
+- Strict bounded JSON parsing preserves the source title/category/summary/details/
+  tags contract and refuses malformed, incomplete or error replies. Analysis
+  appears as an AI-labelled preview; only the separate save control updates the
+  database. Stop/cancellation/config-change guards prevent stale results from
+  replacing a new selection. A failed refresh/save retains the preview.
+- A Room transaction checks both item identity and URI, replaces analysis fields
+  including deliberately empty arrays, and preserves dates, location, EXIF and
+  OCR. Deleted photos are never recreated by a late save. Group refresh failures
+  are reported separately from a successful metadata save. Cloud results have
+  their own state/label and do not claim local OCR ran.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, 4m 3s; **1291 unit tests,
+  0 failures, 0 errors**. Tests cover parser/config bounds, actual local HTTP,
+  Unicode context, consent, cancellation/stale replies, preview/save failures and
+  OCR-state regression. `git diff --check` passed.
+- PKB110 / Android 16: both staged APK installs **Success**;
+  `GalleryVisionStorageDeviceTest,GalleryVisionUiDeviceTest`: **OK (3 tests)**,
+  62.705 seconds. Real Room close/reopen verifies saved fields and identity;
+  Compose fixture controls verify cancel/confirm/preview/save and no-config gates.
+  Test fixtures use their own database; no private photo upload or real provider
+  recognition was performed. Manual production gallery entry opens normally;
+  cold launch **Status: ok**, 489 ms. Evidence is saved outside Git.
+- This phase covers one selected photo. Batch analysis, unified gallery memory
+  orchestration (F09) and configured-provider quality remain pending.
+- Commit subject: `feat: analyze gallery photos with consent and saved previews`.

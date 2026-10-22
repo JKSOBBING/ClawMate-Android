@@ -62,13 +62,14 @@ fun GalleryDetailScreen(
     onDelete: (String) -> Unit,
     onResolveLocation: (String) -> Unit,
     onAnalyzeOcr: (String) -> Unit,
+    visionContent: @Composable (GalleryPhotoItem) -> Unit = {},
 ) {
     val item = detail.currentItem
     val itemId = item?.id
 
-    var titleDraft by remember(item?.id) { mutableStateOf(item?.title ?: "") }
-    var summaryDraft by remember(item?.id) { mutableStateOf(item?.summary ?: "") }
-    var tagsDraft by remember(item?.id) { mutableStateOf(item?.tags?.joinToString("、") ?: "") }
+    var titleDraft by remember(item?.id, item?.title) { mutableStateOf(item?.title ?: "") }
+    var summaryDraft by remember(item?.id, item?.summary) { mutableStateOf(item?.summary ?: "") }
+    var tagsDraft by remember(item?.id, item?.tags) { mutableStateOf(item?.tags?.joinToString("、") ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
 
     if (item == null || itemId == null) {
@@ -100,6 +101,8 @@ fun GalleryDetailScreen(
                 )
                 analysisRow(item)
             }
+
+            item("cloud-vision") { visionContent(item) }
 
             item("uri") { InfoRow("内容 URI", GalleryDetailLabels.contentUriLine(item.uri)) }
             item("date") { InfoRow("归档日期", item.date.ifBlank { "—" }) }
