@@ -3750,3 +3750,25 @@ Commit: 312f233
   unconfigured cloud and unavailable native inference remain explicit.
 - Local SDK paths, proxy settings, screenshots and build logs stay outside Git.
 - Commit subject: `fix: make model path validation portable across hosts`.
+
+## 2026-10-23 — F10a: workflow configuration viewer
+
+- Harmony reference: `pages/task/WorkflowFileViewer.ets` on `clawmate_dev`
+  (`cd69b68`). Added a per-task configuration entry and a selectable, monospace
+  original-JSON view with horizontal/vertical scrolling, loading, retry, missing
+  file and empty-file states. Back returns to the task list without running or
+  saving a workflow. Large documents have a clearly labelled bounded preview.
+- Request versioning prevents an old asynchronous read from replacing a newer
+  selection or reopening a closed screen. Four ViewModel regressions cover
+  read-only behavior, failure/retry, stale reads and preview bounds.
+- Executed `:app:testDebugUnitTest :app:assembleDebug` with `--offline` and the
+  dev-package init script: **BUILD SUCCESSFUL**, **1173 tests, 0 failures,
+  0 errors**. A preliminary run inherited the host HTTP proxy and failed existing
+  local HTTP tests; disabling that proxy for this verification fixed those tests
+  without changing application networking. `git diff --check` passed.
+- PKB110 / Android 16: debug installation returned `Success`, launch `Status: ok`
+  (533 ms). Verified the Alipay and Eleme configuration files, horizontal scrolling
+  and Android Back navigation. The original `com.clawmate.app` installation and
+  data were preserved; validation uses `com.clawmate.app.dev`.
+- Remaining F10 scope: validated editing/saving, task creation/deletion, graph UI.
+- Commit subject: `feat: add read-only workflow configuration viewer`.

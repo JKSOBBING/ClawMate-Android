@@ -11,6 +11,7 @@ import com.clawmate.app.task.runner.RunStatus
 import com.clawmate.app.task.runner.WorkflowRunResult
 import com.clawmate.app.task.runner.WorkflowRunner
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,15 @@ data class StepSummaryLine(
     val indent: Int,
 )
 
+/** Read-only configuration projection, independent of execution state. */
+data class WorkflowConfigUiState(
+    val task: WorkflowTask,
+    val isLoading: Boolean = true,
+    val text: String = "",
+    val error: String? = null,
+    val truncated: Boolean = false,
+)
+
 /**
  * ViewModel for the Task tab: loads tasks from [WorkflowRepository], exposes
  * scene-filtering, enable toggling, task-card expansion with a step summary,
@@ -62,6 +72,47 @@ class TaskViewModel(
     val state: StateFlow<TaskUiState> = _state.asStateFlow()
 
     private var runningJob: Job? = null
+    private var configJob: Job? = null
+    private var configRequest = 0L
+    private val _config = MutableStateFlow<WorkflowConfigUiState?>(null)
+    val config: StateFlow<WorkflowConfigUiState?> = _config.asStateFlow()
+
+    fun openConfig(task: WorkflowTask) {
+        configJob?.cancel()
+        val request = ++configRequest
+        _config.value = WorkflowConfigUiState(task)
+        configJob = viewModelScope.launch {
+            val result = try {
+                val raw = repository.configJson(task)
+                when {
+                    raw == null -> WorkflowConfigUiState(task, false, error = "找不到或无法读取任务配置")
+                    raw.isBlank() -> WorkflowConfigUiState(task, false, error = "任务配置文件为空")
+                    else -> WorkflowConfigUiState(
+                        task, false, raw.take(MAX_CONFIG_PREVIEW_CHARS),
+                        truncated = raw.length > MAX_CONFIG_PREVIEW_CHARS,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                WorkflowConfigUiState(task, false, error = "读取配置失败，请重试")
+            }
+            // A slow read must never reopen a dismissed view or replace a
+            // newer selection, including reselecting the very same task.
+            if (request == configRequest) _config.value = result
+        }
+    }
+
+    fun closeConfig() {
+        ++configRequest
+        configJob?.cancel()
+        configJob = null
+        _config.value = null
+    }
+
+    companion object {
+        const val MAX_CONFIG_PREVIEW_CHARS = 256_000
+    }
 
     init {
         reload()
