@@ -4034,3 +4034,18 @@ Commit: 312f233
   gallery/chat/global pipeline orchestration and coordination with existing
   background/model index writers remain F09; this action uses the existing runner.
 - Commit subject: `feat: add consented chat memory sync and local index actions`.
+
+## 2026-10-23 — F03: actionable empty-index result
+
+- The existing local runner returns zero without creating an index when there
+  are no daily logs. The new Settings action now skips that run on empty input
+  and asks the user to sync chat or collect records, instead of claiming a fresh
+  usable index. Existing artifacts are not touched in this empty-input branch.
+- Updated the empty-result ViewModel regression. Combined candidate checks with
+  the following category/copy slices: offline `:app:testDebugUnitTest
+  :app:assembleDebug :app:assembleDebugAndroidTest` **BUILD SUCCESSFUL**,
+  **1239 unit tests, 0 failures, 0 errors**; `git diff --check` passed.
+- PKB110 / Android 16, real Settings → 数据采集 → 刷新本地记忆索引:
+  displays “未找到可索引事件，请先同步聊天或采集足迹后重试。” as expected.
+  Screenshot/UI evidence: `empty-index-actionable-result` outside Git.
+- Commit subject: `fix: explain empty chat memory index refresh results`.

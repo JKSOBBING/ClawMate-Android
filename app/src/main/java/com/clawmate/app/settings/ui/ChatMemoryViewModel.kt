@@ -86,7 +86,9 @@ class ChatMemoryViewModel(
         job = viewModelScope.launch {
             try {
                 val events = refreshLocalIndex()
-                mutableState.update { it.copy(indexing = false, notice = "本地索引已刷新：$events 条事件。汇总页点击同步后可查看，聊天可查询已索引的记忆。") }
+                val message = if (events == 0) "未找到可索引事件，请先同步聊天或采集足迹后重试。" else
+                    "本地索引已刷新：$events 条事件。汇总页点击同步后可查看，聊天可查询已索引的记忆。"
+                mutableState.update { it.copy(indexing = false, notice = message) }
             } catch (e: CancellationException) {
                 mutableState.update { it.copy(indexing = false, notice = "索引刷新已取消，请稍后重试。") }
                 throw e

@@ -35,9 +35,11 @@ internal fun ChatMemorySettingsCard() {
             },
             refreshLocalIndex = {
                 withContext(Dispatchers.IO) {
-                    if (FileDailyLogEventSource(context.filesDir).load().errors.isNotEmpty()) {
+                    val scan = FileDailyLogEventSource(context.filesDir).load()
+                    if (scan.errors.isNotEmpty()) {
                         throw IOException("存在无法解析的本地日志")
                     }
+                    if (scan.entries.isEmpty()) return@withContext 0
                     LocalConsolidationIndexRunner(context.filesDir).run().indexedEvents
                 }
             },
