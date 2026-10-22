@@ -56,11 +56,17 @@ object LocalModelPathValidator {
      * [filesDir] literally (i.e. it already escapes).
      */
     private fun rawRelative(filesDir: String, path: String): String? {
-        val base = filesDir.trimEnd('/')
-        val raw = path.trimEnd('/')
-        if (raw == base) return ""
-        if (!raw.startsWith(base + "/")) return null
-        return raw.substring(base.length + 1)
+        val raw = separators(path).trimEnd('/')
+        // Inventory paths may be host-absolute while filesDir was supplied in
+        // Android form by a JVM caller. Preserve raw segments before resolving
+        // them, so traversal and duplicate separators are still rejected.
+        val bases = listOf(filesDir, File(filesDir).absolutePath)
+        for (candidate in bases) {
+            val base = separators(candidate).trimEnd('/')
+            if (raw == base) return ""
+            if (raw.startsWith(base + "/")) return raw.substring(base.length + 1)
+        }
+        return null
     }
 
     /** True when [path] is a *direct* child of `filesDir` (filesDir/model). */
@@ -79,8 +85,9 @@ object LocalModelPathValidator {
         if (id.contains('\u0000')) return null
         val clean = id.trim().trim('/')
         if (clean.isEmpty() || clean == ".." || clean.startsWith("..") || clean.contains("../")) return null
-        val candidate = File(filesDir, clean).canonicalPath
-        return if (isValidModelDir(filesDir, candidate)) candidate else null
+        val candidate = File(filesDir, clean).path
+        // Validate the literal path before canonicalization removes dot parts.
+        return if (isValidModelDir(filesDir, candidate)) normalize(candidate) else null
     }
 
     /**
@@ -102,6 +109,8 @@ object LocalModelPathValidator {
         if (p.contains('\u0000')) return null
         val canonical = runCatching { File(p).canonicalPath }.getOrElse { File(p).absolutePath }
         // canonicalPath may resolve symlinks; re-verify it stays under filesDir.
-        return canonical.trimEnd('/')
+        return separators(canonical).trimEnd('/')
     }
+
+    private fun separators(path: String): String = path.replace(File.separatorChar, '/')
 }
