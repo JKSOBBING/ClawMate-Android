@@ -20,7 +20,7 @@ class HomeComfortDeviceTest {
 
     @Test fun casualChatSendsDisplaysReplyAndCanRestartWithoutAStaleReply() {
         val vm = HomeComfortViewModel({ ConsolidationModelConfig("https://example.invalid", "fixture-key", "fixture-model") },
-            { _, _ -> HomeComfortReply("设备测试：我听到了，想从哪件事开始聊？", false) })
+            { _, _, _ -> HomeComfortReply("设备测试：我听到了，想从哪件事开始聊？", false) })
         compose.setContent { MaterialTheme { HomeComfortCard(vm) {} } }
         compose.onNodeWithText("打开陪伴聊天").performClick()
         compose.onNodeWithText("想说的话（最多700字）").performTextInput("设备测试：今天有点累")
@@ -34,7 +34,7 @@ class HomeComfortDeviceTest {
 
     @Test fun unconfiguredSendPreservesTextAndCanOpenSettings() {
         val settings = AtomicInteger()
-        val vm = HomeComfortViewModel({ null }, { _, _ -> error("must not call") })
+        val vm = HomeComfortViewModel({ null }, { _, _, _ -> error("must not call") })
         compose.setContent { MaterialTheme { HomeComfortCard(vm) { settings.incrementAndGet() } } }
         compose.onNodeWithText("打开陪伴聊天").performClick()
         compose.onNodeWithText("想说的话（最多700字）").performTextInput("保留这条草稿")

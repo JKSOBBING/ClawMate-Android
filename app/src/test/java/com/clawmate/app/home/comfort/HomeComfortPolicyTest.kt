@@ -75,4 +75,25 @@ class HomeComfortPolicyTest {
         assertTrue(runCatching { HomeComfortClient(chat, "fixture-model").reply(
             listOf(HomeComfortMessage("id", HomeComfortRole.USER, "hello")), "2026-10-23") }.isFailure)
     }
+
+    @Test fun `topic generator makes a real bounded HTTP request and accepts a genuine empty result`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(buildJsonObject {
+                putJsonArray("choices") { add(buildJsonObject {
+                    putJsonObject("message") { put("role", "assistant"); put("content", "{\"concerns\":[]}") }
+                    put("finish_reason", "stop")
+                }) }
+            }.toString()))
+            val context = HomeComfortTopicContext(buildJsonObject { put("recent_chat_records", JsonArray(emptyList())) },
+                mapOf("record-1" to HomeComfortEvidence("record-1", "2026-10-23", "设备测试片段")))
+            val config = ConsolidationModelConfig.fromValues(server.url("/").toString(), "fixture-key", "fixture-model")!!
+            assertTrue(HomeComfortClient.fromConfig(config, OkHttpClient()).topics(context).isEmpty())
+            val request = server.takeRequest(2, TimeUnit.SECONDS)!!
+            assertEquals("/v1/chat/completions", request.path)
+            val payload = Json.parseToJsonElement(request.body.readUtf8()).jsonObject
+            assertFalse(payload["stream"]!!.jsonPrimitive.boolean)
+            assertEquals(2048, payload["max_tokens"]!!.jsonPrimitive.int)
+        }
+    }
 }

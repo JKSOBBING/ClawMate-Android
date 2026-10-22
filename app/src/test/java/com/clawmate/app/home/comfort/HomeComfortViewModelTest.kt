@@ -16,7 +16,7 @@ class HomeComfortViewModelTest {
     @After fun after() { Dispatchers.resetMain() }
 
     @Test fun `opening is network free and missing configuration preserves the draft`() = runTest {
-        val vm = HomeComfortViewModel({ null }, { _, _ -> error("no network") })
+        val vm = HomeComfortViewModel({ null }, { _, _, _ -> error("no network") })
         vm.open()
         vm.input("我想聊聊")
         vm.send()
@@ -31,7 +31,7 @@ class HomeComfortViewModelTest {
 
     @Test fun `successful send appends only the user and actual returned reply`() = runTest {
         var calls = 0
-        val vm = HomeComfortViewModel({ config }, { _, messages ->
+        val vm = HomeComfortViewModel({ config }, { _, messages, _ ->
             calls++; assertEquals("今天有点累", messages.last().content); HomeComfortReply("测试模型实际返回", false)
         })
         vm.open()
@@ -48,7 +48,7 @@ class HomeComfortViewModelTest {
 
     @Test fun `failure and retry preserve one user turn and any unsent draft`() = runTest {
         var calls = 0
-        val vm = HomeComfortViewModel({ config }, { _, messages ->
+        val vm = HomeComfortViewModel({ config }, { _, messages, _ ->
             calls++
             assertEquals(1, messages.size)
             if (calls == 1) error("private server error") else HomeComfortReply("重试实际回复", false)
@@ -66,7 +66,7 @@ class HomeComfortViewModelTest {
     }
 
     @Test fun `close cancels an unfinished reply without fabricating an assistant message`() = runTest {
-        val vm = HomeComfortViewModel({ config }, { _, _ -> awaitCancellation() })
+        val vm = HomeComfortViewModel({ config }, { _, _, _ -> awaitCancellation() })
         vm.open(); vm.input("正在等待"); vm.send()
         runCurrent()
         assertTrue(vm.state.value.sending)
@@ -83,7 +83,7 @@ class HomeComfortViewModelTest {
     @Test fun `restarting prevents an old late reply or cancellation from replacing new chat`() = runTest {
         val release = CompletableDeferred<Unit>()
         var calls = 0
-        val vm = HomeComfortViewModel({ config }, { _, _ ->
+        val vm = HomeComfortViewModel({ config }, { _, _, _ ->
             calls++
             if (calls == 1) withContext(NonCancellable) { release.await(); HomeComfortReply("old late response", false) }
             else HomeComfortReply("新对话回复", false)

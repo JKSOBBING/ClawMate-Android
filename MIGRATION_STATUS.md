@@ -4159,3 +4159,40 @@ Commit: 312f233
   opens casual user-initiated support, without inferring any user's emotions from
   their records or automatically transmitting background data.
 - Commit subject: `feat: add independent home emotional support conversation`.
+
+## 2026-10-23 — F02b: grounded support topics and isolated conversations
+
+- Added the source `HomeEmotionalSupport.ets` topic-generation flow. Android uses
+  a read-only Room adapter limited to up to 48 completed first-party USER message
+  snippets from seven days (including local-mode chat), with local dates and
+  per-request references. Assistant/tool/system/streaming/old/future messages,
+  traces, session IDs/titles and profiles are excluded from the payload. This
+  deliberately does not upload third-party collected chats; such source expansion
+  would need a separate explicit adapter/data-selection decision.
+- The explicit Home control describes that send scope. A real compatible model
+  call may return zero to three topics; empty input sends no request. Topics must
+  resolve real evidence, are deduplicated/bounded, and diagnostic claims are
+  rejected. The prompt permits only directly supported first-person emotional
+  context, rejects attribution from quotes/others/tasks/consumption, and does not
+  force a fixed number of concerns. Failed refresh retains prior valid topics.
+- Selecting a topic opens its own in-memory conversation with model-generated
+  opening and visible source snippets. Only the selected topic's bounded evidence
+  is added as labelled background data; it is not treated as a fact/instruction.
+  Casual and topic messages/drafts remain separate. New batches discard old topic
+  sessions while preserving the casual draft; generation/cancellation guards still
+  prevent old replies from overwriting new sessions.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1277 unit tests,
+  0 failures, 0 errors**. Eleven new tests cover input/date bounds, first-party
+  filtering, valid empty/partial results, fabricated refs/diagnostic refusal,
+  selected-background limits, model gates/HTTP and conversation isolation.
+  `git diff --check` passed.
+- PKB110 / Android 16: staged main/test installs **Success**. Casual regression
+  plus topic suite **OK (4 tests)**, 131.653 seconds: native send/restart/config
+  behavior, visible topic evidence/opening and honest empty results. Fixture-backed
+  processing did not contact a real provider or read private history. Manual Home
+  topic entry and missing-config/settings feedback verified; cold launch
+  **Status: ok**, 483 ms. Screenshots/UI evidence saved outside Git.
+- Real configured-provider relevance/quality remains unverified. No automatic
+  background inference or ordinary-chat persistence changes were introduced.
+- Commit subject: `feat: suggest grounded support topics with isolated chats`.

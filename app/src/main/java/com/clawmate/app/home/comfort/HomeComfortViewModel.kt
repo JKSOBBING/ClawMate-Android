@@ -16,19 +16,37 @@ data class HomeComfortUiState(
     val messages: List<HomeComfortMessage> = emptyList(),
     val sending: Boolean = false,
     val error: String? = null,
+    val topic: HomeComfortTopic? = null,
 )
 
 /** Session lifetime matches the source HomeComfortChatStore, independent of ordinary chat history. */
 class HomeComfortViewModel(
     private val configProvider: () -> ConsolidationModelConfig?,
-    private val request: suspend (ConsolidationModelConfig, List<HomeComfortMessage>) -> HomeComfortReply,
+    private val request: suspend (ConsolidationModelConfig, List<HomeComfortMessage>, HomeComfortTopic?) -> HomeComfortReply,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(HomeComfortUiState())
     val state = mutableState.asStateFlow()
     private var generation = 0L
     private var pending: Job? = null
+    private val sessions = linkedMapOf<String, HomeComfortUiState>()
+    private var topicBatch: String? = null
 
-    fun open() { mutableState.update { it.copy(open = true) } }
+    fun open(topic: HomeComfortTopic? = null) {
+        val target = topic?.id ?: "casual"
+        val old = state.value
+        val oldKey = old.topic?.id ?: "casual"
+        if (old.open && oldKey == target) return
+        generation++
+        pending?.cancel()
+        pending = null
+        sessions[oldKey] = old.copy(open = false, sending = false,
+            error = if (old.sending) "回复已停止，可以重试或继续说。" else old.error)
+        if (topic != null && topic.batchId != topicBatch) {
+            sessions.keys.filter { it != "casual" }.toList().forEach(sessions::remove)
+            topicBatch = topic.batchId
+        }
+        mutableState.value = (sessions[target] ?: initial(topic)).copy(open = true, topic = topic)
+    }
     fun close() { pending?.cancel(); mutableState.update { it.copy(open = false) } }
     fun input(text: String) { if (text.length <= HomeComfortPolicy.INPUT_LIMIT) mutableState.update { it.copy(input = text) } }
 
@@ -36,7 +54,7 @@ class HomeComfortViewModel(
         generation++
         pending?.cancel()
         pending = null
-        mutableState.value = HomeComfortUiState(open = state.value.open)
+        mutableState.value = initial(state.value.topic).copy(open = state.value.open)
     }
 
     fun stop() { pending?.cancel() }
@@ -62,10 +80,11 @@ class HomeComfortViewModel(
 
     private fun dispatch(config: ConsolidationModelConfig, history: List<HomeComfortMessage>, clearInput: Boolean = true) {
         val token = ++generation
+        val topic = state.value.topic
         mutableState.update { it.copy(messages = history, input = if (clearInput) "" else it.input, sending = true, error = null) }
         pending = viewModelScope.launch {
             try {
-                val reply = request(config, history)
+                val reply = request(config, history, topic)
                 currentCoroutineContext().ensureActive()
                 if (generation == token) {
                     require(reply.text.isNotBlank() && reply.text.length <= HomeComfortPolicy.REPLY_LIMIT)
@@ -84,4 +103,8 @@ class HomeComfortViewModel(
             } finally { if (generation == token) pending = null }
         }
     }
+
+    private fun initial(topic: HomeComfortTopic?) = HomeComfortUiState(topic = topic, messages = topic?.let {
+        listOf(HomeComfortMessage(UUID.randomUUID().toString(), HomeComfortRole.ASSISTANT, it.opening))
+    }.orEmpty())
 }
