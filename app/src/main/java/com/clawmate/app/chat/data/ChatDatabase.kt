@@ -2,6 +2,9 @@ package com.clawmate.app.chat.data
 
 import android.content.Context
 import androidx.room.Dao
+import androidx.room.ColumnInfo
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Index
@@ -52,6 +55,7 @@ data class ChatMessageEntity(
     val trace: List<String>,
     val collapsed: Boolean,
     val createdAt: Long,
+    @ColumnInfo(defaultValue = "''") val imagePaths: List<String> = emptyList(),
 )
 
 @Dao
@@ -84,7 +88,7 @@ interface ChatDao {
 
 @Database(
     entities = [ChatSessionEntity::class, ChatMessageEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -92,6 +96,11 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN imagePaths TEXT NOT NULL DEFAULT ''")
+            }
+        }
         @Volatile
         private var instance: ChatDatabase? = null
 
@@ -101,7 +110,7 @@ abstract class ChatDatabase : RoomDatabase() {
                     context.applicationContext,
                     ChatDatabase::class.java,
                     "clawmate-chat.db",
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
             }
     }
 }

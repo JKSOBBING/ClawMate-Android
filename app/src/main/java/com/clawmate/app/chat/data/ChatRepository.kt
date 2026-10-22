@@ -24,6 +24,14 @@ sealed interface ChatSendEvent {
 /** Failure surfaced by [ChatRepository.observeSendError], separate from events. */
 
 interface ChatRepository {
+    /** Safe destination label; null means this adapter cannot send images. No image I/O. */
+    fun imageUploadInfo(): ChatImageUploadInfo? = null
+
+    /** An explicit ordinary-chat image turn, with no tool/task execution. */
+    suspend fun sendImageMessage(userText: String, images: List<com.clawmate.app.image.PreparedChatImage>): kotlinx.coroutines.flow.Flow<ChatSendEvent> =
+        kotlinx.coroutines.flow.flow { throw com.clawmate.app.chat.cloud.ChatException(
+            com.clawmate.app.chat.cloud.ChatErrorKind.CONFIG, "当前聊天适配器未接入图片发送") }
+
     /** All sessions, most recently updated first. */
     suspend fun sessions(): List<ChatSession>
 
@@ -80,4 +88,8 @@ interface ChatRepository {
      * the active session.
      */
     suspend fun deleteSession(sessionId: String)
+}
+
+data class ChatImageUploadInfo(val service: String, val model: String, internal val configurationId: String = "") {
+    override fun toString() = "ChatImageUploadInfo(service=$service, model=$model)"
 }

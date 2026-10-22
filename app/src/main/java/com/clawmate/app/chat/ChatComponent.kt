@@ -62,5 +62,10 @@ object ChatComponent {
             settingsRepository = com.clawmate.app.settings.data.DataStoreSettingsRepository(
                 context.applicationContext,
             ),
+            imageStore = com.clawmate.app.chat.data.ChatImageFileStore(context.applicationContext.filesDir),
+            imageClientProvider = {
+                val current = ChatServerConfig.fromEndpointConfig()
+                current to ChatCompletionsClient(httpClient, current)
+            },
         ).also { repository = it }
 }

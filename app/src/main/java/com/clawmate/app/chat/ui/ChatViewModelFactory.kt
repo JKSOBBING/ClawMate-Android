@@ -21,6 +21,7 @@ class ChatViewModelFactory(private val context: Context) : ViewModelProvider.Fac
             repository = repository,
             voiceController = voiceController,
             filesDir = context.filesDir?.path,
+            prepareImage = { uri -> com.clawmate.app.image.AndroidChatImagePreparer(context.applicationContext).prepare(uri) },
         ) as T
     }
 }

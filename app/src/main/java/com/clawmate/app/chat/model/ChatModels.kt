@@ -68,6 +68,8 @@ data class ChatMessage(
     val collapsed: Boolean,
     val createdAt: Long,
     val streamingVersion: Int = 0,
+    /** Bare names of prepared pictures in the app-private chat image store. */
+    val imagePaths: List<String> = emptyList(),
 ) {
     val isStreaming: Boolean get() = streamingVersion > 0
 }

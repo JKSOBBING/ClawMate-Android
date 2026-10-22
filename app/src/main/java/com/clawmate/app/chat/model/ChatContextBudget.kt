@@ -247,7 +247,8 @@ class ChatContextBudget(
 
     private fun toContextWires(messages: List<ChatMessage>): List<ChatMessageWire> = buildList {
         for (m in messages) {
-            val content = m.content.trim()
+            val content = m.content.trim() + if (m.role == ChatMessageRole.USER && m.imagePaths.isNotEmpty())
+                "\n[该历史消息附有${m.imagePaths.size}张图片；图片未包含在当前请求中，需用户重新附图才能查看。]" else ""
             if (content.isEmpty() || isSkippedContextMessage(m)) continue
             when {
                 m.role == ChatMessageRole.USER ||

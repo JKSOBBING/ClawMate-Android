@@ -12,6 +12,15 @@ import com.clawmate.app.chat.model.ChatSession
 import com.clawmate.app.chat.model.defaultChatSessionTitle
 import com.clawmate.app.chat.model.chatSessionTitleFromMessages
 import java.util.UUID
+import com.clawmate.app.image.PreparedChatImage
+import com.clawmate.app.chat.cloud.ChatImageBounds
+import com.clawmate.app.chat.cloud.validateChatImageDataUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -45,6 +54,9 @@ class DefaultChatRepository(
      */
     private val settingsRepository: com.clawmate.app.settings.data.SettingsRepository? = null,
     private val toolRegistry: com.clawmate.app.chat.agent.ToolRegistry = com.clawmate.app.chat.agent.createDefaultToolRegistry(),
+    private val imageStore: ChatImageFileStore? = null,
+    /** Reads the latest saved runtime configuration at the explicit image send seam. */
+    private val imageClientProvider: (() -> Pair<ChatServerConfig, ChatClient>)? = null,
 ) : ChatRepository {
 
     @Volatile
@@ -71,7 +83,31 @@ class DefaultChatRepository(
         return ChatMappers.fromEntity(entity, messages)
     }
 
-    override suspend fun sendMessage(userText: String): Flow<ChatSendEvent> = flow {
+    override suspend fun sendMessage(userText: String): Flow<ChatSendEvent> = sendOrdinaryMessage(userText, emptyList(), config, client)
+
+    private fun imageConnection(): Pair<ChatServerConfig, ChatClient> = imageClientProvider?.invoke() ?: (config to client)
+
+    override fun imageUploadInfo(): ChatImageUploadInfo? {
+        if (imageStore == null) return null
+        val current = imageConnection().first
+        val url = current.completionsUrl.toHttpUrlOrNull() ?: return null
+        if (url.username.isNotEmpty() || url.password.isNotEmpty() || current.modelName.isBlank()) return null
+        val identity = java.security.MessageDigest.getInstance("SHA-256")
+            .digest((current.completionsUrl + "\u0000" + current.apiKey + "\u0000" + current.modelName).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        return ChatImageUploadInfo("${url.host}:${url.port}", current.modelName, identity)
+    }
+
+    override suspend fun sendImageMessage(userText: String, images: List<PreparedChatImage>): Flow<ChatSendEvent> = flow {
+        check(imageUploadInfo() != null) { "请先配置支持图片输入的聊天服务" }
+        require(images.size in 1..ChatImageBounds.MAX_IMAGES) { "单次最多发送4张图片" }
+        images.forEach { validateChatImageDataUrl(it.dataUrl) }
+        val (currentConfig, currentClient) = imageConnection()
+        sendOrdinaryMessage(userText.ifBlank { com.clawmate.app.chat.model.CHAT_IMAGE_ATTACHMENT_ONLY_PROMPT },
+            images, currentConfig, currentClient).collect { emit(it) }
+    }
+
+    private fun sendOrdinaryMessage(userText: String, images: List<PreparedChatImage>, config: ChatServerConfig, client: ChatClient): Flow<ChatSendEvent> = flow {
         if (!ChatServerConfig.isConfigured(config.baseUrl)) {
             throw ChatException(ChatErrorKind.CONFIG, "Cloud model not configured")
         }
@@ -79,56 +115,84 @@ class DefaultChatRepository(
         if (text.isEmpty()) return@flow
 
         val sessionId = ensureActiveSession()
-
-        // 1. Persist the user message immediately.
-        val userMessage = ChatMessage(
-            id = "msg-" + UUID.randomUUID(),
-            role = ChatMessageRole.USER,
-            kind = ChatMessageKind.CHAT,
-            content = text,
-            trace = emptyList(),
-            collapsed = false,
-            createdAt = now(),
-        )
-        dao.upsertMessages(listOf(ChatMappers.toEntity(sessionId, userMessage)))
-        updateSessionMeta(sessionId, now())
-        emit(ChatSendEvent.UserMessageAccepted(userMessage))
-
-        // 2. Build the model request from the stored history (which already
-        // contains the just-persisted user turn). The context budget applies
-        // deterministic, local-only compression when the thread exceeds the
-        // user-configured threshold.
-        val history = dao.messagesFor(sessionId).map(ChatMappers::fromEntity)
-        val buildResult = budget().buildWireContext(systemPrompt(), history)
-        val request = ChatCompletionsRequest(
-            model = config.modelName,
-            messages = buildResult.messages,
-            stream = true,
-        )
-
-        // 3. Stream from the client, accumulate and persist on completion.
-        val accumulated = StringBuilder()
-        client.completionStream(request).collect { chunk ->
-            if (chunk.contentDelta.isNotEmpty()) {
-                accumulated.append(chunk.contentDelta)
-                emit(ChatSendEvent.AssistantDelta(chunk.contentDelta))
-            }
+        if (images.isNotEmpty()) check(dao.session(sessionId)?.mode != com.clawmate.app.chat.model.ChatMode.LOCAL_INFERENCE) {
+            "本地推理尚不支持图片输入，请切换云端聊天"
         }
 
-        // 4. Persist the completed assistant message.
-        val assistantContent = accumulated.toString()
-        val assistantMessage = ChatMessage(
-            id = "msg-" + UUID.randomUUID(),
-            role = ChatMessageRole.ASSISTANT,
-            kind = ChatMessageKind.CHAT,
-            content = assistantContent,
-            trace = emptyList(),
-            collapsed = false,
-            createdAt = now(),
-        )
-        dao.upsertMessages(listOf(ChatMappers.toEntity(sessionId, assistantMessage)))
-        updateSessionMeta(sessionId, now())
-        emit(ChatSendEvent.Completed(assistantContent))
+        val storedNames = mutableListOf<String>()
+        var accepted = false
+        try {
+            if (images.isNotEmpty()) withContext(Dispatchers.IO) { storedNames += checkNotNull(imageStore).save(images) }
+
+            // 1. Persist the user message immediately.
+            val userMessage = ChatMessage(
+                id = "msg-" + UUID.randomUUID(),
+                role = ChatMessageRole.USER,
+                kind = ChatMessageKind.CHAT,
+                content = text,
+                trace = emptyList(),
+                collapsed = false,
+                createdAt = now(),
+                imagePaths = storedNames.toList(),
+            )
+            currentCoroutineContext().ensureActive()
+            withContext(NonCancellable) {
+                dao.upsertMessages(listOf(ChatMappers.toEntity(sessionId, userMessage)))
+                accepted = true
+            }
+            updateSessionMeta(sessionId, now())
+            emit(ChatSendEvent.UserMessageAccepted(userMessage))
+
+            // 2. Build the model request from the stored history (which already
+            // contains the just-persisted user turn). The context budget applies
+            // deterministic, local-only compression when the thread exceeds the
+            // user-configured threshold.
+            val history = dao.messagesFor(sessionId).map(ChatMappers::fromEntity)
+            val buildResult = if (images.isEmpty()) budget().buildWireContext(systemPrompt(), history) else
+                budget().buildWireContext(systemPrompt(), history.filterNot { it.id == userMessage.id }, pendingUserText = text)
+            val wires = if (images.isEmpty()) buildResult.messages else buildResult.messages.dropLast(1) +
+                buildResult.messages.last().copy(imageUrls = images.map { it.dataUrl })
+            val request = ChatCompletionsRequest(
+                model = config.modelName,
+                messages = wires,
+                stream = true,
+            )
+
+            // 3. Stream from the client, accumulate and persist on completion.
+            val accumulated = StringBuilder()
+            var imageFinish = ""
+            var receivedImageToolCall = false
+            client.completionStream(request).collect { chunk ->
+                if (chunk.finishReason.isNotBlank()) imageFinish = chunk.finishReason
+                if (chunk.toolCallDeltas.isNotEmpty()) receivedImageToolCall = true
+                if (chunk.contentDelta.isNotEmpty()) {
+                    accumulated.append(chunk.contentDelta)
+                    emit(ChatSendEvent.AssistantDelta(chunk.contentDelta))
+                }
+            }
+
+            // 4. Persist the completed assistant message.
+            val assistantContent = accumulated.toString()
+            if (images.isNotEmpty() && (imageFinish != "stop" || receivedImageToolCall || assistantContent.isBlank())) {
+                throw ChatException(ChatErrorKind.MALFORMED_SSE, "图片模型未返回完整的普通聊天回复，请检查模型能力并重试")
+            }
+            val assistantMessage = ChatMessage(
+                id = "msg-" + UUID.randomUUID(),
+                role = ChatMessageRole.ASSISTANT,
+                kind = ChatMessageKind.CHAT,
+                content = assistantContent,
+                trace = emptyList(),
+                collapsed = false,
+                createdAt = now(),
+            )
+            dao.upsertMessages(listOf(ChatMappers.toEntity(sessionId, assistantMessage)))
+            updateSessionMeta(sessionId, now())
+            emit(ChatSendEvent.Completed(assistantContent))
+        } finally {
+            // Once accepted, the persisted user bubble owns the prepared local files,
+            // even if the network fails or is cancelled. Unaccepted batches are removed.
+            if (!accepted && storedNames.isNotEmpty()) withContext(NonCancellable + Dispatchers.IO) { imageStore?.delete(storedNames) }
+        }
     }
 
     override suspend fun sendAgentMessage(userText: String): Flow<ChatSendEvent> = flow {
@@ -226,8 +290,10 @@ class DefaultChatRepository(
 
     override suspend fun deleteSession(sessionId: String) {
         val wasActive = activeSessionId == sessionId
+        val images = dao.messagesFor(sessionId).flatMap { it.imagePaths }
         dao.deleteMessagesFor(sessionId)
         dao.deleteSession(sessionId)
+        withContext(NonCancellable + Dispatchers.IO) { imageStore?.delete(images) }
         if (wasActive) {
             // Clear the in-memory active marker so the next send (or restart
             // restore) re-selects the most recently updated remaining session,

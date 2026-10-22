@@ -130,6 +130,7 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showLogs by remember { androidx.compose.runtime.mutableStateOf(false) }
+    ChatImageConsentDialog(vm)
 
     if (showLogs) {
         LogScreen(onBack = { showLogs = false })
@@ -640,6 +641,7 @@ private fun MessageBubble(
             if (!message.isStreaming && message.content.isNotBlank()) {
                 CopyMessageButton(message.content)
             }
+            ChatStoredImages(message.imagePaths)
         }
         return
     }
