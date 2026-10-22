@@ -3998,3 +3998,39 @@ Commit: 312f233
 - No production model request is triggered yet: the explicit consent/settings
   action is the next slice. No endpoints, keys or private database files added.
 - Commit subject: `feat: connect chat memory to cloud completion and Room`.
+
+## 2026-10-23 — F03d: explicit settings action, consent and local refresh
+
+- Added “聊天长期记忆” under Settings → 数据采集. The production action reads
+  saved cloud settings, confirms the destination host/model and data scope before
+  opening Room or creating a model client. Consent explicitly includes local-mode
+  chat fragments and limited context, excludes tool traces/reasoning, and explains
+  that deleting chat does not delete already-saved memory. Configuration changes
+  invalidate pending consent. Nothing runs on launch/construction/recomposition.
+- Sync shows progress, bounded errors, cancellation and returned counts. A separate
+  zero-network local-index action checks for malformed logs before invoking the
+  existing deterministic runner. It does not enable periodic scheduling or cloud
+  consolidation. Updated the extraction prompt to keep ordinary preferences and
+  temporary events in their topical category rather than treating every “I” as
+  identity data.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1236 unit tests,
+  0 failures, 0 errors**, including eight new consent/config-change/cancellation/
+  error/index-action tests. `git diff --check` passed.
+- PKB110 / Android 16: both staged APK installs **Success**;
+  `ChatMemoryConsentDeviceTest` **OK (2 tests)**, 65.105 seconds. The phone requested
+  a normal auxiliary-app launch confirmation; “仅本次允许” was selected. Tests
+  exercised real Compose consent/cancel/confirm controls and separate index action
+  with labelled injected processing, plus the unconfigured error path. No provider
+  call or private chat read was made by these tests.
+- Manual production-page verification: cold launch **Status: ok**, 492 ms;
+  Settings → 数据采集 shows the real card; unconfigured sync says to fill/save
+  model settings; local refresh completes with **0 indexed events**, matching this
+  dev installation's empty daily logs. Screenshots/UI dumps saved outside Git;
+  original app/data preserved. Earlier F03 storage/query and Room device tests each
+  passed separately, making four F03 feature device tests in total.
+- Remaining boundaries: real provider behavior needs a configured account; memory
+  categories beyond the old four summary tabs are the next parity fix. Unified
+  gallery/chat/global pipeline orchestration and coordination with existing
+  background/model index writers remain F09; this action uses the existing runner.
+- Commit subject: `feat: add consented chat memory sync and local index actions`.
