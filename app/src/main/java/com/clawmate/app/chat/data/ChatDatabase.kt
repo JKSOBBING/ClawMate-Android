@@ -71,6 +71,10 @@ interface ChatDao {
     @Query("SELECT * FROM chat_messages WHERE sessionId = :sessionId ORDER BY createdAt ASC")
     suspend fun messagesFor(sessionId: String): List<ChatMessageEntity>
 
+    @Query("SELECT * FROM chat_messages WHERE sessionId = :sessionId AND createdAt >= :cutoff AND createdAt <= :now " +
+        "AND kind = 'chat' AND role IN ('user', 'assistant') ORDER BY createdAt ASC, id ASC")
+    suspend fun memoryMessagesFor(sessionId: String, cutoff: Long, now: Long): List<ChatMessageEntity>
+
     @Query("DELETE FROM chat_messages WHERE sessionId = :sessionId")
     suspend fun deleteMessagesFor(sessionId: String)
 
