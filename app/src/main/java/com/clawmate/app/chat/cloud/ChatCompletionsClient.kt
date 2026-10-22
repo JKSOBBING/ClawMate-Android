@@ -147,7 +147,7 @@ class ChatCompletionsClient(
 
     private fun buildBody(request: ChatCompletionsRequest, stream: Boolean): RequestBody {
         val wire = request.copy(stream = stream)
-        return json.encodeToString(ChatCompletionsRequest.serializer(), wire)
+        return encodeChatCompletionsRequest(wire, json)
             .toRequestBody(jsonMediaType)
     }
 

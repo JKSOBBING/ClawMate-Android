@@ -4196,3 +4196,33 @@ Commit: 312f233
 - Real configured-provider relevance/quality remains unverified. No automatic
   background inference or ordinary-chat persistence changes were introduced.
 - Commit subject: `feat: suggest grounded support topics with isolated chats`.
+
+## 2026-10-23 — F05/F07a: bounded image preparation and compatible request encoding
+
+- Added shared request-only image inputs to the existing completion client.
+  Ordinary text/tool serialization is unchanged byte-for-byte; explicit prepared
+  user images become text/image_url content parts for both completion and SSE
+  requests. Inputs are limited to four images per request and 1 MiB per image.
+  Only validated JPEG/PNG data URLs are accepted; remote URLs, content/file paths,
+  invalid encodings, wrong roles and oversize inputs fail before network dispatch.
+- Added explicit Android content-grant/private-file preparation: bounded decode,
+  EXIF rotation/mirroring, final maximum side 1280, white transparency flattening,
+  bounded JPEG encoding and metadata removal. File URIs must resolve inside the
+  app's private files/cache; no arbitrary path/network image fetch is performed.
+  Prepared-image logging describes dimensions/byte counts without printing data.
+- Full offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1281 unit tests,
+  0 failures, 0 errors**. Four new tests cover exact ordinary-wire preservation,
+  multimodal shape/bounds and actual local non-streaming/SSE HTTP requests.
+  `git diff --check` passed.
+- Initial device runner initialization failed because one expression-bodied test
+  inferred a Bitmap return rather than void; no bitmap assertions ran then.
+  Fixed explicit `runBlocking<Unit>`, rebuilt only the affected Android test APK:
+  **BUILD SUCCESSFUL**, 19 seconds. Both staged installs succeeded; final PKB110 /
+  Android 16 `ChatImagePreparationDeviceTest`: **OK (3 tests)**, 0.155 seconds.
+  Real bitmap assertions cover odd-sized downsampling, rotation, mirroring,
+  transparency, GPS/make removal and path refusal using test-owned cache files.
+  Initial/final logs are preserved outside Git.
+- This is shared infrastructure, not completed F05/F07: no attachment send UI,
+  gallery model analysis, automatic uploads or provider-recognition claim yet.
+- Commit subject: `feat: prepare bounded Android images for multimodal requests`.
