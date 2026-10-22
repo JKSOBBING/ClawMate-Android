@@ -4372,3 +4372,28 @@ Commit: 312f233
   data is involved. Latest production launch verified separately; transport
   fixture checks do not establish configured-provider model behavior.
 - Commit subject: `fix: cancel blocked cloud calls and preserve transport errors`.
+
+## 2026-10-23 — Settings: apply live cloud configuration to every chat send
+
+- Fixed the singleton chat repository retaining its initial endpoint/client for
+  ordinary and agent sends after Settings saved new runtime values. Generalized
+  the image path's live connection provider to all explicit sends; each run uses
+  one current config/client pair, including the agent model and credentials.
+  Existing constructor-only test/adaptor injection remains available.
+- Clearing the endpoint now blocks subsequent sends before appending a phantom
+  user turn. Existing sessions/history and image consent/config-change guards
+  are preserved. No new configuration store or copied credentials were added.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, 4m 2s; **1315 unit tests,
+  0 failures, 0 errors**. New actual loopback HTTP test starts with stale/empty
+  constructor values, verifies ordinary and agent requests use changed key/model,
+  then verifies clearing config sends no request and adds no message.
+  Existing image/provider and transport regression tests pass. `git diff --check`
+  passed.
+- PKB110 / Android 16: both staged installs **Success**;
+  `ChatTransportDeviceTest`: **OK (2 tests)**, 0.352 seconds. New isolated Room /
+  labelled model-fixture check verifies changed config reaches both send paths
+  and preserves four actual stored messages. Actual socket-cancellation regression
+  also passes. No private chat database or real provider account was used.
+  Latest production cold launch **Status: ok**, 486 ms; evidence outside Git.
+- Commit subject: `fix: apply current cloud settings to ordinary and agent chat`.

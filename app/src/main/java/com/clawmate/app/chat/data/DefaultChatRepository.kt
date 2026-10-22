@@ -55,8 +55,8 @@ class DefaultChatRepository(
     private val settingsRepository: com.clawmate.app.settings.data.SettingsRepository? = null,
     private val toolRegistry: com.clawmate.app.chat.agent.ToolRegistry = com.clawmate.app.chat.agent.createDefaultToolRegistry(),
     private val imageStore: ChatImageFileStore? = null,
-    /** Reads the latest saved runtime configuration at the explicit image send seam. */
-    private val imageClientProvider: (() -> Pair<ChatServerConfig, ChatClient>)? = null,
+    /** Reads the latest saved runtime connection at each explicit send. */
+    private val connectionProvider: (() -> Pair<ChatServerConfig, ChatClient>)? = null,
 ) : ChatRepository {
 
     @Volatile
@@ -83,13 +83,16 @@ class DefaultChatRepository(
         return ChatMappers.fromEntity(entity, messages)
     }
 
-    override suspend fun sendMessage(userText: String): Flow<ChatSendEvent> = sendOrdinaryMessage(userText, emptyList(), config, client)
+    override suspend fun sendMessage(userText: String): Flow<ChatSendEvent> = flow {
+        val (currentConfig, currentClient) = connection()
+        sendOrdinaryMessage(userText, emptyList(), currentConfig, currentClient).collect { emit(it) }
+    }
 
-    private fun imageConnection(): Pair<ChatServerConfig, ChatClient> = imageClientProvider?.invoke() ?: (config to client)
+    private fun connection(): Pair<ChatServerConfig, ChatClient> = connectionProvider?.invoke() ?: (config to client)
 
     override fun imageUploadInfo(): ChatImageUploadInfo? {
         if (imageStore == null) return null
-        val current = imageConnection().first
+        val current = connection().first
         val url = current.completionsUrl.toHttpUrlOrNull() ?: return null
         if (url.username.isNotEmpty() || url.password.isNotEmpty() || current.modelName.isBlank()) return null
         val identity = java.security.MessageDigest.getInstance("SHA-256")
@@ -102,7 +105,7 @@ class DefaultChatRepository(
         check(imageUploadInfo() != null) { "请先配置支持图片输入的聊天服务" }
         require(images.size in 1..ChatImageBounds.MAX_IMAGES) { "单次最多发送4张图片" }
         images.forEach { validateChatImageDataUrl(it.dataUrl) }
-        val (currentConfig, currentClient) = imageConnection()
+        val (currentConfig, currentClient) = connection()
         sendOrdinaryMessage(userText.ifBlank { com.clawmate.app.chat.model.CHAT_IMAGE_ATTACHMENT_ONLY_PROMPT },
             images, currentConfig, currentClient).collect { emit(it) }
     }
@@ -196,6 +199,7 @@ class DefaultChatRepository(
     }
 
     override suspend fun sendAgentMessage(userText: String): Flow<ChatSendEvent> = flow {
+        val (config, client) = connection()
         if (!ChatServerConfig.isConfigured(config.baseUrl)) {
             throw com.clawmate.app.chat.cloud.ChatException(
                 com.clawmate.app.chat.cloud.ChatErrorKind.CONFIG,
