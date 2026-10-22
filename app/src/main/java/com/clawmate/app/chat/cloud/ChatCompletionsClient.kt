@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -52,6 +58,7 @@ class ChatCompletionsClient(
             val body = buildBody(request, stream = false)
             val httpRequest = buildHttpRequest(body)
             val call = httpClient.newCall(httpRequest)
+            val cancellationGuard = cancelCallWithOwner(call)
             try {
                 val response = call.execute()
                 response.use { resp ->
@@ -71,8 +78,10 @@ class ChatCompletionsClient(
                 call.cancel()
                 throw e
             } catch (e: IOException) {
-                call.cancel()
-                throw if (call.isCanceled()) e else mapIOException(e)
+                currentCoroutineContext().ensureActive()
+                throw mapIOException(e)
+            } finally {
+                cancellationGuard.cancel()
             }
         }
 
@@ -84,13 +93,14 @@ class ChatCompletionsClient(
      * Streams a completion over SSE as a cold [Flow] emitting [CloudStreamChunk]
      * deltas. The flow is cancelled by the collector (e.g. the ViewModel),
      * which closes the underlying connection via [Call.cancel]. Reading is
-     * cancellable between SSE lines. A terminal `[DONE]` (done chunk) completes
+     * cancellable while waiting for SSE lines. A terminal `[DONE]` (done chunk) completes
      * the flow normally.
      */
     override fun completionStream(request: ChatCompletionsRequest): Flow<CloudStreamChunk> = flow {
         val body = buildBody(request, stream = true)
         val httpRequest = buildHttpRequest(body)
         val call = httpClient.newCall(httpRequest)
+        val cancellationGuard = cancelCallWithOwner(call)
 
         val parser = SseEventParser()
         var finished = false
@@ -134,9 +144,10 @@ class ChatCompletionsClient(
             call.cancel()
             throw e
         } catch (e: IOException) {
-            call.cancel()
-            throw if (call.isCanceled()) CancellationException("stream cancelled") else mapIOException(e)
+            currentCoroutineContext().ensureActive()
+            throw mapIOException(e)
         } finally {
+            cancellationGuard.cancel()
             call.cancel()
         }
     }.flowOn(Dispatchers.IO)
@@ -144,6 +155,12 @@ class ChatCompletionsClient(
     // ---------------------------------------------------------------------
     // Internals
     // ---------------------------------------------------------------------
+
+    /** Child lifetime follows the request owner even while its thread blocks in socket I/O. */
+    private suspend fun cancelCallWithOwner(call: okhttp3.Call): Job =
+        CoroutineScope(currentCoroutineContext()).launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { call.cancel() }
+        }
 
     private fun buildBody(request: ChatCompletionsRequest, stream: Boolean): RequestBody {
         val wire = request.copy(stream = stream)

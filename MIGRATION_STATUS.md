@@ -4343,3 +4343,32 @@ Commit: 312f233
   parser/VM tests were not repeated for this two-line presentation fix.
 - Real configured-provider answer relevance/quality remains unverified.
 - Commit subject: `feat: answer gallery questions with validated photo citations`.
+
+## 2026-10-23 — Cloud transport: actual socket cancellation and truthful IO errors
+
+- Fixed shared completion/SSE transport cancellation while blocked in socket I/O.
+  A request-owned child closes the OkHttp call when its owner is cancelled, and
+  is cleaned up on normal completion/failure. The blocking reader can now stop
+  without waiting for the next body/stream line. Public API, wire and parsers
+  remain unchanged.
+- Fixed IOException handling that cancelled the call before inspecting its
+  cancelled flag, misclassifying real transport failures. Owner cancellation now
+  propagates as cancellation; genuine read timeout/network failures retain their
+  typed error so the UI can show retry/error feedback.
+- Initial full run: **1314 tests, 1 failure** in the new SSE test, whose throttled
+  fixture did not reach response headers before its wait expired; that run did
+  not verify blocked SSE cancellation. Switched to an explicit loopback address
+  and a body delay after headers to exercise the intended state. Initial/final
+  logs remain outside Git; no success was inferred from the failed run.
+- Final offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, 1m 44s; **1314 unit tests,
+  0 failures, 0 errors**. Three actual local HTTP tests verify ordinary/SSE call
+  cancellation within a two-second bound and correctly typed read timeouts in
+  both modes. `git diff --check` passed.
+- PKB110 / Android 16: both staged installs **Success**;
+  `ChatTransportDeviceTest`: **OK (1 test)**, 0.276 seconds. A test-owned loopback
+  server receives actual Android HTTP requests and partial SSE, then observes
+  peer disconnection after cancelling each client. No external provider or user
+  data is involved. Latest production launch verified separately; transport
+  fixture checks do not establish configured-provider model behavior.
+- Commit subject: `fix: cancel blocked cloud calls and preserve transport errors`.
