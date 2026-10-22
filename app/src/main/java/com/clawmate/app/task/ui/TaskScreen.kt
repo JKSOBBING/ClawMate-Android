@@ -1,6 +1,7 @@
 package com.clawmate.app.task.ui
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,6 +62,13 @@ fun TaskScreen(
         factory = TaskViewModelFactory(TaskComponent.repository(context), TaskComponent.runner(context)),
     )
     val state by vm.state.collectAsState()
+    val config by vm.config.collectAsState()
+
+    config?.let { document ->
+        BackHandler(onBack = vm::closeConfig)
+        WorkflowConfigScreen(document, onBack = vm::closeConfig, onRetry = { vm.openConfig(document.task) })
+        return
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         val error = state.error
@@ -145,6 +154,7 @@ private fun TaskContent(
                                 scene = scene,
                                 isRunning = state.runningTaskId == task.id,
                                 onToggle = { vm.toggleEnabled(task) },
+                                onViewConfig = { vm.openConfig(task) },
                             )
                         }
                     }
@@ -234,7 +244,7 @@ private fun TaskSceneHeading(scene: WorkflowScene, tasks: List<WorkflowTask>) {
 /**
  * Compact task row matching HarmonyOS SimpleTaskRow.
  * 40x40 icon, title + status label, and a switch — no expand, no run button,
- * no step summary (those belong in the config/editor view).
+ * no step summary. Configuration inspection opens a separate read-only view.
  */
 @Composable
 private fun SimpleTaskRow(
@@ -242,6 +252,7 @@ private fun SimpleTaskRow(
     scene: WorkflowScene,
     isRunning: Boolean,
     onToggle: () -> Unit,
+    onViewConfig: () -> Unit,
 ) {
     val accent = parseHexColor(scene.colorHex)
     val borderColor = if (isRunning) accent else Color(0xFFE8EDF5)
@@ -304,6 +315,12 @@ private fun SimpleTaskRow(
                     color = statusColor,
                     modifier = Modifier.padding(top = 5.dp),
                 )
+                TextButton(
+                    onClick = onViewConfig,
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("查看配置", fontSize = 12.sp, color = accent)
+                }
             }
             Switch(
                 checked = task.enabled,
