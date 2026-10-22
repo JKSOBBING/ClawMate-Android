@@ -3861,3 +3861,32 @@ Commit: 312f233
   local storage tests are distinct from model/provider verification. PR still
   awaits the user's final review.
 - Commit subject: `feat: query indexed personal events from the chat agent`.
+
+## 2026-10-23 — F06: native chat Markdown and whole-message copying
+
+- Harmony reference: `components/MarkdownView.ets` and
+  `pages/chat/ChatMessageList.ets` at `cd69b68`. Completed user and assistant chat
+  messages now render headings, emphasis, lists, quotes, monospace code/language
+  captions and tables. Streaming remains immediate plain text until completion,
+  matching the source; task/notice text remains exact. Message storage is unchanged.
+- Compose hosts a native TextView renderer with pinned Markwon core/tables 4.6.2
+  (API verified against its upstream tag). No WebView or remote image loader is
+  used. Image alternatives and literal HTML remain inert text. Explicit link taps
+  permit only valid HTTP(S) URLs without embedded credentials; unsupported links
+  and unavailable browser handling have visible error feedback.
+- Added whole-message original-text copy actions for both sides, with success and
+  failure feedback. Copies exclude the streaming cursor and separate tool traces.
+  Native selection remains available for partial rendered-text copying.
+- `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest`:
+  **BUILD SUCCESSFUL**, **1199 unit tests, 0 failures, 0 errors**. Two unit tests
+  exercise URL schemes, credentials, control characters, malformed URLs, encoded
+  paths, IPv6 and international hostnames. Three Android tests are compiled for
+  formatting/code/link spans, table spans and inert HTML/image handling.
+  `git diff --check` passed.
+- **Device rendering/copy tests remain pending** the phone's auxiliary-package
+  security verification described under F04. No Android test is reported as passed.
+  The waiting install also held the test APK open on Windows and caused one
+  packaging failure. Stopping that install client released the file lock; the final
+  build above passed. Future install attempts should use staged APK copies outside
+  the Gradle output directory, and must not solve/bypass the phone challenge.
+- Commit subject: `feat: render chat Markdown and copy complete messages`.

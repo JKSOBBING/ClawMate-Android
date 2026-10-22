@@ -109,6 +109,8 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.tables)
 
     // Phase 11 — on-device Chinese text recognition (ML Kit). Bundled standalone
     // SDK; the recognizer may download the Chinese model via Play services on
