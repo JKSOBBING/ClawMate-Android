@@ -13,7 +13,7 @@ feature below starts from zero. Detailed evidence and completed checks are in
 | F01 | Executable home task suggestions | `pages/home/HomePage.ets` | Pending |
 | F02 | Emotional support chat entry and prompt | `pages/home/HomePage.ets`, `pages/Index.ets` | Pending |
 | F03 | Chat → daily-log long-term memory synchronization | `datamanager/ChatMemorySync.ets`, `ChatMemoryExtraction.ets` | Pending |
-| F04 | `query_events` personal memory agent tool | `datamanager/DataManagerQueryEventsTool.ets` | Pending |
+| F04 | `query_events` personal memory agent tool | `datamanager/DataManagerQueryEventsTool.ets` | Implemented; unit tests pass; device tests await installer security verification |
 | F05 | Image attachment transmission to a vision-capable cloud model | `pages/chat/ChatAttachmentPolicy.ets`, `pages/Index.ets` | Pending; picker exists |
 | F06 | Markdown, code, safe links, full-message copying | `components/MarkdownView.ets`, `pages/chat/ChatMessageList.ets` | Pending |
 | F07 | Gallery cloud vision analyzer | `utils/gallery/GalleryAnalyzer.ets` | Pending; current adapter reports unconfigured |

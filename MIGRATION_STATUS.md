@@ -3825,3 +3825,39 @@ Commit: 312f233
 - Existing persisted fallback titles are preserved until the user saves a config;
   new task initialization now derives titles correctly from the bundled metadata.
 - Commit subject: `fix: preserve quoted workflow text during JSON repair`.
+
+## 2026-10-23 — F04: query_events implementation (device verification pending)
+
+- Harmony reference: `datamanager/DataManagerQueryEventsTool.ets` and
+  `datamanager/IndexService.ets` at `cd69b68`. Bound a read-only `query_events`
+  tool to the real Android chat Agent registry and app-private event index.
+- Supports keyword AND/OR, domains, person/place/merchant names and aliases,
+  exact dates, months, inclusive/open date ranges, result limits and todo deadline
+  inclusion/sorting. Enriched fields now participate before filtering. Existing
+  callers retain their default query limits and options.
+- Validates arguments and conflicting time scopes. Missing/corrupt indexes return
+  an actionable refresh error. Explicit empty indexes stay empty even if stale
+  partition files remain; partition names cannot traverse outside the event folder.
+  An initial full run (1197 tests, 1 failure) caught the existing tolerant codec's
+  corrupt-to-empty behavior; index availability now uses strict decoding.
+- Tool JSON preserves the source `ok`/`events` contract, per-result numeric IDs,
+  summary/detail/domains/entities/sources/todo. It omits internal IDs, state files
+  and source refs, and reports result/content truncation while remaining valid JSON
+  within the registry's 4000-character boundary. It never builds indexes or collects
+  new data as a side effect, and treats returned historical text as data.
+- Final commands: `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest` offline, proxy disabled: **BUILD SUCCESSFUL**,
+  **1197 tests, 0 failures, 0 errors**. Ten new unit tests cover validation,
+  persisted query behavior, corruption, enrichment, deadlines and output bounds.
+  Android test dependencies were downloaded in a separate proxy-enabled build.
+  `git diff --check` passed.
+- **Device tests NOT run yet.** Main dev APK installation returned `Success`.
+  The auxiliary `com.clawmate.app.dev.test` APK installation reached the phone's
+  “安全验证 / 拖动下方滑块完成拼图” challenge. This needs the user; it was not
+  solved or bypassed. Two instrumented tests are ready for production registration
+  and real Android-file query behavior using clearly labelled test-owned fixtures.
+  Reinstall the final main APK and rerun those tests after verification succeeds.
+- No real cloud-provider call has been validated for this feature; direct tool and
+  local storage tests are distinct from model/provider verification. PR still
+  awaits the user's final review.
+- Commit subject: `feat: query indexed personal events from the chat agent`.
