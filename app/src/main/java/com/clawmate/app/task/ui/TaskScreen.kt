@@ -66,7 +66,13 @@ fun TaskScreen(
 
     config?.let { document ->
         BackHandler(onBack = vm::closeConfig)
-        WorkflowConfigScreen(document, onBack = vm::closeConfig, onRetry = { vm.openConfig(document.task) })
+        WorkflowConfigScreen(
+            document, onBack = vm::closeConfig, onRetry = { vm.openConfig(document.task) },
+            canEdit = state.runningTaskId == null && !state.batchRunning,
+            onEdit = vm::editConfig, onDraftChange = vm::updateConfigDraft,
+            onSave = vm::saveConfig, onCancelEdit = vm::cancelConfigEdit,
+            onDiscard = vm::discardConfigEdits, onKeepEditing = vm::keepConfigEditing,
+        )
         return
     }
 

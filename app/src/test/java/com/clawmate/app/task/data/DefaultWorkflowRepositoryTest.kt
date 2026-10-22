@@ -80,6 +80,37 @@ class DefaultWorkflowRepositoryTest {
         assertTrue(reloadedJson != null && reloadedJson == edited)
         val after = repo.tasks().first { it.id == task.id }
         assertTrue(after.isUserModified)
+        assertEquals("我的自定义任务", after.title)
+        val reopened = DefaultWorkflowRepository(base, FileDirBundledConfigReader(bundledDir()))
+        assertEquals(edited, reopened.configJson(after))
+        assertEquals("custom", reopened.tasks().first { it.id == task.id }.source)
+    }
+
+    @Test
+    fun `invalid edit does not change existing configuration`() = runBlocking {
+        val base = Files.createTempDirectory("base").toFile()
+        val repo = DefaultWorkflowRepository(base, FileDirBundledConfigReader(bundledDir()))
+        val task = repo.tasks().first()
+        val before = repo.configJson(task)
+        val attempt = runCatching { repo.saveConfigJson(task, "{broken json}") }
+        assertTrue(attempt.isFailure)
+        assertEquals(before, repo.configJson(task))
+        assertFalse(repo.tasks().first().isUserModified)
+        assertFalse(File(base, "workflows/configs").listFiles()!!.any { it.extension == "tmp" })
+    }
+
+    @Test
+    fun `configuration paths cannot escape the private config directory`() = runBlocking {
+        val base = Files.createTempDirectory("base").toFile()
+        val repo = DefaultWorkflowRepository(base, FileDirBundledConfigReader(bundledDir()))
+        val task = repo.tasks().first()
+        val sentinel = File(base, "sentinel.json").apply { writeText("unchanged") }
+        for (name in listOf("../../sentinel.json", "..\\..\\sentinel.json", sentinel.absolutePath, "C:sentinel.json", "..")) {
+            val malicious = task.copy(configFileName = name)
+            assertTrue(name, runCatching { repo.saveConfigJson(malicious, """{"steps":[]}""") }.isFailure)
+            assertTrue(name, runCatching { repo.configJson(malicious) }.isFailure)
+            assertEquals("unchanged", sentinel.readText())
+        }
     }
 
     @Test

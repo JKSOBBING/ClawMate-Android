@@ -3772,3 +3772,33 @@ Commit: 312f233
   data were preserved; validation uses `com.clawmate.app.dev`.
 - Remaining F10 scope: validated editing/saving, task creation/deletion, graph UI.
 - Commit subject: `feat: add read-only workflow configuration viewer`.
+
+## 2026-10-23 — F10b: validated workflow JSON editing
+
+- Harmony reference: `pages/task/TaskPage.ets` JSON editor/save flow and
+  `utils/WorkflowStorage.ets`. Added editing, save progress, retained drafts on
+  failure, and explicit discard/keep-editing confirmation. Saving does not execute
+  a workflow. Editing is unavailable for truncated previews and while tasks run.
+- Authored text is checked as JSON before any write; root/branch shapes, step
+  type, required IDs, duplicate IDs within a branch, length and nesting are
+  validated. Unknown fields and future step types remain intact in the original
+  saved text; actual runner capability errors still apply when executing.
+- The repository rejects filenames escaping the app-private config directory,
+  verifies the task still exists, replaces files through flushed temporary files,
+  and refreshes task metadata without changing its run/enabled state.
+- Added `MIGRATION_BACKLOG.md` to keep the source comparison and remaining slices
+  available alongside the code. F10 creation/deletion and graph editing remain.
+- Executed `:app:testDebugUnitTest :app:assembleDebug` offline with the dev-package
+  init script: **BUILD SUCCESSFUL**, **1183 tests, 0 failures, 0 errors**. Ten new
+  tests cover structure, unknown fields, bounds, draft/save state, failed writes,
+  persistence and filename containment. `git diff --check` passed.
+- PKB110 / Android 16: final APK installed successfully and launched in 528 ms.
+  Verified invalid JSON and duplicate-ID errors, keep/discard editing, successful
+  save, metadata update, and re-reading the exact saved text after a cold restart.
+  Test edits were then restored in the dev app; original config and backup SHA-256
+  matched. No original-app data was touched. No app fatal crash was observed.
+- Follow-up discovered during validation: the existing tolerant JSON repair
+  corrupts valid Chinese smart quotes in string values. Fix separately by parsing
+  original JSON before attempting repair; some bundled task titles currently fall
+  back to filenames because of this existing bug.
+- Commit subject: `feat: edit and persist validated workflow JSON`.
