@@ -10,7 +10,7 @@ feature below starts from zero. Detailed evidence and completed checks are in
 
 | ID | Gap / next Android slice | Harmony source of truth | State |
 |---|---|---|---|
-| F01 | Executable home task suggestions | `pages/home/HomePage.ets` | Pending |
+| F01 | Executable home task suggestions | `pages/home/HomePage.ets`, `HomeTaskSuggestion.ets` | Generation, evidence/detail, editable copy and supported-workflow navigation complete; free-form GUI/Qwen execution pending P01/P06 |
 | F02 | Emotional support chat entry and prompt | `pages/home/HomePage.ets`, `pages/Index.ets` | Pending |
 | F03 | Chat → daily-log long-term memory synchronization | `datamanager/ChatMemorySync.ets`, `ChatMemoryExtraction.ets` | Implemented with per-run consent and separate local index refresh; unit/build and 4 feature device tests pass; real provider/configured-account verification pending |
 | F04 | `query_events` personal memory agent tool | `datamanager/DataManagerQueryEventsTool.ets` | Implemented; unit/build and 2 connected-device query tests pass |

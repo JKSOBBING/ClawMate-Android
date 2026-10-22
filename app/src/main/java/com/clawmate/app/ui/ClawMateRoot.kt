@@ -219,6 +219,8 @@ private fun MainTabScaffold(
                     galleryItemsSource = galleryItemsSource,
                     dailyLogSource = dailyLogSource,
                     profileGenerationRepository = profileGenerationRepository,
+                    onOpenTasks = { selectedRoute = Destination.Task.route },
+                    onOpenSettings = { selectedRoute = Destination.Settings.route },
                 )
                 }
                 Destination.Summary.route -> CollectionSummaryScreen(
@@ -247,6 +249,8 @@ private fun MainTabScaffold(
                     galleryItemsSource = galleryItemsSource,
                     dailyLogSource = dailyLogSource,
                     profileGenerationRepository = profileGenerationRepository,
+                    onOpenTasks = { selectedRoute = Destination.Task.route },
+                    onOpenSettings = { selectedRoute = Destination.Settings.route },
                 )
             }
         }

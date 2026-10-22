@@ -4087,3 +4087,40 @@ Commit: 312f233
   completes the pending four F06 device component checks. No cloud call needed.
   `git diff --check` passed; logs remain outside Git.
 - Commit subject: `test: verify complete chat message copy on Android clipboard`.
+
+## 2026-10-23 — F01a: grounded home task suggestions and detail flow
+
+- Ported the generation/context/evidence/short-task contract from
+  `pages/home/HomeTaskSuggestion.ets` and `HomePage.ets` at `cd69b68`. The explicit
+  Home action sends up to 24 real indexed events and four populated profile
+  summaries, using compact per-request references; internal event IDs/state paths
+  and source refs are omitted. Prior tasks are supplied for duplicate avoidance.
+  Nothing reads context or calls a model on construction/recomposition.
+- A real completion client requires exactly three distinct suggestions with real
+  referenced evidence. It supports the legacy `tasks` response key, bounded text,
+  guarded single-action drafts and source-compatible Qwen applicability metadata.
+  Missing/fabricated evidence, incomplete output and repeated tasks cannot replace
+  a valid batch. Failed refresh/cancellation preserves previous suggestions.
+- Added Home “猜你想做 · AI 任务建议”, generation/cancel/error states, evidence
+  details, editable/validated task copying, and navigation to existing workflows
+  or Settings. The generation control explains that indexed text/profile summaries
+  are sent to the saved cloud model. Suggestion titles/reasons are labelled AI.
+- **Execution boundary:** free-form phone GUI planning and Qwen handoff are not
+  implemented by Android's current chat tool adapters. Details say this explicitly;
+  copying is not execution, and “查看可用流程” opens the real task page for user
+  selection. This is F01's generation/detail slice, not a claim of full F01 execution
+  parity. P01/P06 remain open; no generated task is marked executed/completed.
+- Offline `:app:testDebugUnitTest :app:assembleDebug
+  :app:assembleDebugAndroidTest`: **BUILD SUCCESSFUL**, **1255 unit tests,
+  0 failures, 0 errors**. Sixteen new tests cover bounded context/evidence,
+  duplicates, missing refs, task validation/platform applicability, actual local
+  HTTP protocol, no-config/no-input gates, cancellation and retained batches.
+  `git diff --check` passed.
+- PKB110 / Android 16: main/test installs **Success**; fixture-backed
+  `HomeTaskSuggestionsDeviceTest` **OK (2 tests)**, 65.626 seconds. Real Compose
+  controls show evidence, the unavailable execution explanation, workflow callback
+  and missing-config/settings callback. Manual production Home also shows the new
+  section after scrolling; unconfigured generation gives the correct error and
+  “查看可用流程” opens the actual 11-workflow page. Cold launch **Status: ok**,
+  472 ms. No external-app workflow or real provider request was run.
+- Commit subject: `feat: generate grounded home task suggestions with evidence`.

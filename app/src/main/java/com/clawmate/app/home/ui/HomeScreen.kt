@@ -87,6 +87,8 @@ fun HomeScreen(
     dailyLogSource: (suspend () -> List<com.clawmate.app.datamanager.DailyLogEntry>)? = null,
     profileGenerationRepository: com.clawmate.app.datamanager.ProfileGenerationRepository? = null,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(homeRecRepository, profileSource, galleryItemsSource, dailyLogSource, profileGenerationRepository)),
+    onOpenTasks: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val list by viewModel.list.collectAsState()
@@ -121,6 +123,8 @@ fun HomeScreen(
             onNext = viewModel::nextPage,
             onSetCompleted = viewModel::setRecommendationCompleted,
             onOpenAvatar = { showAvatar = true },
+            onOpenTasks = onOpenTasks,
+            onOpenSettings = onOpenSettings,
         )
     }
 }
@@ -190,6 +194,8 @@ private fun HomeContent(
     onNext: () -> Unit,
     onSetCompleted: (String, Boolean) -> Unit,
     onOpenAvatar: () -> Unit,
+    onOpenTasks: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -225,6 +231,8 @@ private fun HomeContent(
         // Keep the real indexed-profile generation flow available after the
         // Harmony-aligned first viewport, rather than inserting an extra card
         // between the source page's completeness and recommendation blocks.
+        HomeTaskSuggestionsSection(profile.domains, onOpenTasks, onOpenSettings)
+
         ProfileGenerationSection(
             profileGeneration = profileGeneration,
             onGenerateProfile = onGenerateProfile,
