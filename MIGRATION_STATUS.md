@@ -3890,3 +3890,24 @@ Commit: 312f233
   build above passed. Future install attempts should use staged APK copies outside
   the Gradle output directory, and must not solve/bypass the phone challenge.
 - Commit subject: `feat: render chat Markdown and copy complete messages`.
+
+## 2026-10-23 — F04/F06 connected-device verification
+
+- The user completed the phone's installer security verification. Both staged
+  APKs from `fa84678` were installed with `adb install -r`: **Success** for
+  `com.clawmate.app.dev` and `com.clawmate.app.dev.test`. The original application
+  and its data were preserved.
+- Ran `adb shell am instrument -w -r -e class
+  com.clawmate.app.QueryEventsDeviceTest,com.clawmate.app.ChatMarkdownDeviceTest,com.clawmate.app.MainActivityTest
+  com.clawmate.app.dev.test/androidx.test.runner.AndroidJUnitRunner` on PKB110 /
+  Android 16: **OK (6 tests)**, 46.441 seconds. This supersedes the pending
+  installer status above.
+- Two tests verified production memory-tool registration and structured queries
+  against test-owned files on the real device. Three tests verified actual
+  native formatting/code/link spans, table spans and inert HTML/image alternatives.
+  The launch test verified all five navigation tabs. No provider/network call was
+  made by these tests. Whole-message clipboard interaction still needs its own
+  UI check; renderer tests alone do not verify it.
+- Device log is saved outside Git as `f04-f06-device-tests.log`. Future installs
+  continue to use staged APK copies to avoid locking Gradle packaging outputs.
+- Commit subject: `docs: record connected-device query and Markdown checks`.
