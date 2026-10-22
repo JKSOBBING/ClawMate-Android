@@ -4305,3 +4305,41 @@ Commit: 312f233
   cold launch **Status: ok**, 477 ms. UI/screenshot evidence is outside Git.
   Configured-provider multimodal support/recognition quality remains unverified.
 - Commit subject: `feat: send confirmed chat images and preserve private history`.
+
+## 2026-10-23 — F08: grounded gallery question answering
+
+- Ported the source GalleryPage/CloudModelClient flow: search saved gallery
+  records locally, select at most ten keyword hits, then ask the saved gallery
+  model about their text. No automatic request on entry. Per-run consent names
+  the destination/model and candidate titles/excerpts and describes the metadata
+  scope. Empty search, missing config and cancelled consent send nothing.
+- Context is capped at 16000 characters, OCR at 240 per item, with bounded
+  title/summary/details/tags and Unicode-safe clipping. Structured JSON separates
+  data from instructions. Only ephemeral request IDs are sent; original photos,
+  URI/private filenames, original EXIF/GPS and persisted item IDs are excluded.
+- Strict bounded answers preserve answer/matchedIds/confidence contracts.
+  Citations must resolve a real candidate, confidence must be finite in [0,1],
+  and incomplete/tool/error replies fail explicitly. Uncited claims are replaced
+  by a controlled insufficient-evidence state. This validates provenance, not
+  factual accuracy of model-written prose; the UI labels AI output and shows the
+  saved evidence with a real local-photo detail action.
+- Draft/retry/stop/clear and generation guards retain prior valid answers with
+  their original question label and ignore late cancelled errors. QA is separate
+  from ordinary chat and does not write messages or analysis back to storage.
+- Full offline unit/main/test-APK check: **BUILD SUCCESSFUL**, 3m 55s;
+  **1311 unit tests, 0 failures, 0 errors**. Nine new tests cover bounded/private
+  context, Unicode, citation/refusal rules, actual local HTTP and cancellation/
+  configuration/retry boundaries. `git diff --check` passed.
+- PKB110 / Android 16: both staged installs **Success**;
+  `GalleryQuestionDeviceTest`: **OK (2 tests)**, 49.947 seconds. Native controls
+  verify cancelled/confirmed upload, real source-ID mapping for detail navigation,
+  and empty/configuration gates using labelled fixtures, without a real provider.
+- Manual production entry/config feedback and cold launch **Status: ok**, 488 ms.
+  Screenshot review found the duplicate floating picker obscuring QA error text.
+  Hid that duplicate during active questions/answers; the top picker remains.
+  Main-only layout build **BUILD SUCCESSFUL**, 1m 57s; staged install **Success**,
+  latest cold launch **Status: ok**, 647 ms. Actual screenshot now shows readable
+  feedback; manual test draft cleared. Evidence is outside Git. Unchanged model/
+  parser/VM tests were not repeated for this two-line presentation fix.
+- Real configured-provider answer relevance/quality remains unverified.
+- Commit subject: `feat: answer gallery questions with validated photo citations`.
