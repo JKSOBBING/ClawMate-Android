@@ -1,9 +1,13 @@
 package com.clawmate.app.task.data
 
 import com.clawmate.app.task.json.WorkflowJsonParser
+import com.clawmate.app.task.json.WorkflowEditValidator
 import com.clawmate.app.task.model.WorkflowTask
 import com.clawmate.app.task.runner.WorkflowRunResult
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.AtomicMoveNotSupportedException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,13 +51,22 @@ class DefaultWorkflowRepository(
 
     override suspend fun saveConfigJson(task: WorkflowTask, newJson: String): Unit =
         withContext(Dispatchers.IO) {
+            require(WorkflowEditValidator.error(newJson) == null) { "Invalid workflow configuration" }
             ensureWorkspace()
             val file = resolvedConfigFile(task.configFileName)
-            file.writeText(newJson)
-            // Mark the task as user-modified (persisted to the index).
             val tasks = loadTasks()
+            require(tasks.any { it.id == task.id && it.configFileName == task.configFileName }) {
+                "Workflow no longer exists"
+            }
+            val metadata = (WorkflowJsonParser.parse(newJson) as? WorkflowJsonParser.Result.Ok)?.definition?.metadata
+            replaceText(file, newJson)
+            // Mark the task as user-modified (persisted to the index).
             writeIndex(tasks.map {
-                if (it.id == task.id) it.copy(isUserModified = true) else it
+                if (it.id == task.id) it.copy(
+                    isUserModified = true,
+                    title = metadata?.description?.takeIf(String::isNotBlank) ?: it.title,
+                    source = metadata?.name?.takeIf(String::isNotBlank) ?: it.source,
+                ) else it
             })
         }
 
@@ -155,7 +168,7 @@ class DefaultWorkflowRepository(
 
     private fun writeIndex(tasks: List<WorkflowTask>) {
         ensureWorkspace()
-        indexFile.writeText(WorkflowTaskIndexCodec.encode(tasks))
+        replaceText(indexFile, WorkflowTaskIndexCodec.encode(tasks))
     }
 
     private fun ensureWorkspace() {
@@ -163,11 +176,35 @@ class DefaultWorkflowRepository(
         if (!configsDir.exists()) configsDir.mkdirs()
     }
 
-    private fun resolvedConfigFile(fileName: String): File =
-        if (fileName.contains('/') || fileName.contains('.')) configsDir.resolve(fileName)
-        else configsDir.resolve("$fileName.json")
+    private fun resolvedConfigFile(fileName: String): File {
+        require(fileName.isNotBlank() && fileName != "." && fileName != ".." &&
+            fileName.none { it == '/' || it == '\\' || it == ':' || it.isISOControl() }) {
+            "Invalid configuration filename"
+        }
+        val file = configsDir.resolve(if (fileName.contains('.')) fileName else "$fileName.json")
+        require(file.canonicalFile.parentFile == configsDir.canonicalFile) { "Configuration outside workspace" }
+        return file
+    }
 
-    private fun copiedConfigFile(fileName: String): File = configsDir.resolve(fileName)
+    private fun copiedConfigFile(fileName: String): File = resolvedConfigFile(fileName)
+
+    /** A failed write cannot leave half of a JSON document in the destination. */
+    private fun replaceText(destination: File, text: String) {
+        val temporary = File.createTempFile("workflow-", ".tmp", destination.parentFile)
+        try {
+            temporary.outputStream().use { stream ->
+                stream.write(text.toByteArray(Charsets.UTF_8))
+                stream.fd.sync()
+            }
+            try {
+                Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            temporary.delete()
+        }
+    }
 
     private fun nowStamp(): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())

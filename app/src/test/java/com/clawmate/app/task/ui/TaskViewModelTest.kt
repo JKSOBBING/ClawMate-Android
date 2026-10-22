@@ -129,6 +129,120 @@ class TaskViewModelTest {
         assertEquals(0, repository.saves)
     }
 
+    @Test
+    fun `valid save preserves raw unknown fields and refreshes metadata without running`() = runTest {
+        val task = task("edit")
+        val repository = FakeTaskRepository(listOf(task))
+        val vm = TaskViewModel(repository, noRun)
+        vm.openConfig(task)
+        advanceUntilIdle()
+        vm.editConfig()
+        val edited = """{ "metadata":{"description":"renamed"}, "steps":[], "future":true }"""
+        vm.updateConfigDraft(edited)
+        vm.saveConfig()
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertEquals(1, repository.saves)
+        assertEquals(edited, repository.savedJson)
+        assertEquals(edited, vm.config.value!!.text)
+        assertNull(vm.config.value!!.draft)
+        assertEquals("renamed", vm.state.value.tasks.single().title)
+        assertTrue(vm.state.value.tasks.single().isUserModified)
+        assertTrue(repository.recorded.isEmpty())
+    }
+
+    @Test
+    fun `invalid drafts and failed writes preserve original text and allow retry`() = runTest {
+        val task = task("edit")
+        val repository = FakeTaskRepository(listOf(task))
+        val vm = TaskViewModel(repository, noRun)
+        vm.openConfig(task)
+        advanceUntilIdle()
+        val original = vm.config.value!!.text
+        vm.editConfig()
+        vm.updateConfigDraft("{steps:[]}")
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertEquals(0, repository.saves)
+        assertTrue(vm.config.value!!.editError != null)
+        val draft = """{"steps":[],"extra":1}"""
+        vm.updateConfigDraft(draft)
+        repository.writeConfig = { throw java.io.IOException("private file path") }
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertEquals(original, vm.config.value!!.text)
+        assertEquals(draft, vm.config.value!!.draft)
+        assertFalse(vm.config.value!!.editError!!.contains("private file path"))
+        assertFalse(vm.config.value!!.isSaving)
+        repository.writeConfig = {}
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertEquals(draft, vm.config.value!!.text)
+    }
+
+    @Test
+    fun `dirty cancel and back require explicit discard and can keep editing`() = runTest {
+        val task = task("edit")
+        val repository = FakeTaskRepository(listOf(task))
+        val vm = TaskViewModel(repository, noRun)
+        vm.openConfig(task)
+        advanceUntilIdle()
+        vm.editConfig()
+        vm.updateConfigDraft("draft")
+        vm.cancelConfigEdit()
+        assertTrue(vm.config.value!!.showDiscardDialog)
+        vm.keepConfigEditing()
+        assertEquals("draft", vm.config.value!!.draft)
+        assertFalse(vm.config.value!!.showDiscardDialog)
+        vm.closeConfig()
+        assertTrue(vm.config.value!!.showDiscardDialog)
+        vm.discardConfigEdits()
+        assertNull(vm.config.value)
+        assertEquals(0, repository.saves)
+    }
+
+    @Test
+    fun `saving cannot be dismissed or have its draft replaced`() = runTest {
+        val task = task("edit")
+        val repository = FakeTaskRepository(listOf(task))
+        val gate = CompletableDeferred<Unit>()
+        repository.writeConfig = { gate.await() }
+        val vm = TaskViewModel(repository, noRun)
+        vm.openConfig(task)
+        advanceUntilIdle()
+        vm.editConfig()
+        val draft = """{"steps":[],"extra":2}"""
+        vm.updateConfigDraft(draft)
+        vm.saveConfig()
+        advanceUntilIdle()
+        vm.closeConfig()
+        vm.cancelConfigEdit()
+        vm.updateConfigDraft("changed while saving")
+        vm.openConfig(task("different"))
+        assertTrue(vm.config.value!!.isSaving)
+        assertEquals(draft, vm.config.value!!.draft)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(vm.config.value!!.isSaving)
+        assertEquals(draft, vm.config.value!!.text)
+    }
+
+    @Test
+    fun `truncated preview cannot become an editable document`() = runTest {
+        val task = task("large")
+        val repository = FakeTaskRepository(listOf(task))
+        repository.readConfig = { "x".repeat(TaskViewModel.MAX_CONFIG_PREVIEW_CHARS + 1) }
+        val vm = TaskViewModel(repository, noRun)
+        vm.openConfig(task)
+        advanceUntilIdle()
+        vm.editConfig()
+        vm.updateConfigDraft("""{"steps":[]}""")
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertNull(vm.config.value!!.draft)
+        assertEquals(0, repository.saves)
+    }
+
     private fun task(id: String) = WorkflowTask(
         id = id,
         sceneId = 0,
@@ -146,12 +260,18 @@ class TaskViewModelTest {
     private class FakeTaskRepository(private val initial: List<WorkflowTask>) : WorkflowRepository {
         var recorded = mutableListOf<String>()
         var saves = 0
+        var savedJson: String? = null
+        var writeConfig: suspend (String) -> Unit = {}
         var readConfig: suspend (WorkflowTask) -> String? = { "{\"steps\":[]}" }
         private var current = initial
 
         override suspend fun tasks() = current
         override suspend fun configJson(task: WorkflowTask) = readConfig(task)
-        override suspend fun saveConfigJson(task: WorkflowTask, newJson: String) { saves++ }
+        override suspend fun saveConfigJson(task: WorkflowTask, newJson: String) {
+            saves++
+            writeConfig(newJson)
+            savedJson = newJson
+        }
         override suspend fun setTaskEnabled(taskId: String, enabled: Boolean) {
             current = current.map { if (it.id == taskId) it.copy(enabled = enabled) else it }
         }

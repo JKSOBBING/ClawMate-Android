@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clawmate.app.task.data.WorkflowRepository
 import com.clawmate.app.task.json.WorkflowJsonParser
+import com.clawmate.app.task.json.WorkflowEditValidator
 import com.clawmate.app.task.model.WorkflowScene
 import com.clawmate.app.task.model.WorkflowSceneConfig
 import com.clawmate.app.task.model.WorkflowTask
@@ -49,14 +50,22 @@ data class StepSummaryLine(
     val indent: Int,
 )
 
-/** Read-only configuration projection, independent of execution state. */
+/** Configuration document and explicit edit/save state, separate from execution. */
 data class WorkflowConfigUiState(
     val task: WorkflowTask,
     val isLoading: Boolean = true,
     val text: String = "",
     val error: String? = null,
     val truncated: Boolean = false,
-)
+    val draft: String? = null,
+    val isSaving: Boolean = false,
+    val editError: String? = null,
+    val notice: String? = null,
+    val showDiscardDialog: Boolean = false,
+    val closeAfterDiscard: Boolean = false,
+) {
+    val hasChanges: Boolean get() = draft != null && draft != text
+}
 
 /**
  * ViewModel for the Task tab: loads tasks from [WorkflowRepository], exposes
@@ -78,6 +87,7 @@ class TaskViewModel(
     val config: StateFlow<WorkflowConfigUiState?> = _config.asStateFlow()
 
     fun openConfig(task: WorkflowTask) {
+        if (_config.value?.isSaving == true || _config.value?.hasChanges == true) return
         configJob?.cancel()
         val request = ++configRequest
         _config.value = WorkflowConfigUiState(task)
@@ -104,14 +114,92 @@ class TaskViewModel(
     }
 
     fun closeConfig() {
+        val current = _config.value
+        if (current?.isSaving == true) return
+        if (current?.hasChanges == true) {
+            _config.value = current.copy(showDiscardDialog = true, closeAfterDiscard = true)
+            return
+        }
+        dismissConfig()
+    }
+
+    private fun dismissConfig() {
         ++configRequest
         configJob?.cancel()
         configJob = null
         _config.value = null
     }
 
+    fun editConfig() {
+        val current = _config.value ?: return
+        if (current.isLoading || current.error != null || current.truncated || current.isSaving ||
+            _state.value.runningTaskId != null || _state.value.batchRunning) return
+        _config.value = current.copy(draft = current.text, editError = null, notice = null)
+    }
+
+    fun updateConfigDraft(text: String) {
+        val current = _config.value ?: return
+        if (current.draft == null || current.isSaving) return
+        _config.value = current.copy(draft = text, editError = null)
+    }
+
+    fun cancelConfigEdit() {
+        val current = _config.value ?: return
+        if (current.isSaving) return
+        _config.value = if (current.hasChanges) {
+            current.copy(showDiscardDialog = true, closeAfterDiscard = false)
+        } else current.copy(draft = null, editError = null)
+    }
+
+    fun keepConfigEditing() {
+        _config.update { it?.copy(showDiscardDialog = false) }
+    }
+
+    fun discardConfigEdits() {
+        val current = _config.value ?: return
+        if (current.isSaving) return
+        if (current.closeAfterDiscard) dismissConfig()
+        else _config.value = current.copy(draft = null, editError = null, showDiscardDialog = false)
+    }
+
+    fun saveConfig() {
+        val current = _config.value ?: return
+        val draft = current.draft ?: return
+        if (current.isSaving || current.truncated || !current.hasChanges) return
+        val error = WorkflowEditValidator.error(draft)
+        if (error != null) {
+            _config.value = current.copy(editError = error)
+            return
+        }
+        val request = configRequest
+        _config.value = current.copy(isSaving = true, editError = null)
+        configJob = viewModelScope.launch {
+            try {
+                repository.saveConfigJson(current.task, draft)
+                if (request != configRequest) return@launch
+                val metadata = (WorkflowJsonParser.parse(draft) as? WorkflowJsonParser.Result.Ok)?.definition?.metadata
+                val savedTask = current.task.copy(
+                    isUserModified = true,
+                    title = metadata?.description?.takeIf(String::isNotBlank) ?: current.task.title,
+                    source = metadata?.name?.takeIf(String::isNotBlank) ?: current.task.source,
+                )
+                _config.value = current.copy(task = savedTask, text = draft, draft = null, notice = "配置已保存")
+                _state.update { state -> state.copy(
+                    tasks = state.tasks.map { if (it.id == savedTask.id) savedTask else it },
+                    stepSummary = emptyList(),
+                    activeResult = null,
+                ) }
+            } catch (cancelled: CancellationException) {
+                if (request == configRequest) _config.value = current.copy(editError = "保存已取消，请重新读取配置确认文件状态")
+                throw cancelled
+            } catch (_: Exception) {
+                if (request == configRequest) _config.value = current.copy(editError = "保存失败，草稿已保留，请重试")
+            }
+        }
+    }
+
     companion object {
-        const val MAX_CONFIG_PREVIEW_CHARS = 256_000
+        const val MAX_CONFIG_PREVIEW_CHARS = WorkflowEditValidator.MAX_CHARS
     }
 
     init {
