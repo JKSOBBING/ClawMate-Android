@@ -40,6 +40,7 @@ import com.clawmate.app.R
 import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.collection.IndexedCollectionTab
 import com.clawmate.app.gallery.collection.IndexedEventCollectionService
+import com.clawmate.app.task.model.WorkflowSceneConfig
 import com.clawmate.app.ui.ClawMateHeader
 import com.clawmate.app.ui.theme.ClawMateDesign
 
@@ -111,7 +112,7 @@ fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
 }
 
 @Composable
-private fun SummarySceneTabs(
+internal fun SummarySceneTabs(
     selected: IndexedCollectionTab,
     onSelect: (IndexedCollectionTab) -> Unit,
 ) {
@@ -184,13 +185,9 @@ private fun SummaryStatsCard(
     }
 }
 
-internal fun summarySceneColor(sceneId: Int): Color = when (sceneId) {
-    0 -> Color(0xFF765BFF)
-    1 -> Color(0xFF39BFA3)
-    2 -> Color(0xFF8066FF)
-    3 -> Color(0xFF4B8BFF)
-    else -> Color(0xFF8066FF)
-}
+internal fun summarySceneColor(sceneId: Int): Color = WorkflowSceneConfig.memoryScenes
+    .firstOrNull { it.sceneId == if (sceneId == 7) 1 else sceneId }
+    ?.colorHex?.removePrefix("#")?.toLongOrNull(16)?.let { Color(0xFF000000 or it) } ?: Color(0xFF8066FF)
 
 @Composable
 private fun SummaryActionCards(onOpenGallery: () -> Unit, onOpenSettings: () -> Unit) {

@@ -18,7 +18,7 @@ feature below starts from zero. Detailed evidence and completed checks are in
 | F06 | Markdown, code, safe links, full-message copying | `components/MarkdownView.ets`, `pages/chat/ChatMessageList.ets` | Implemented; unit/build and 3 device renderer tests pass; whole-message UI copy check pending |
 | F07 | Gallery cloud vision analyzer | `utils/gallery/GalleryAnalyzer.ets` | Pending; current adapter reports unconfigured |
 | F08 | Gallery question answering | `pages/gallery/GalleryPage.ets`, `utils/gallery/GallerySearchService.ets` | Pending; keyword search exists |
-| F09 | Unified gallery → daily-log → index refresh | `utils/gallery/GalleryMemorySync.ets`, `datamanager/DataManagerFacade.ets` | Pending; separate components exist |
+| F09 | Unified gallery → daily-log → index refresh | `utils/gallery/GalleryMemorySync.ets`, `datamanager/DataManagerFacade.ets` | All 12 memory summary categories/legacy mapping complete; unified gallery/global refresh orchestration pending |
 | F10 | Workflow config viewing, JSON editing, creation/deletion, graph editor | `pages/task/TaskPage.ets`, `WorkflowFileViewer.ets` | Viewer `b930746`; JSON editing complete; creation/deletion and graph UI pending |
 | F11 | Workflow `vlm_qa` cloud tool | `utils/WorkflowRunner.ets` | Pending |
 | F12 | Avatar image-to-image and version selection | `datamanager/avatar/AvatarService.ets` | Pending; text-to-image exists |

@@ -89,10 +89,42 @@ class IndexedEventCollectionServiceTest {
     @Test
     fun `tabs are a bounded ordered set with fallback`() {
         val tabs = IndexedEventCollectionService.tabs()
-        assertEquals(4, tabs.size)
+        assertEquals(12, tabs.size)
         assertEquals("shopping", tabs[0].tabId)
         assertEquals(IndexedEventCollectionService.tabForScene(0), tabs[0])
         assertEquals(tabs[0], IndexedEventCollectionService.tabForScene(99)) // fallback
+    }
+
+    @Test
+    fun `personal gallery and remaining workflow memories never fall into shopping`() {
+        for (scene in listOf(4, 5, 6, 8, 9, 10, 11, 12)) {
+            val input = event("memory-$scene", sceneIds = listOf(scene), date = "2026-10-23", summary = "真实分类记录")
+            assertTrue(IndexedEventCollectionService.group(listOf(input), 0).isEmpty())
+            assertEquals(listOf(input.eventId), IndexedEventCollectionService.group(listOf(input), scene).single().eventIds)
+            assertEquals(scene, IndexedEventCollectionService.tabForScene(scene).sceneId)
+        }
+    }
+
+    @Test
+    fun `legacy takeout id maps to takeout while unknown ids retain fallback`() {
+        val legacy = event("legacy", sceneIds = listOf(7), date = "2026-10-23")
+        assertEquals(1, IndexedEventCollectionService.tabForScene(7).sceneId)
+        assertEquals(listOf("legacy"), IndexedEventCollectionService.group(listOf(legacy), 1).single().eventIds)
+        assertTrue(IndexedEventCollectionService.group(listOf(legacy), 0).isEmpty())
+        val unknown = event("unknown", sceneIds = listOf(999), date = "2026-10-23")
+        assertEquals(listOf("unknown"), IndexedEventCollectionService.group(listOf(unknown), 0).single().eventIds)
+    }
+
+    @Test
+    fun `chat memory file partitions use a friendly common source label`() {
+        val first = event("first", sceneIds = listOf(12), date = "2026-10-23", sources = listOf("app-chat__cloud__12.md"))
+        val next = event("next", sceneIds = listOf(12), date = "2026-10-23", sources = listOf("app-chat__cloud__12__2.md"))
+        val groups = IndexedEventCollectionService.group(listOf(first, next), 12)
+        assertEquals(1, groups.size)
+        assertEquals("云端聊天", groups.single().source)
+        assertEquals(2, groups.single().eventIds.size)
+        val local = first.copy(sources = listOf("app-chat__local__12.md"))
+        assertEquals("本地聊天", IndexedEventCollectionService.toDetailEvent(local).source)
     }
 
     private fun event(
