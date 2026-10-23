@@ -257,7 +257,7 @@ private fun GalleryActionToolbar(storedCount: Int, syncing: Boolean, onPick: () 
         Column(modifier = Modifier.padding(14.dp)) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("已分析", fontSize = 12.sp, color = Color(0xFF737987))
+                    Text("已入库", fontSize = 12.sp, color = Color(0xFF737987))
                     Text("" + storedCount, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2F5BEA))
                 }
                 Box(
@@ -267,9 +267,9 @@ private fun GalleryActionToolbar(storedCount: Int, syncing: Boolean, onPick: () 
                         .background(Color(0xFFE5E8F0)),
                 )
                 Column(modifier = Modifier.weight(1f).padding(start = 18.dp)) {
-                    Text("最近分析", fontSize = 12.sp, color = Color(0xFF737987))
+                    Text("记录状态", fontSize = 12.sp, color = Color(0xFF737987))
                     Text(
-                        if (syncing) "分析中" else if (storedCount > 0) "已入库" else "尚未同步",
+                        if (syncing) "处理中" else if (storedCount > 0) "已入库" else "尚未入库",
                         fontSize = 16.sp, color = Color(0xFF202636), modifier = Modifier.padding(top = 4.dp),
                     )
                 }
