@@ -4397,3 +4397,40 @@ Commit: 312f233
   also passes. No private chat database or real provider account was used.
   Latest production cold launch **Status: ok**, 486 ms; evidence outside Git.
 - Commit subject: `fix: apply current cloud settings to ordinary and agent chat`.
+
+## 2026-10-23 — Gallery count labels and overnight handoff
+
+- Corrected three toolbar strings: the stored-record count now says imported
+  (已入库), rather than analysed. The status caption is 记录状态, with 处理中 /
+  已入库 / 尚未入库 states. Importing a record does not establish that its image
+  has been analysed; storage and analysis behavior are unchanged.
+- The pending main-only offline `:app:assembleDebug` completed before the quota
+  pause: **BUILD SUCCESSFUL**, 1m 56s (`gallery-storage-label-build.log`, outside
+  Git). This presentation-only change did not rerun the full suite; the preceding
+  actual result remains **1315 unit tests, 0 failures, 0 errors**.
+- Final closure on PKB110 / Android 16: staged dev APK install **Success**;
+  cold launch **Status: ok**, 647 ms. Navigated through the production collection
+  entry to the gallery. Actual UI dump and screenshot show 已入库 / 0 / 记录状态 /
+  尚未入库. No private photo was selected and no provider request was made.
+  Evidence: `gallery-label-final-launch`, `gallery-label-final-collection` and
+  `gallery-label-final-gallery` XML/PNG files outside Git. `git diff --check`
+  passed. Only `com.clawmate.app.dev` was installed; the original package/data
+  were not modified.
+- The 08:00 UTC+8 overnight deadline has passed. The `clawmate` heartbeat was
+  deleted at closure; no further feature was started. The already-built text
+  change was verified and committed during handoff. Queued heartbeat timestamps
+  do not represent additional migration work during the quota pause.
+- Reviewable coverage now includes home suggestions/support, chat memory sync /
+  event queries / Markdown / image sends with private history, single-photo
+  gallery vision and cited gallery QA, workflow JSON viewing/editing, and the
+  cloud cancellation/live-settings fixes. Each phase above has its own commit
+  and actual verification record.
+- Remaining scope is tracked in `MIGRATION_BACKLOG.md`: unified gallery-memory
+  orchestration, batch vision, workflow creation/deletion/graph and VLM tool,
+  avatar/voice/reminder/persistent-scan/privacy work and platform adapters.
+  Configured-provider behavior/quality remains unverified; fixture checks are
+  not live-provider checks. Actual MNN inference remains deferred.
+- All changes remain local on `codex/android-migration`. No push, PR, merge or
+  publication was performed. PR submission still requires the user's final
+  confirmation after reviewing these commits.
+- Commit subject: `fix: label imported gallery records without claiming analysis`.
