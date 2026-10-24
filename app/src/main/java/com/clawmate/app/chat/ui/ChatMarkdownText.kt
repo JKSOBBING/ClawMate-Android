@@ -74,7 +74,7 @@ internal fun createChatMarkdown(
     }).build()
 
 @Composable
-internal fun ChatMarkdownText(markdown: String, modifier: Modifier = Modifier, foreground: Color = Color.Unspecified) {
+internal fun ChatMarkdownText(markdown: String, modifier: Modifier = Modifier, foreground: Color = Color.Unspecified, textSizeSp: Float = 14f) {
     val context = LocalContext.current
     val textColor = (if (foreground == Color.Unspecified) MaterialTheme.colorScheme.onSurfaceVariant else foreground).toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
@@ -94,7 +94,7 @@ internal fun ChatMarkdownText(markdown: String, modifier: Modifier = Modifier, f
         modifier = modifier.fillMaxWidth(),
         factory = { ctx -> TextView(ctx).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp)
             setTextColor(textColor)
             setLineSpacing(0f, 1.15f)
             includeFontPadding = false

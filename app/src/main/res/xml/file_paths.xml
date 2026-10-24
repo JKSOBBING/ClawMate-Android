@@ -5,4 +5,5 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="shared_profiles" path="profile-share/" />
     <cache-path name="inbox" path="profile-inbox/" />
+    <cache-path name="chat_camera" path="chat-camera/" />
 </paths>
