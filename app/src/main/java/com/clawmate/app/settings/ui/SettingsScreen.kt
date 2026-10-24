@@ -30,6 +30,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -69,6 +72,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     initialSectionId: Int? = null,
 ) {
+    var auxiliary by rememberSaveable { mutableStateOf<String?>(null) }
     val version = rememberAppVersion(context)
     val vm: SettingsViewModel = viewModel(
         factory = SettingsViewModelFactory.forContext(
@@ -84,6 +88,13 @@ fun SettingsScreen(
         initialSectionId
             ?.let { id -> SettingsSectionId.entries.firstOrNull { it.ordinalIndex == id } }
             ?.let(vm::selectSection)
+    }
+
+    if (auxiliary != null) {
+        SettingsAuxiliaryPage(auxiliary!!, onBack = { auxiliary = null }, onOpenConnections = {
+            auxiliary = null; vm.selectSection(SettingsSectionId.ModelAgents)
+        })
+        return
     }
 
     Box(modifier = modifier.fillMaxSize().padding(top = 0.dp)) {
@@ -116,13 +127,13 @@ fun SettingsScreen(
                 )
             }
         } else {
-            SectionList(state = state, vm = vm, context = context)
+            SectionList(state = state, vm = vm, context = context, onAuxiliary = { auxiliary = it })
         }
     }
 }
 
 @Composable
-private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: Context) {
+private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: Context, onAuxiliary: (String) -> Unit) {
     val scroll = rememberScrollState()
     HarmonyPage(scrollOffset = { scroll.value.toFloat() }, header = { ClawMateHeader("我的") }) { insets ->
     Column(
@@ -131,8 +142,9 @@ private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: 
             .verticalScroll(scroll)
             .padding(insets),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.Top,
     ) {
+        SettingsHomeExtras(context, onAuxiliary)
         // Keep the five HarmonyOS sections as the primary list. Android-only
         // extensions are reachable from their owning section below.
         SETTINGS_SECTIONS.take(5).forEach { item ->
@@ -153,7 +165,8 @@ private fun SectionListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth(0.92f)
-            .background(Color.White, RoundedCornerShape(18.dp))
+            .padding(top = 12.dp)
+            .background(HarmonyTheme.surface, RoundedCornerShape(18.dp))
             .clickable { onClick() }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -182,7 +195,7 @@ private fun SectionListItem(
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Text("›", fontSize = 28.sp, color = Color(0xFF8A93A3))
+        Text("›", fontSize = 28.sp, color = HarmonyTheme.text("#8A93A3"))
     }
 }
 
@@ -194,10 +207,26 @@ private fun SectionDetail(
     context: Context,
 ) {
     val scroll = rememberScrollState()
+    var saveRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(saveRequested, state.saveBusy, state.dirty) {
+        if (saveRequested && !state.saveBusy) {
+            saveRequested = false
+            if (state.dirty) vm.saveWhenIdle()
+        }
+    }
+    val close = {
+        vm.saveWhenIdle()
+        vm.closeSection()
+    }
+    DisposableEffect(vm) { onDispose { vm.hide(""); vm.saveWhenIdle() } }
+    BackHandler(onBack = close)
+    CompositionLocalProvider(LocalSettingsSaveRequest provides { saveRequested = true },
+        LocalSettingsOrdinaryFocus provides { vm.hide("") }) {
     HarmonyPage(scrollOffset = { scroll.value.toFloat() }, header = {
-        ClawMateHeader(section.title, onBack = vm::closeSection)
+        ClawMateHeader(section.title, onBack = close)
     }) { insets ->
-    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(insets).padding(horizontal = 16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(insets), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth(.92f).padding(top = 16.dp, bottom = 22.dp)) {
         // Error banner
         state.error?.let { err ->
             Box(
@@ -211,23 +240,10 @@ private fun SectionDetail(
             }
         }
 
-        // Saved confirmation
-        if (state.saved) {
-            LaunchedEffect(state.saved) {
-                kotlinx.coroutines.delay(2000)
+        LaunchedEffect(state.saved) {
+            if (state.saved) {
+                android.widget.Toast.makeText(context, "设置已保存", android.widget.Toast.LENGTH_SHORT).show()
                 vm.dismissSaved()
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = SettingsThemeColors.Success)
-                Text(
-                    "设置已保存",
-                    fontSize = 13.sp,
-                    color = SettingsThemeColors.Success,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
             }
         }
 
@@ -243,41 +259,9 @@ private fun SectionDetail(
             SettingsSectionId.RuntimeLogs -> Unit
         }
 
-        // Save / reset actions
-        SettingsSaveResetBar(
-            saveBusy = state.saveBusy,
-            dirty = state.dirty,
-            onSave = { vm.save() },
-            onReset = { vm.resetToDefaults() },
-        )
     }
     }
-}
-
-@Composable
-private fun SettingsSaveResetBar(saveBusy: Boolean, dirty: Boolean, onSave: () -> Unit, onReset: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Button(
-            onClick = onSave,
-            enabled = dirty && !saveBusy,
-            colors = ButtonDefaults.buttonColors(containerColor = SettingsThemeColors.Primary),
-            modifier = Modifier.weight(1f).height(ClawMateDesign.Size.ButtonHeight),
-        ) {
-            if (saveBusy) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White)
-            } else {
-                Text("保存设置", fontSize = 14.sp)
-            }
-        }
-        TextButton(
-            onClick = onReset,
-            modifier = Modifier.height(ClawMateDesign.Size.ButtonHeight),
-        ) {
-            Text("恢复默认", fontSize = 14.sp, color = SettingsThemeColors.Secondary)
-        }
+    }
     }
 }
 

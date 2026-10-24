@@ -20,6 +20,7 @@ import com.clawmate.app.log.domain.LogSource
  * pure unit-testable utility taking an explicit [InAppLogRepository].
  */
 object AppLogger {
+    @Volatile var debugLoggingEnabled: Boolean = true
 
     private const val DOMAIN_TAG = "ClawMate"
 
@@ -37,6 +38,7 @@ object AppLogger {
         module: String,
         message: String,
     ) {
+        if (level == LogLevel.DEBUG && !debugLoggingEnabled) return
         val repo = repository
         runCatching {
             repo.append(

@@ -169,6 +169,9 @@ fun ProfileAvatarScreen(
                 onSave = { viewModel.saveDraft() },
                 saveError = state.saveError,
             )
+            TextButton(onClick = {
+                context.startActivity(android.content.Intent(context, com.clawmate.app.profile.share.nfc.NfcProfileShareActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, modifier = Modifier.padding(horizontal = 16.dp)) { Text("一碰分享（NFC）") }
             supplementaryContent()
         }
 

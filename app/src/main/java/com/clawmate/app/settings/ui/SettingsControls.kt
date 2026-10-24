@@ -18,6 +18,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.focus.FocusRequester
+import com.clawmate.app.ui.HarmonyButton
+import com.clawmate.app.ui.theme.HarmonyTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,6 +36,8 @@ private val CardRadius = ClawMateDesign.Shape.Card
 private val ControlRadius = ClawMateDesign.Shape.Control
 private val CardPadding = ClawMateDesign.Space.Lg
 private val FieldHeight = ClawMateDesign.Size.InputHeight
+val LocalSettingsSaveRequest = compositionLocalOf<() -> Unit> { {} }
+val LocalSettingsOrdinaryFocus = compositionLocalOf<() -> Unit> { {} }
 
 /**
  * Grouped settings card — title + optional subtitle + injected content.
@@ -49,7 +55,7 @@ fun SettingsGroupCard(
             .fillMaxWidth()
             .padding(top = 12.dp)
             .background(SettingsThemeColors.CardBackground, RoundedCornerShape(CardRadius))
-            .border(1.dp, Color(0xFFF0F2F7), RoundedCornerShape(CardRadius))
+            .border(1.dp, HarmonyTheme.border("#F0F2F7"), RoundedCornerShape(CardRadius))
             .padding(CardPadding),
     ) {
         Text(
@@ -66,6 +72,8 @@ fun SettingsGroupCard(
                 subtitle,
                 fontSize = 12.sp,
                 color = SettingsThemeColors.SecondaryText,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp)
@@ -122,15 +130,25 @@ fun SettingInput(
     singleLine: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
+    val save = LocalSettingsSaveRequest.current
+    val ordinaryFocus = LocalSettingsOrdinaryFocus.current
+    var focused by remember { mutableStateOf(false) }
+    val multiline = !singleLine || value.length > 34 || placeholder.length > 34 || value.contains('\n') || placeholder.contains('\n')
     ClawMateInput(
         value = value,
         onValueChange = onValueChange,
         label = label,
         placeholder = placeholder,
         enabled = enabled,
-        singleLine = singleLine,
+        singleLine = !multiline,
+        maxLines = if (multiline) 4 else 1,
+        modifier = Modifier.padding(top = 8.dp),
+        onFocus = { active ->
+            if (focused && !active) save()
+            if (active) ordinaryFocus()
+            focused = active
+        },
     )
-    Spacer(Modifier.height(10.dp))
 }
 
 /**
@@ -145,16 +163,17 @@ fun SettingToggle(
     enabled: Boolean = true,
     onValueChange: (Boolean) -> Unit,
 ) {
+    val save = LocalSettingsSaveRequest.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 8.dp)
-            .clickable(enabled = enabled) { onValueChange(!selected) },
+            .clickable(enabled = enabled) { onValueChange(!selected); save() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(
             checked = selected,
-            onCheckedChange = if (enabled) { v -> onValueChange(v) } else { null },
+            onCheckedChange = if (enabled) { v -> onValueChange(v); save() } else { null },
             enabled = enabled,
         )
         Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
@@ -191,23 +210,31 @@ fun SensitiveSettingInput(
     currentValue: String,
 ) {
     val revealed = revealedKeys.contains(key)
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val save = LocalSettingsSaveRequest.current
+    val focus = remember { FocusRequester() }
+    var wasFocused by remember { mutableStateOf(false) }
+    val multiline = value.length > 24 || placeholder.length > 24 || value.contains('\n')
+    LaunchedEffect(revealed) { if (revealed) { withFrameNanos { }; runCatching { focus.requestFocus() } } }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(label, fontSize = 13.sp, color = SettingsThemeColors.MutedText, modifier = Modifier.padding(bottom = 6.dp))
+        Row(verticalAlignment = Alignment.Top) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, fontSize = 13.sp, color = SettingsThemeColors.MutedText, modifier = Modifier.padding(bottom = 6.dp))
             if (revealed) {
                 ClawMateInput(
                     value = currentValue,
                     onValueChange = { v -> if (!SensitiveValueUtilsMarker.isMasked(v)) onValueChange(v) },
                     placeholder = placeholder,
-                    singleLine = true,
+                    singleLine = !multiline,
+                    maxLines = if (multiline) 4 else 1,
+                    fieldFocusRequester = focus,
+                    onFocus = { active -> if (wasFocused && !active) { onHide(); save() }; wasFocused = active },
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(FieldHeight)
+                        .height(if (multiline) 86.dp else FieldHeight)
                         .background(SettingsThemeColors.InputDisabledBackground, RoundedCornerShape(ControlRadius))
-                        .border(1.dp, ClawMateDesign.Colors.Border, RoundedCornerShape(ControlRadius))
                         .padding(horizontal = 12.dp)
                         .clickable { onReveal() },
                     contentAlignment = Alignment.CenterStart,
@@ -216,17 +243,15 @@ fun SensitiveSettingInput(
                         maskForDisplay(value, placeholder),
                         fontSize = 13.sp,
                         color = SettingsThemeColors.SecondaryText,
-                        maxLines = 1,
+                        maxLines = if (multiline) 3 else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
-        TextButton(
-            onClick = { if (revealed) onHide() else onReveal() },
-            modifier = Modifier.padding(start = 8.dp).width(72.dp),
-        ) {
-            Text(if (revealed) "隐藏" else "显示", fontSize = 12.sp)
+        HarmonyButton(if (revealed) "隐藏" else "显示", { if (revealed) { onHide(); save() } else onReveal() },
+            Modifier.padding(start = 8.dp).width(64.dp), height = 42.dp, radius = 12.dp, fontSize = 12.sp,
+            color = Color.White, background = settingsActionColor(if (revealed) SettingsActionKind.Secondary else SettingsActionKind.Primary), horizontalPadding = 0.dp)
         }
     }
 }
@@ -257,17 +282,9 @@ fun SettingsActionRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         actions.forEach { action ->
-            TextButton(
-                onClick = action.onClick,
-                enabled = action.enabled,
-                modifier = Modifier.weight(1f).height(40.dp),
-            ) {
-                Text(
-                    action.label,
-                    fontSize = 12.sp,
-                    color = if (action.enabled) settingsActionColor(action.kind) else SettingsThemeColors.Disabled,
-                )
-            }
+            HarmonyButton(action.label, action.onClick, Modifier.weight(1f), height = 40.dp, radius = 12.dp, fontSize = 12.sp,
+                enabled = action.enabled, color = Color.White,
+                background = if (action.enabled) settingsActionColor(action.kind) else HarmonyTheme.fill("#A9B0BE"))
         }
     }
 }
@@ -295,7 +312,7 @@ fun SettingsOutputPanel(title: String, content: String, placeholder: String = "�
             Text(
                 content.ifBlank { placeholder },
                 fontSize = 12.sp,
-                color = androidx.compose.ui.graphics.Color(0xFF333333),
+                color = HarmonyTheme.text("#333333"),
             )
         }
     }
