@@ -358,4 +358,12 @@
 - 画像生成仍连接原 ViewModel 与配置门控；照片参考可通过系统选择器真实预览，但 Android 照片参考生成尚未接入，点击生成明确说明没有上传/调用生成。旧版本只存 Prompt 和画像哈希，没有参数/授权/领域快照时明确显示未记录，且本机导入不标成 AI 生成。
 - 实际 ui-avatar-details-build.log 主包/测试包构建成功 3m58s；两包安装 PKB110 Success。ui-avatar-details-device-tests.log 共 13 项通过，其中分身 3 项：选项回调独立、历史/管理返回及保存入口可达、本机导入不补造 AI 参数。真实首页头像入口已点击检查，ui-avatar-home-overlay.png/xml 显示正确弹层；fixture 截图也已检查。没有运行真实模型生成或上传私人照片。
 - 剩余：历史数据缺少的快照属于数据层能力缺口；旧本地管理表单是 Android 扩展入口，HDS 阴影/系统字体等仍需鸿蒙同状态画面对照。
+
+### UI-11：任务新建、图编排与 JSON 共用草稿（2026-10-25）
+
+- 按 TaskPage.ets 的 EditorPanel、WorkflowMetaPanel、NodePalette、FlowCanvas 和节点属性重建配置页内联编辑器，支持图编辑/JSON 切换、标题/分类/上下文、六种原始模板、嵌套条件/循环、节点上移/下移/删除及截图+Summary 组合。常用 GUI 动作、工具输入、阻塞执行、Schema、判断条件可编辑；超深结构和未知节点保留原文并提供 JSON 入口。
+- 图编辑以完整 JSON 树操作，保留未知字段和字面量类型，不通过宽松修复覆盖原文。格式错误保留草稿并阻止提交；关闭未保存草稿需确认。新建配置真实写入本机，默认关闭，不触发执行；保存后切换到所选分类。已有未改动的有效配置可直接保存关闭，避免重复写入。
+- 实际构建 ui-workflow-editor-build.log / -2 / -3 / -4 均成功；最终 -4 为 4m47s。最终完整单元回归 1335 项、零失败/错误；最终主包/测试包安装 PKB110 均 Success，ui-workflow-editor-final-device-tests.log 共 20 项通过，其中编辑器 3、任务页 3、Android 实际文件新建/重读 1 项。手机存储测试使用独立缓存目录，未写用户的 workflow 目录，也未运行模型或任务。
+- 真实任务入口已检查 ui-editor-new-graph.png、ui-editor-discard-dialog.png、ui-editor-draft-discarded.png/xml：图新建可达，放弃后原任务列表恢复，没有新增用户记录。
+- 剩余：完整文件管理、任务卡快捷联系人与整任务复制/删除继续对齐；图中超过 12 层的内容保留在 JSON 中编辑。字体栅格化、HDS 材质和原生系统转场仍需双端同状态画面对照。
 - 剩余：月度真实云结果的精细展示、部分原生分析/扫描流程仍存在 Android 适配差异，图片详情/汇总事件详情在下一阶段继续；此阶段未分析用户照片或访问模型服务。

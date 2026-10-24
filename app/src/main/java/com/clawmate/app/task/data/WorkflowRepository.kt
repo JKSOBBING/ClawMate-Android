@@ -39,6 +39,10 @@ interface WorkflowRepository {
     /** Replace the editable config JSON for a task and mark it user-modified. */
     suspend fun saveConfigJson(task: WorkflowTask, newJson: String)
 
+    /** Persist a new, initially disabled local workflow. Saving never executes it. */
+    suspend fun createConfigJson(sceneId: Int, newJson: String): WorkflowTask =
+        throw UnsupportedOperationException("当前任务仓库不支持新建配置")
+
     /** Updates a task's enabled flag. */
     suspend fun setTaskEnabled(taskId: String, enabled: Boolean)
 

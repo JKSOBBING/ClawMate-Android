@@ -33,6 +33,52 @@ class TaskViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
+    @Test fun `saving an unchanged valid config closes the editor without a redundant write`() = runTest {
+        val existing = task("unchanged")
+        val repository = FakeTaskRepository(listOf(existing))
+        val vm = TaskViewModel(repository, noRun)
+        vm.openConfig(existing)
+        advanceUntilIdle()
+        vm.editConfig()
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertNull(vm.config.value)
+        assertEquals(0, repository.saves)
+        assertTrue(repository.recorded.isEmpty())
+    }
+
+    @Test fun `new config save selects its scene and does not execute it`() = runTest {
+        val repository = FakeTaskRepository(emptyList())
+        val vm = TaskViewModel(repository, noRun)
+        advanceUntilIdle()
+        vm.openNewConfig(0, "graph")
+        vm.updateConfigScene(4)
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertEquals(4, vm.state.value.sceneFilter)
+        assertEquals(4, vm.state.value.tasks.single().sceneId)
+        assertFalse(vm.state.value.tasks.single().enabled)
+        assertFalse(vm.config.value!!.isNew)
+        assertFalse(vm.config.value!!.hasChanges)
+        assertTrue(repository.recorded.isEmpty())
+        assertNull(vm.state.value.runningTaskId)
+    }
+
+    @Test fun `scene only edit is a real unsaved change and persists on save`() = runTest {
+        val existing = task("scene-edit")
+        val vm = TaskViewModel(FakeTaskRepository(listOf(existing)), noRun)
+        vm.openConfig(existing)
+        advanceUntilIdle()
+        vm.editConfig()
+        vm.updateConfigScene(2)
+        assertTrue(vm.config.value!!.hasChanges)
+        vm.saveConfig()
+        advanceUntilIdle()
+        assertEquals(2, vm.state.value.sceneFilter)
+        assertEquals(2, vm.config.value!!.originalSceneId)
+        assertFalse(vm.config.value!!.hasChanges)
+    }
+
     @Test
     fun `batch execution reports completion and persists each result`() = runTest {
         val tasks = listOf(task("one"), task("two"))
@@ -271,6 +317,11 @@ class TaskViewModelTest {
             saves++
             writeConfig(newJson)
             savedJson = newJson
+        }
+        override suspend fun createConfigJson(sceneId: Int, newJson: String): WorkflowTask {
+            val created = WorkflowTask("created-fixture", sceneId, "测", "#276EF1", "新建任务", "test", false, "created.json", "未运行", "尚未执行", "", true)
+            current = current + created; savedJson = newJson
+            return created
         }
         override suspend fun setTaskEnabled(taskId: String, enabled: Boolean) {
             current = current.map { if (it.id == taskId) it.copy(enabled = enabled) else it }
