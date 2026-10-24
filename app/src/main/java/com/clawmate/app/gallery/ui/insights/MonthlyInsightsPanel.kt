@@ -58,33 +58,14 @@ fun MonthlyInsightsPanel(
     onGenerateSummary: (GalleryMonthInsight) -> Unit = {},
     onEmbed: (GalleryMonthInsight) -> Unit = {},
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "月度洞察",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.weight(1f))
-                Text("仅基于已存图库数据", style = MaterialTheme.typography.bodySmall)
-            }
-            Spacer(Modifier.height(8.dp))
-            when (state) {
-                is GalleryInsightsUiState.Loading -> InsightsLoading()
-                is GalleryInsightsUiState.Empty -> InsightsEmpty()
-                is GalleryInsightsUiState.Error -> InsightsError(state.message)
-                is GalleryInsightsUiState.Loaded -> InsightsLoaded(
-                    state = state,
-                    onOpenItem = onOpenItem,
-                    onGenerateSummary = onGenerateSummary,
-                    onEmbed = onEmbed,
-                )
-            }
-        }
+    if (state is GalleryInsightsUiState.Error) {
+        InsightsError(state.message)
+        return
+    }
+    val loaded = state as? GalleryInsightsUiState.Loaded ?: return
+    if (loaded.insights.isEmpty()) return
+    HarmonyMonthlyContent(loaded, onOpenItem, onGenerateSummary) { selected ->
+        CloudInsetsNotice(loaded.aiSummary, loaded.embedding, { onGenerateSummary(selected) }, { onEmbed(selected) })
     }
 }
 

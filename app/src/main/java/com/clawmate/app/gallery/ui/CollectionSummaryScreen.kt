@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
 fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
     var showGallery by remember { mutableStateOf(false) }
     if (showGallery) {
-        InsetSecondaryPage { GalleryScreen(onBack = { showGallery = false }, onOpenSettings = onOpenSettings) }
+        GalleryScreen(onBack = { showGallery = false }, onOpenSettings = onOpenSettings)
         return
     }
     val vm: CollectionIndexViewModel = viewModel(factory = CollectionIndexViewModel.Factory(GalleryComponent.indexedEventReader(context)))

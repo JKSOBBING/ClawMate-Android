@@ -30,7 +30,7 @@
 | 聊天 | `pages/chat/ChatPage.ets`、`ChatMessageList.ets`、`ChatSessionDrawer.ets` | 空态、模式标签、消息、工具状态、底部输入、键盘、会话抽屉 | 欢迎/输入/抽屉/气泡已重建并验证；深度思考参数与精细工具模块尚未接入 |
 | 任务 | `pages/task/TaskPage.ets` | 执行概览、设备控制、提醒、任务列表、配置/编辑/文件管理 | 执行页及配置入口已重建并验证；图编辑/新建/完整文件管理继续对齐 |
 | 我的 | `pages/settings/SettingsCenterPage.ets` | 账号、Debug、桌面/HDC 入口、五组设置、详情表单 | 主列表、表单尺寸及保存交互已重建并验证；HMS/HDC 为明确受限适配 |
-| 图库及详情 | `pages/gallery/`、`pages/collection/CollectionGroupDetailPage.ets` | 分类、分析状态、图像预览、分组详情、返回 | 待对齐 |
+| 图库及详情 | `pages/gallery/`、`pages/collection/CollectionGroupDetailPage.ets` | 分类、分析状态、图像预览、分组详情、返回 | 图库主界面/日期筛选/本地检索已重建并验证；图片和事件详情正在对齐 |
 | 引导与隐私 | `pages/onboarding/`、相关隐私页 | 分页、选择、按钮、许可和确认弹窗 | 待对齐 |
 | 数字分身 | `pages/chat/DigitalAvatarView.ets`、首页分身覆盖层 | 呼吸 760ms、按压/阴影、生成/历史/版本 | 聊天猫素材、脉冲和点击反馈已实现并验证；个人分身管理页继续对齐 |
 
@@ -69,3 +69,7 @@
 ### UI-06 实际检查（2026-10-24）
 
 任务执行页、配置导航、分场景任务卡和 JSON 真实入口已重建；3 项针对性真机测试通过。证据：ui-task-chat-build.log、ui-task-chat-device-tests.log、ui-task-execution.png/xml、ui-task-config.png/xml。配置新建面板/图编辑/上下文变量/完整文件管理尚未完成，控制方式和采集提醒有明确 Android 能力限制；未运行真实任务。
+
+### UI-07 实际检查（2026-10-24）
+
+图库主界面、日期过滤、分类回退、问答/检索布局和月度本机概览已重建。完整单元回归 1323 项通过；12 项真机回归通过，其中图库 3 项。证据：ui-gallery-build-2.log、ui-gallery-device-tests.log、ui-gallery-main.png/xml。运行中无计数时显示不确定进度，未把本机入库称为模型分析；详情弹层和月度云结果的细节继续迁移。
