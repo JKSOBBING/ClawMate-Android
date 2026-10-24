@@ -38,13 +38,14 @@ fun HarmonyButton(label: String, onClick: () -> Unit, modifier: Modifier = Modif
 }
 
 @Composable
-fun HarmonyModal(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun HarmonyModal(onDismiss: () -> Unit, widthFraction: Float = .88f, topPadding: Dp = 18.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         val dim = HarmonyTheme.background("#66000000").alpha
-        SideEffect { window?.setDimAmount(dim) }
-        Column(Modifier.fillMaxWidth(.88f).heightIn(max = 680.dp).clip(RoundedCornerShape(18.dp))
-            .background(HarmonyTheme.surface).padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 20.dp),
+        ConfigureHarmonyDialog(dim)
+        Column(Modifier.fillMaxWidth(widthFraction).heightIn(max = 680.dp).clip(RoundedCornerShape(18.dp))
+            .background(HarmonyTheme.surface).padding(start = 18.dp, end = 18.dp, top = topPadding, bottom = 20.dp),
             content = content)
     }
 }
@@ -54,6 +55,7 @@ fun HarmonyFullScreen(onDismiss: () -> Unit, background: Color = HarmonyTheme.pa
     content: @Composable () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        ConfigureHarmonyDialog(HarmonyTheme.background("#66000000").alpha)
         Box(Modifier.fillMaxSize().background(background).statusBarsPadding().navigationBarsPadding().imePadding()) { content() }
     }
 }

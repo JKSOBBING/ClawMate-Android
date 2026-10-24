@@ -379,7 +379,7 @@ class ProfileAvatarViewModel(
             .joinToString("") { String.format("%02x", it) }
     }
 
-    private fun resolveLocalAssetPath(relativePath: String): String? =
+    fun resolveLocalAssetPath(relativePath: String): String? =
         assetRepository.absoluteAssetPath(relativePath)?.let { "file://$it" }
 
     private fun generationState(settings: com.clawmate.app.settings.domain.AppSettings): AvatarGenerationState =
