@@ -174,7 +174,7 @@ private fun WorkflowFlowNodes(graph: WorkflowGraphDraft, container: String, dept
         val accent = if (pair || node.string("type") == "tool") "#148F73" else if (node.string("type") in listOf("if", "loop")) "#7C4DFF" else "#276EF1"
         key(path, node.string("id")) {
         Row(Modifier.padding(top = 12.dp).fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Column(Modifier.width(32.dp).padding(end = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.padding(start = (depth * 14).dp).width(32.dp).padding(end = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(2.dp, 18.dp).background(HarmonyTheme.background("#DCE3EF")))
                 Box(Modifier.size(28.dp).background(HarmonyTheme.fill(accent), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
                     Text(node.string("id") + if (pair) "+" else "", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.text("#FFFFFF"), maxLines = 1)
@@ -233,14 +233,21 @@ private fun WorkflowNodeFields(graph: WorkflowGraphDraft, path: String, enabled:
     onChange: (WorkflowGraphDraft) -> Unit, onError: (String, Boolean) -> Unit, pairPath: String? = null,
 ) {
     val node = graph.at(path) as JsonObject
-    Text("节点 ID：${node.string("id")}", fontSize = 12.sp, color = HarmonyTheme.secondaryText, modifier = Modifier.padding(top = 10.dp))
+    EditorLabel("节点 ID")
+    Box(Modifier.fillMaxWidth().height(38.dp).background(HarmonyTheme.background("#F6F8FC"), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
+        Text(node.string("id"), fontSize = 12.sp, color = HarmonyTheme.text("#1E2633"))
+    }
     WorkflowEditorField("显示名称", node.string("name"), { onChange(graph.field(path, "name", JsonPrimitive(it))) }, enabled = enabled)
-    EditorLabel("失败策略")
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("stop" to "停止", "continue" to "继续").forEach { (value, label) -> HarmonyButton(label, { onChange(graph.field(path, "on_error", JsonPrimitive(value))) },
-            height = 30.dp, radius = 8.dp, fontSize = 11.sp, enabled = enabled,
-            color = HarmonyTheme.text(if (node.string("on_error").ifBlank { "stop" } == value) "#FFFFFF" else "#276EF1"),
-            background = HarmonyTheme.background(if (node.string("on_error").ifBlank { "stop" } == value) "#276EF1" else "#EEF4FF")) }
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("失败策略", fontSize = 11.sp, color = HarmonyTheme.secondaryText, modifier = Modifier.padding(end = 10.dp, bottom = 8.dp))
+        listOf(Triple("stop", "停止", "#B42318"), Triple("continue", "继续", "#148F73")).forEach { (value, label, accent) ->
+            val active = node.string("on_error").ifBlank { "stop" } == value
+            HarmonyButton(label, { onChange(graph.field(path, "on_error", JsonPrimitive(value))) }, Modifier.padding(end = 8.dp, bottom = 8.dp),
+                height = 30.dp, radius = 8.dp, fontSize = 11.sp, enabled = enabled, horizontalPadding = 10.dp,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                color = HarmonyTheme.text(if (active) "#FFFFFF" else accent),
+                background = HarmonyTheme.background(if (active) accent else "#F2F5FA"))
+        }
     }
     EditorLabel("在当前节点后添加")
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -290,10 +297,14 @@ private fun WorkflowNodeFields(graph: WorkflowGraphDraft, path: String, enabled:
                 "app_start", "app_stop" -> listOf("package_name" to "包名")
                 else -> emptyList()
             }
-            fields.forEach { (key, label) ->
-                if (key in listOf("x", "y", "start_x", "start_y", "end_x", "end_y", "seconds")) ValidatedNumberField(label, node[key], enabled,
-                    { onChange(graph.field(path, key, it)) }, { onError("$path/$key", it) })
-                else WorkflowEditorField(label, node.string(key), { onChange(graph.field(path, key, JsonPrimitive(it))) }, enabled = enabled)
+            if (fields.firstOrNull()?.first in listOf("x", "start_x", "seconds")) fields.chunked(2).forEach { group ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (node.string("action") == "click") 10.dp else 8.dp)) {
+                    group.forEach { (key, label) -> Column(Modifier.weight(1f)) {
+                        ValidatedNumberField(label, node[key], enabled, { onChange(graph.field(path, key, it)) }, { onError("$path/$key", it) })
+                    } }
+                }
+            } else fields.forEach { (key, label) ->
+                WorkflowEditorField(label, node.string(key), { onChange(graph.field(path, key, JsonPrimitive(it))) }, enabled = enabled)
             }
             if (node.string("action") == "swipe") WorkflowSegments("方向", node.string("direction"),
                 listOf("up" to "上", "down" to "下", "left" to "左", "right" to "右"), enabled, "#C76800",
@@ -402,7 +413,7 @@ private fun WorkflowConditionFields(condition: JsonObject, label: String, enable
         .border(1.dp, HarmonyTheme.border("#E3E8F1"), RoundedCornerShape(14.dp)).padding(14.dp), content = content)
 }
 @Composable private fun EditorTitle(title: String, modifier: Modifier = Modifier) { Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText, modifier = modifier) }
-@Composable private fun EditorLabel(label: String) { Text(label, fontSize = 11.sp, color = HarmonyTheme.secondaryText, modifier = Modifier.padding(top = 10.dp, bottom = 7.dp)) }
+@Composable private fun EditorLabel(label: String) { Text(label, fontSize = 11.sp, color = HarmonyTheme.secondaryText, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp)) }
 @Composable internal fun WorkflowEditorField(label: String, value: String, onChange: (String) -> Unit,
     height: Dp = 38.dp, mono: Boolean = false, enabled: Boolean = true,
     fontSize: TextUnit = if (mono) 11.sp else 12.sp,

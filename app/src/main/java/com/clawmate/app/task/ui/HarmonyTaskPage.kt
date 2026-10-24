@@ -34,6 +34,7 @@ internal fun HarmonyTaskPage(state: TaskUiState, onToggle: (WorkflowTask) -> Uni
     onBatchRun: () -> Unit, onCancel: () -> Unit, onRefresh: () -> Unit, onSettings: () -> Unit,
     onCreate: ((Int, String) -> Unit)? = null, onViewGraph: ((WorkflowTask) -> Unit)? = null,
     editor: (@Composable () -> Unit)? = null, onCloseEditor: () -> Unit = {},
+    fileManager: (@Composable () -> Unit)? = null,
 ) {
     var configuring by rememberSaveable { mutableStateOf(false) }
     var sceneId by rememberSaveable { mutableIntStateOf(0) }
@@ -86,7 +87,7 @@ internal fun HarmonyTaskPage(state: TaskUiState, onToggle: (WorkflowTask) -> Uni
                     Text("点击上方新建任务，使用图编辑或 JSON 创建 workflow。", fontSize = 12.sp,
                         color = HarmonyTheme.text("#7B8290"), modifier = Modifier.padding(top = 8.dp))
                 } }
-                item("files") { TaskFilePanel(state.tasks, onViewConfig) }
+                item("files") { if (fileManager != null) fileManager() else TaskFilePanel(state.tasks, onViewConfig) }
             } else {
                 item("execution") { TaskExecutionPanel(state.tasks, !busy) { openConfig(null) } }
                 item("device") { TaskDevicePanel(!busy) { boundary = "Android 任务控制仍由已配置的适配器决定；手机 HDC 及控制方式切换尚未接入，请前往任务自动化设置检查。" } }

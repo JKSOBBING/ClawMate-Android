@@ -28,11 +28,12 @@ fun HarmonyButton(label: String, onClick: () -> Unit, modifier: Modifier = Modif
     height: Dp = 32.dp, radius: Dp = 16.dp, fontSize: TextUnit = 12.sp,
     color: Color = HarmonyTheme.text("#6658D9"), background: Color = HarmonyTheme.background("#EEECFF"),
     enabled: Boolean = true, horizontalPadding: Dp = 14.dp, bold: Boolean = false,
+    fontWeight: FontWeight? = null,
 ) {
     Box(modifier.height(height).clip(RoundedCornerShape(radius)).background(background)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = horizontalPadding),
         contentAlignment = Alignment.Center) {
-        Text(label, fontSize = fontSize, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
+        Text(label, fontSize = fontSize, fontWeight = fontWeight ?: if (bold) FontWeight.Bold else FontWeight.Medium,
             color = color, maxLines = 1)
     }
 }
