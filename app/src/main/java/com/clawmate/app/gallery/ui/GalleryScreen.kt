@@ -110,6 +110,8 @@ fun GalleryScreen(
     } ?: baseUiState
     val selectedId by vm.selectedItemId.collectAsState()
     val detail by vm.detail.collectAsState()
+    var detailEditor by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedId) { detailEditor = false }
     val insightsVm: GalleryInsightsViewModel = viewModel(
         factory = GalleryInsightsViewModel.Factory(
             repository = repository,
@@ -156,12 +158,12 @@ fun GalleryScreen(
             GallerySyncGateStatus.BLOCKED -> permissionLauncher.launch(mediaReadPermissionName())
         }
     }
-    if (selectedId != null && detail?.itemId == selectedId) {
+    if (detailEditor && selectedId != null && detail?.itemId == selectedId) {
         val d = detail
         if (d != null) {
-            BackHandler { vm.deselectItem() }
+            BackHandler { detailEditor = false }
             InsetSecondaryPage { GalleryDetailScreen(
-                detail = d, onBack = { vm.deselectItem() },
+                detail = d, onBack = { detailEditor = false },
                 onEditTitle = { id, title -> vm.editTitle(id, title) },
                 onEditSummary = { id, summary -> vm.editSummary(id, summary) },
                 onEditTags = { id, tags -> vm.editTags(id, tags) },
@@ -222,6 +224,9 @@ fun GalleryScreen(
             }
             Spacer(Modifier.height(20.dp))
         }
+    }
+    detail?.currentItem?.takeIf { it.id == selectedId }?.let { item ->
+        HarmonyGalleryDetail(item, { vm.deselectItem() }, { detailEditor = true })
     }
     if (showBulkExplanation) HarmonyModal({ showBulkExplanation = false }) {
         Text("批量读图", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)

@@ -30,7 +30,7 @@
 | 聊天 | `pages/chat/ChatPage.ets`、`ChatMessageList.ets`、`ChatSessionDrawer.ets` | 空态、模式标签、消息、工具状态、底部输入、键盘、会话抽屉 | 欢迎/输入/抽屉/气泡已重建并验证；深度思考参数与精细工具模块尚未接入 |
 | 任务 | `pages/task/TaskPage.ets` | 执行概览、设备控制、提醒、任务列表、配置/编辑/文件管理 | 执行页及配置入口已重建并验证；图编辑/新建/完整文件管理继续对齐 |
 | 我的 | `pages/settings/SettingsCenterPage.ets` | 账号、Debug、桌面/HDC 入口、五组设置、详情表单 | 主列表、表单尺寸及保存交互已重建并验证；HMS/HDC 为明确受限适配 |
-| 图库及详情 | `pages/gallery/`、`pages/collection/CollectionGroupDetailPage.ets` | 分类、分析状态、图像预览、分组详情、返回 | 图库主界面/日期筛选/本地检索已重建并验证；图片和事件详情正在对齐 |
+| 图库及详情 | `pages/gallery/`、`pages/collection/CollectionGroupDetailPage.ets` | 分类、分析状态、图像预览、分组详情、返回 | 主界面与图片/事件详情弹层已重建并真机验证；索引缺少来源图时明确提示，月度云结果继续对齐 |
 | 引导与隐私 | `pages/onboarding/`、相关隐私页 | 分页、选择、按钮、许可和确认弹窗 | 待对齐 |
 | 数字分身 | `pages/chat/DigitalAvatarView.ets`、首页分身覆盖层 | 呼吸 760ms、按压/阴影、生成/历史/版本 | 聊天猫素材、脉冲和点击反馈已实现并验证；个人分身管理页继续对齐 |
 
@@ -73,3 +73,7 @@
 ### UI-07 实际检查（2026-10-24）
 
 图库主界面、日期过滤、分类回退、问答/检索布局和月度本机概览已重建。完整单元回归 1323 项通过；12 项真机回归通过，其中图库 3 项。证据：ui-gallery-build-2.log、ui-gallery-device-tests.log、ui-gallery-main.png/xml。运行中无计数时显示不确定进度，未把本机入库称为模型分析；详情弹层和月度云结果的细节继续迁移。
+
+### UI-08 实际检查（2026-10-25）
+
+图片和分组事件详情弹层、正文滚动、关闭及原图片管理入口已重建。早期滚动语义失败已修复；最终 ui-avatar-details-device-tests.log 共 13 项通过，其中详情 2 项。已检查 ui-gallery-detail-fixture.png、ui-indexed-detail-fixture.png，平台默认淡入造成的中间帧叠影已消除。没有来源图片/模型证据的数据不补造；仍需鸿蒙同状态运行画面对照。
