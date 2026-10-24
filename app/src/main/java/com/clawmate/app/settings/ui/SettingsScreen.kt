@@ -48,6 +48,8 @@ import com.clawmate.app.settings.domain.SETTINGS_SECTIONS
 import com.clawmate.app.settings.domain.SettingsSectionId
 import com.clawmate.app.log.ui.LogScreen
 import com.clawmate.app.R
+import com.clawmate.app.ui.HarmonyPage
+import com.clawmate.app.ui.theme.HarmonyTheme
 import com.clawmate.app.ui.ClawMateHeader
 import com.clawmate.app.ui.theme.ClawMateDesign
 
@@ -103,7 +105,7 @@ fun SettingsScreen(
             val active = SettingsSectionId.entries.firstOrNull { it.ordinalIndex == state.selectedSectionId }
             if (active != null) {
                 if (active == SettingsSectionId.RuntimeLogs) {
-                    LogScreen(onBack = vm::closeSection)
+                    com.clawmate.app.ui.InsetSecondaryPage { LogScreen(onBack = vm::closeSection) }
                     return@Box
                 }
                 SectionDetail(
@@ -121,16 +123,16 @@ fun SettingsScreen(
 
 @Composable
 private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: Context) {
+    val scroll = rememberScrollState()
+    HarmonyPage(scrollOffset = { scroll.value.toFloat() }, header = { ClawMateHeader("我的") }) { insets ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SettingsThemeColors.PageBackground)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 16.dp),
+            .verticalScroll(scroll)
+            .padding(insets),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ClawMateHeader(title = "设置中心", iconRes = R.drawable.header_settings)
         // Keep the five HarmonyOS sections as the primary list. Android-only
         // extensions are reachable from their owning section below.
         SETTINGS_SECTIONS.take(5).forEach { item ->
@@ -139,6 +141,7 @@ private fun SectionList(state: SettingsUiState, vm: SettingsViewModel, context: 
                 onClick = { vm.selectSection(item.id) },
             )
         }
+    }
     }
 }
 
@@ -190,39 +193,11 @@ private fun SectionDetail(
     vm: SettingsViewModel,
     context: Context,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SettingsThemeColors.PageBackground)
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, bottom = 128.dp),
-    ) {
-        Row(
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .align(Alignment.CenterHorizontally)
-            .padding(top = 18.dp, bottom = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(
-                onClick = { vm.closeSection() },
-                modifier = Modifier
-                    .size(42.dp)
-                    .background(Color.White, RoundedCornerShape(14.dp)),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回设置中心", tint = SettingsThemeColors.TitleColor)
-            }
-            Column(modifier = Modifier.padding(start = 4.dp)) {
-                Text("设置中心", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SettingsThemeColors.TitleColor)
-                Text(
-                    section.title,
-                    fontSize = 12.sp,
-                    color = SettingsThemeColors.SecondaryText,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-
+    val scroll = rememberScrollState()
+    HarmonyPage(scrollOffset = { scroll.value.toFloat() }, header = {
+        ClawMateHeader(section.title, onBack = vm::closeSection)
+    }) { insets ->
+    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(insets).padding(horizontal = 16.dp)) {
         // Error banner
         state.error?.let { err ->
             Box(
@@ -275,6 +250,7 @@ private fun SectionDetail(
             onSave = { vm.save() },
             onReset = { vm.resetToDefaults() },
         )
+    }
     }
 }
 

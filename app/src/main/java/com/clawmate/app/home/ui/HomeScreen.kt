@@ -49,6 +49,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.res.painterResource
 import com.clawmate.app.R
+import com.clawmate.app.ui.HarmonyPage
+import com.clawmate.app.ui.theme.HarmonyTheme
 import com.clawmate.app.ui.ClawMateHeader
 import com.clawmate.app.ui.theme.ClawMateDesign
 import com.clawmate.app.gallery.model.GalleryPhotoItem
@@ -100,7 +102,7 @@ fun HomeScreen(
     // dead disabled button.
     var showAvatar by remember { mutableStateOf(false) }
     if (showAvatar) {
-        ProfileAvatarHost(onClose = { showAvatar = false })
+        com.clawmate.app.ui.InsetSecondaryPage { ProfileAvatarHost(onClose = { showAvatar = false }) }
         return
     }
 
@@ -133,18 +135,9 @@ fun HomeScreen(
 private fun HomeStateWithHeader(
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ClawMateDesign.Colors.PageBackground),
-    ) {
-        ClawMateHeader(
-            title = "你的智伴",
-            iconRes = R.drawable.header_companion,
-            pcServerVisible = true,
-        )
-        content()
-    }
+    HarmonyPage(background = HarmonyTheme.pageWhite, header = {
+        ClawMateHeader("你的智伴", R.drawable.digital_avatar, showIcon = true, pcServerVisible = true)
+    }) { insets -> Column(Modifier.fillMaxSize().padding(insets), content = content) }
 }
 
 @Composable
@@ -197,25 +190,13 @@ private fun HomeContent(
     onOpenTasks: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .background(ClawMateDesign.Colors.PageBackground)
-            .padding(bottom = 24.dp),
-    ) {
-        ClawMateHeader(
-            title = "你的智伴",
-            iconRes = R.drawable.header_companion,
-            pcServerVisible = true,
-        )
-
-        // --------------------------------------------------- avatar section
-        AvatarSectionCard(profile, onOpenAvatar)
-
-        // ------------------------------------------- completeness + pillars
-        CompletenessCard(completeness = profile.completeness)
-        PillarsRow(domains = profile.domains)
+    val scroll = rememberScrollState()
+    HarmonyPage(background = HarmonyTheme.pageWhite, scrollOffset = { scroll.value.toFloat() }, header = {
+        ClawMateHeader(title = "你的智伴", iconRes = R.drawable.digital_avatar, showIcon = true,
+            pcServerVisible = true, onIconClick = onOpenAvatar)
+    }) { insets ->
+      Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(insets), horizontalAlignment = Alignment.CenterHorizontally) {
+        ProfileOverview(profile, list.recommendations.count { !it.completed }, onOpenAvatar)
 
         // --------------------------------------------------- recommendations
         RecommendationsSection(
@@ -234,10 +215,9 @@ private fun HomeContent(
         HomeTaskSuggestionsSection(profile.domains, onOpenTasks, onOpenSettings)
         HomeComfortSection(onOpenSettings)
 
-        ProfileGenerationSection(
-            profileGeneration = profileGeneration,
-            onGenerateProfile = onGenerateProfile,
-        )
+        // Existing generation action remains reachable while its avatar overlay is ported.
+        ProfileGenerationSection(profileGeneration, onGenerateProfile)
+      }
     }
 }
 
