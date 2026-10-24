@@ -1,110 +1,73 @@
 package com.clawmate.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.clawmate.app.ui.theme.ClawMateDesign
+import com.clawmate.app.ui.theme.HarmonyTheme
 
-/** Shared page header mirroring HarmonyOS AppHeader. */
+/** AppHeader.ets: title centered independently of either side control. */
 @Composable
 fun ClawMateHeader(
     title: String,
-    iconRes: Int,
+    iconRes: Int = 0,
     subtitle: String? = null,
     pcServerVisible: Boolean = false,
     pcServerConnected: Boolean = false,
     modifier: Modifier = Modifier,
+    showIcon: Boolean = false,
+    onIconClick: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 22.dp, end = 18.dp, top = 24.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(40.dp),
-            )
-            Column(
-                modifier = Modifier.padding(start = 9.dp),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    title,
-                    fontSize = 25.sp,
-                    lineHeight = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = ClawMateDesign.Colors.Text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        subtitle,
-                        fontSize = 14.sp,
-                        lineHeight = 18.sp,
-                        color = Color(0xFF717684),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+    val titlePadding = if (showIcon || pcServerVisible) 88.dp else if (onBack != null || actionLabel != null) 56.dp else 0.dp
+    Box(modifier.fillMaxWidth().height(56.dp).padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(title, fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium,
+            color = HarmonyTheme.text("#172033"), textAlign = TextAlign.Center, maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = titlePadding))
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) {
+                Box(Modifier.size(42.dp, 40.dp).clip(RoundedCornerShape(14.dp))
+                    .background(HarmonyTheme.surface).clickable(onClick = onBack)
+                    .semantics { contentDescription = "返回" }, contentAlignment = Alignment.Center) {
+                    Text("‹", fontSize = 28.sp, color = HarmonyTheme.text("#11182F"))
+                }
+            } else if (showIcon && iconRes != 0) {
+                Box(Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
+                    .background(HarmonyTheme.background("#EEF2FF"))
+                    .then(if (onIconClick != null) Modifier.clickable(onClick = onIconClick) else Modifier),
+                    contentAlignment = Alignment.Center) {
+                    Icon(painterResource(iconRes), "数字分身", tint = Color.Unspecified, modifier = Modifier.size(34.dp))
                 }
             }
-        }
-        Column(
-            horizontalAlignment = Alignment.End,
-            modifier = Modifier.padding(start = 8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(ClawMateDesign.Colors.PrimaryContainer, RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("盾", fontSize = 12.sp, color = ClawMateDesign.Colors.PrimaryStrong)
-                }
-                Text("隐私守护中", fontSize = 13.sp, color = ClawMateDesign.Colors.TextSecondary, modifier = Modifier.padding(horizontal = 5.dp))
-                Text(">", fontSize = 16.sp, color = ClawMateDesign.Colors.TextMuted)
-            }
+            Spacer(Modifier.weight(1f))
             if (pcServerVisible) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 5.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .background(
-                                if (pcServerConnected) Color(0xFF22B07D) else Color(0xFFA7AFBD),
-                                RoundedCornerShape(4.dp),
-                            ),
-                    )
-                    Text(
-                        if (pcServerConnected) "PC 已连接" else "PC 未连接",
-                        fontSize = 11.sp,
-                        color = if (pcServerConnected) Color(0xFF167456) else Color(0xFF747B87),
-                        modifier = Modifier.padding(start = 5.dp),
-                    )
+                Row(Modifier.width(80.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(Modifier.size(7.dp).background(HarmonyTheme.background(if (pcServerConnected) "#22B07D" else "#A7AFBD"), RoundedCornerShape(4.dp)))
+                    Text(if (pcServerConnected) "PC 已连接" else "PC 未连接", fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                        color = HarmonyTheme.text(if (pcServerConnected) "#167456" else "#747B87"), maxLines = 1)
+                }
+            } else if (actionLabel != null) {
+                Box(Modifier.size(56.dp, 40.dp).clip(RoundedCornerShape(14.dp))
+                    .background(HarmonyTheme.background("#EEF4FF")).clickable(onClick = onAction), contentAlignment = Alignment.Center) {
+                    Text(actionLabel, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = HarmonyTheme.text("#276EF1"))
                 }
             }
         }
