@@ -193,6 +193,7 @@ fun ChatScreen(
         }
     }
 
+    val debugEnabled = com.clawmate.app.ui.rememberUiDebugEnabled()
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -237,7 +238,7 @@ fun ChatScreen(
                         if (mode != state.mode) vm.newSession(mode)
                     },
                 )
-                TextButton(onClick = { showLogs = true }) {
+                if (debugEnabled) TextButton(onClick = { showLogs = true }) {
                     Text("日志")
                 }
             }

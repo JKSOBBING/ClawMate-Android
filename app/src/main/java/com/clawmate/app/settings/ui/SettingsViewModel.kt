@@ -299,6 +299,13 @@ class SettingsViewModel(
 
     // ------------------------------------------------------------------ actions
 
+    fun saveWhenIdle() {
+        viewModelScope.launch {
+            state.first { !it.saveBusy }
+            if (state.value.dirty) save()
+        }
+    }
+
     fun save() {
         val draft = _state.value.draft
         viewModelScope.launch {
@@ -327,13 +334,16 @@ class SettingsViewModel(
 
             com.clawmate.app.log.AppLogger.i("Settings", "设置已保存")
             _state.update {
+                // A focus-loss save can finish after the user starts another field.
+                // Keep that newer draft instead of replacing it with the older snapshot.
+                val unchanged = it.draft == draft
                 it.copy(
                     saveBusy = false,
                     saved = true,
                     appSettings = clean,
-                    draft = clean,
-                    dirty = false,
-                    revealedSensitiveKeys = emptySet(), // lock secrets again after save
+                    draft = if (unchanged) clean else it.draft,
+                    dirty = !unchanged,
+                    revealedSensitiveKeys = if (unchanged) emptySet() else it.revealedSensitiveKeys,
                 )
             }
         }

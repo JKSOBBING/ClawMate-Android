@@ -304,3 +304,12 @@
 - 构建日志 `ui-summary-build.log`（5m39s），手机测试 `ui-summary-device-tests.log`（11/11）；截图/XML `ui-summary-layout` 和 `ui-summary-data-collection-route` 核对足迹首屏及入口跳转。dev 包已安装，冷启动 487ms。原包及数据未清理，未创建 PR。
 - 边界：图库、分组详情及设置内部界面继续对齐；截图/录屏跨平台像素和原生动画对比尚未完成。
 - 前一阶段提交：`c31b948`（首页）；共用结构提交：`110556a`。
+
+### UI-04：我的列表与设置控件（2026-10-24）
+
+- 对照 SettingsCenterPage / SettingsCenterControls 重建帐号卡、Debug、桌面端 App、手机 HDC、五组设置入口。表单使用源码日夜配色、42/86dp 字段、40dp 操作按钮和密码显隐；移除页面常驻保存区，失焦、开关和返回触发真实保存。修复保存完成时覆盖新草稿的竞态。
+- Debug 使用应用私有偏好控制聊天日志入口和 DEBUG 记录。NFC 实际入口移到数字分身页。任务建议执行面板补齐标题与关闭按钮。
+- HMS 登录、小艺授权、手机 HDC 原生协议未接入时明确说明限制；隐私声明不宣称未经验证的数据保留政策。桌面下载只打开用户提供的 HTTPS 地址，不复制源码中的环境链接/口令。这些页面仍需补齐平台适配和运行画面对照。
+- 实际验证：ui-settings-build.log 中设置/日志 103 项单元测试通过；最终 ui-settings-build-3.log 构建主包、测试包并复跑 SettingsConcurrentSaveTest 通过（6m56s）。PKB110 安装两包均 Success，ui-settings-device-tests-4.log 为 OK (5 tests)。冷启动 487ms；已检查 ui-settings-mine-verified、ui-settings-collection-verified 的截图和 XML。
+- 失败记录：早两次尺寸测试读取内部编辑区域 26dp，已改为独立外框节点并验证 42/86dp；第三轮误写测试类名导致初始化失败，改为仓库真实 HomeTaskSuggestionsDeviceTest 后五项全部通过。以上失败未计为通过。
+- 边界：本阶段不验证服务端请求、HMS 登录、HDC 配对和模型推理；不是像素级或鸿蒙原生动画最终验收。独立 dev 包保留原应用及其数据。
