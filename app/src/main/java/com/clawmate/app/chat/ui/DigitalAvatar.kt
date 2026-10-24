@@ -2,6 +2,10 @@ package com.clawmate.app.chat.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +33,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,6 +72,8 @@ import com.clawmate.app.chat.voice.waveBarWidth
 import com.clawmate.app.chat.voice.waveOpacity
 import com.clawmate.app.chat.voice.waveTranslateX
 import com.clawmate.app.chat.voice.waveTranslateY
+import com.clawmate.app.R
+import com.clawmate.app.ui.theme.HarmonyTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -96,8 +106,10 @@ fun DigitalAvatar(
     fallbackText: String = "助",
     fallbackColorHex: String = DigitalAvatarColors.DEFAULT_FALLBACK_HEX,
     foregroundPainter: Painter? = null,
+    useAssistantMascot: Boolean = false,
 ) {
     val fallbackColor = avatarColor(fallbackColorHex)
+    val painter = if (useAssistantMascot) painterResource(R.drawable.chat_assistant_avatar) else foregroundPainter
 
     // Non-digital messages (user "我", notices "压", task "任") are a plain
     // static letter — matching HarmonyOS, which shows no ring/wave for them.
@@ -118,8 +130,24 @@ fun DigitalAvatar(
         return
     }
 
-    val hasContent = foregroundPainter != null || fallbackText.isNotEmpty()
+    val hasContent = painter != null || fallbackText.isNotEmpty()
     val animated = hasContent && visualState.isAnimated
+    val scope = rememberCoroutineScope()
+    var tapStage by remember { mutableStateOf(0) }
+    var tapLocked by remember { mutableStateOf(false) }
+    val easeOut = remember { CubicBezierEasing(0f, 0f, .58f, 1f) }
+    val easeInOut = remember { CubicBezierEasing(.42f, 0f, .58f, 1f) }
+    val tapScale by animateFloatAsState(when(tapStage) {
+        1 -> if (size == DigitalAvatarSize.HERO) 1.16f else 1.28f
+        2 -> if (size == DigitalAvatarSize.HERO) 1.04f else 1.08f
+        else -> 1f
+    }, tween(120, easing = easeOut), label = "avatar tap scale")
+    val tapY by animateFloatAsState(when(tapStage) { 1 -> if (size == DigitalAvatarSize.HERO) -16f else -10f; 2 -> 2f; else -> 0f },
+        tween(120, easing = easeOut), label = "avatar tap lift")
+    val tapShadow by animateFloatAsState(when(tapStage) { 1 -> .68f; 2 -> 1.18f; else -> 1f }, tween(120, easing = easeOut), label = "avatar tap shadow")
+    val tapShadowAlpha by animateFloatAsState(when(tapStage) { 1 -> .08f; 2 -> .28f; else -> .22f }, tween(120, easing = easeOut), label = "avatar shadow alpha")
+    val tapHalo by animateFloatAsState(when(tapStage) { 1 -> 1.34f; 2 -> 1.16f; 3 -> 1.58f; else -> .86f }, tween(120, easing = easeOut), label = "avatar halo scale")
+    val tapHaloAlpha by animateFloatAsState(when(tapStage) { 1 -> .72f; 2 -> .34f; else -> 0f }, tween(120, easing = easeOut), label = "avatar halo alpha")
 
     // 800 ms pulse — restarts only when the animated flag flips; runs free across
     // thinking/listening/speaking so the breathing never stutters.
@@ -152,8 +180,9 @@ fun DigitalAvatar(
         // voice that goes quiet always settles — a still-running pulse animation can
         // otherwise no-op an in-flight re-target and leave the ring stuck expanded.
         val settle = !visualState.isAnimated
-        val ringSpec = tween<Float>(760)
-        val waveSpec = tween<Float>(360)
+        val ringSpec = tween<Float>(760, easing = easeInOut)
+        val foregroundSpec = tween<Float>(620, easing = easeOut)
+        val waveSpec = tween<Float>(360, easing = easeInOut)
         launch {
             val t = ringScale(visualState, pulse)
             if (settle) ringScaleA.snapTo(t) else ringScaleA.animateTo(t, ringSpec)
@@ -164,11 +193,11 @@ fun DigitalAvatar(
         }
         launch {
             val t = foregroundScale(1f, visualState, pulse)
-            if (settle) fgScaleA.snapTo(t) else fgScaleA.animateTo(t, ringSpec)
+            if (settle) fgScaleA.snapTo(t) else fgScaleA.animateTo(t, foregroundSpec)
         }
         launch {
             val t = shadowScale(1f, visualState, pulse)
-            if (settle) shadowScaleA.snapTo(t) else shadowScaleA.animateTo(t, ringSpec)
+            if (settle) shadowScaleA.snapTo(t) else shadowScaleA.animateTo(t, foregroundSpec)
         }
         launch {
             val t = waveOpacity(visualState, pulse)
@@ -201,15 +230,25 @@ fun DigitalAvatar(
         modifier = modifier
             .size(
                 width = containerWidth(size, true).dp,
-                height = containerHeight(size, true).dp,
-            ),
+                height = (if (useAssistantMascot) containerWidth(size, true) else containerHeight(size, true)).dp,
+            ).semantics { contentDescription = if (useAssistantMascot) "ClawMate 卡通猫助手" else "个人生成形象" }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                if (hasContent && !tapLocked) scope.launch {
+                    tapLocked = true
+                    try { tapStage = 1; delay(170); tapStage = 2; delay(170); tapStage = 3; delay(220) }
+                    finally { tapStage = 0; tapLocked = false }
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
+        Box(Modifier.size(ringSize(size).dp).scale(tapHalo).alpha(tapHaloAlpha)
+            .background(HarmonyTheme.background("#445968FF"), CircleShape))
         // 1. Outer ring — normally hidden behind the frame, grows past it on the pulse.
         Box(
             modifier = Modifier
                 .size(ringSize(size).dp)
-                .background(avatarColor(DigitalAvatarColors.RING_HEX).copy(alpha = ringOpacityV), CircleShape)
+                .alpha(ringOpacityV)
+                .background(HarmonyTheme.background(DigitalAvatarColors.RING_HEX), CircleShape)
                 .scale(ringScaleV),
         )
 
@@ -219,24 +258,24 @@ fun DigitalAvatar(
                 .width(shadowWidth(size).dp)
                 .height(shadowHeight(size).dp)
                 .offset(y = shadowTranslateY(size).dp)
-                .background(avatarColor(DigitalAvatarColors.SHADOW_HEX), RoundedCornerShape(shadowRadius(size).dp))
-                .scale(shadowScaleV),
+                .alpha(tapShadowAlpha)
+                .background(HarmonyTheme.background(DigitalAvatarColors.SHADOW_HEX), RoundedCornerShape(shadowRadius(size).dp))
+                .scale(shadowScaleV * tapShadow, 1f),
         )
 
         // 3. Foreground — the real avatar image, or the fallback letter.
         Box(
             modifier = Modifier
                 .then(
-                    if (foregroundPainter != null) {
-                        Modifier.size(width = frameWidth(size).dp, height = frameHeight(size).dp)
+                    if (painter != null) {
+                        Modifier.size(width = frameWidth(size).dp, height = (if (useAssistantMascot) frameWidth(size) else frameHeight(size)).dp)
                     } else {
                         Modifier.size(fallbackSize(size).dp)
                     },
                 )
-                .scale(foregroundScaleV),
+                .offset(y = tapY.dp).scale(foregroundScaleV * tapScale),
             contentAlignment = Alignment.Center,
         ) {
-            val painter = foregroundPainter
             if (painter != null) {
                 Image(
                     painter = painter,
@@ -267,7 +306,8 @@ fun DigitalAvatar(
                 .width(highlightWidth(size).dp)
                 .height(highlightHeight(size).dp)
                 .offset(x = highlightTranslateX(size).dp, y = highlightTranslateY(size).dp)
-                .background(avatarColor(DigitalAvatarColors.HIGHLIGHT_HEX), RoundedCornerShape(highlightRadius(size).dp)),
+                .alpha(.32f)
+                .background(HarmonyTheme.background(DigitalAvatarColors.HIGHLIGHT_HEX), RoundedCornerShape(highlightRadius(size).dp)),
         )
 
         // 5. Voice-state wave bars — visible only while speaking / interrupted.
@@ -284,7 +324,7 @@ fun DigitalAvatar(
                         modifier = Modifier
                             .width(waveBarWidth(size).dp)
                             .height(waveBarMaxHeight(size).dp)
-                            .background(avatarColor(DigitalAvatarColors.WAVE_HEX), RoundedCornerShape(waveBarRadius(size).dp))
+                            .background(HarmonyTheme.background(DigitalAvatarColors.WAVE_HEX), RoundedCornerShape(waveBarRadius(size).dp))
                             .scale(1f, s),
                     )
                 }

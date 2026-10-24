@@ -1,5 +1,12 @@
 package com.clawmate.app.chat.ui
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.clawmate.app.ui.*
+import com.clawmate.app.ui.theme.HarmonyTheme
 import android.Manifest
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,6 +23,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -110,8 +118,8 @@ import com.clawmate.app.R
  *   - voice controls: mic / listening / transcript on the input bar, and
  *     speak / stop / replay on assistant bubbles (Android TextToSpeech).
  *
- * No replies are faked: if the cloud model is not configured the input bar is
- * disabled and an actionable message is shown; if a request fails, the error
+ * The composer remains visible without configuration; an attempted send opens
+ * the configuration explanation without issuing a request; if a request fails, the error
  * banner explains what happened. Voice input never fabricates a transcript —
  * the editable field is only appended to after a real final ASR result.
  * Recording requires RECORD_AUDIO: the mic button requests that permission and
@@ -156,10 +164,11 @@ fun ChatScreen(
     }
 
     // Runtime RECORD_AUDIO permission; requested only when the user taps the mic.
+    var holdingVoice by remember { androidx.compose.runtime.mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) {
+        if (granted && holdingVoice) {
             vm.beginVoiceInput()
         }
     }
@@ -193,126 +202,109 @@ fun ChatScreen(
         }
     }
 
-    val debugEnabled = com.clawmate.app.ui.rememberUiDebugEnabled()
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            SessionDrawer(
-                sessions = state.sessions,
-                activeSessionId = state.sessionId,
-                onClose = { vm.setDrawerOpen(false) },
-                onNewSession = { vm.newSession() },
-                onSelect = { id ->
-                    vm.selectSession(id)
-                    vm.setDrawerOpen(false)
-                },
-                onDelete = { id -> vm.deleteSession(id) },
-            )
-        },
-    ) {
-        Column(modifier = Modifier.fillMaxSize().imePadding()) {
-            // Header bar: open the session drawer + current session title.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 18.dp, end = 18.dp, top = 22.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = {
-                    if (state.drawerOpen) vm.setDrawerOpen(false) else vm.setDrawerOpen(true)
-                }) {
-                    Icon(Icons.Filled.Menu, contentDescription = "历史会话")
-                }
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "MobiAgent",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
-                ChatModeTabs(
-                    mode = state.mode,
-                    enabled = !state.isSending,
-                    onSelect = { mode ->
-                        if (mode != state.mode) vm.newSession(mode)
-                    },
-                )
-                if (debugEnabled) TextButton(onClick = { showLogs = true }) {
-                    Text("日志")
-                }
+    val debugEnabled = rememberUiDebugEnabled()
+    var showConfiguration by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showThinkingBoundary by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showAttachmentSources by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var cameraUri by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { accepted ->
+        val uri = cameraUri
+        if (accepted && uri != null) vm.addPendingAttachments(listOf(uri), AttachmentSource.CAMERA)
+        else uri?.let { runCatching { context.contentResolver.delete(android.net.Uri.parse(it), null, null) } }
+        cameraUri = null
+    }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
+    val keyboardVisible = WindowInsets.ime.getBottom(density) > 0
+    var footerHeight by remember { androidx.compose.runtime.mutableIntStateOf(220) }
+    val send = {
+        if (state.isSending) vm.cancelSend()
+        else if (state.inputText.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
+            if (!state.isConfigured) showConfiguration = true
+            else { focus.clearFocus(); keyboard?.hide(); vm.send() }
+        }
+    }
+    ModalNavigationDrawer(drawerState = drawerState, drawerContent = {
+        HarmonySessionDrawer(state.sessions, state.sessionId,
+            onClose = { vm.setDrawerOpen(false) }, onNewSession = { mode -> vm.newSession(mode) },
+            onSelect = { vm.selectSession(it); vm.setDrawerOpen(false) }, onDelete = vm::deleteSession)
+    }, scrimColor = HarmonyTheme.background("#66000000")) {
+        Box(Modifier.fillMaxSize()) {
+            HarmonyPage(background = HarmonyTheme.background(if (state.messages.isEmpty()) "#F4F8FF" else "#FFFFFF"),
+                header = {
+                    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 18.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(44.dp, 40.dp).clickable { vm.setDrawerOpen(true) }
+                            , contentAlignment = Alignment.Center) {
+                            Text("☰", fontSize = 28.sp, color = HarmonyTheme.text("#111827"))
+                        }
+                        Text("MobiAgent", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                            color = HarmonyTheme.text("#111827"), modifier = Modifier.weight(1f), maxLines = 1)
+                        ChatModeTabs(state.mode, !state.isSending) { if (it != state.mode) vm.newSession(it) }
+                        if (debugEnabled) HarmonyButton("日志", { showLogs = true }, Modifier.padding(start = 8.dp).width(52.dp),
+                            height = 36.dp, fontSize = 14.sp, color = HarmonyTheme.text("#5968FF"),
+                            background = Color.Transparent, horizontalPadding = 0.dp)
+                    }
+                }) { insets ->
+                val bottom = with(density) { footerHeight.toDp() }
+                if (state.messages.isEmpty()) HarmonyChatWelcome(vm::onInputChange, voice.session, insets, bottom)
+                else MessageList(state.messages, state, voice.session, vm, listState,
+                    Modifier.fillMaxSize(), PaddingValues(start = 28.dp, end = 28.dp,
+                        top = insets.calculateTopPadding(), bottom = bottom))
             }
-
-            MessageList(
-                messages = state.messages,
-                state = state,
-                voice = voice.session,
-                vm = vm,
-                listState = listState,
-                modifier = Modifier.weight(1f),
-            )
-
-            if (state.error != null) {
-                ErrorBanner(
-                    message = state.error.orEmpty(),
-                    onDismiss = vm::clearError,
-                )
-            }
-            ChatActionStrip(onOpenTasks = onOpenTasks)
-            VoiceStatusBanner(voice.session)
-
-            if (state.isConfigured) {
+            Column(Modifier.align(Alignment.BottomCenter).onSizeChanged { footerHeight = it.height }
+                .imePadding().navigationBarsPadding().padding(bottom = if (keyboardVisible) 0.dp else 88.dp)) {
+                state.error?.let { ErrorBanner(it, vm::clearError) }
                 AttachmentNoteBanner(state.attachmentNote)
-                InputBar(
-                    value = state.inputText,
-                    onChange = vm::onInputChange,
-                    onSend = vm::send,
-                    sending = state.isSending,
-                    onMicClicked = {
+                HarmonyPendingAttachments(state.pendingAttachments, !state.isSending) {
+                    state.pendingAttachments.forEach { vm.removePendingAttachment(it.id) }
+                }
+                Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (state.mode != ChatMode.LOCAL_INFERENCE) HarmonyChatAction("深度思考 关") { showThinkingBoundary = true }
+                    HarmonyChatAction("下发任务", onOpenTasks)
+                }
+                VoiceStatusBanner(voice.session)
+                HarmonyChatComposer(state.inputText, vm::onInputChange, state.mode, state.isSending,
+                    voice.session.status == VoiceInteractionStatus.LISTENING, send,
+                    onVoiceStart = {
+                        holdingVoice = true
                         if (voice.asrRecordPermissionGranted) vm.beginVoiceInput()
                         else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    },
-                    pendingAttachments = state.pendingAttachments,
-                    onAttachClicked = {
-                        if (!state.isSending && remainingSlots > 0) pickImages()
-                    },
-                    onRemoveAttachment = vm::removePendingAttachment,
-                )
-            } else {
-                MissingConfigPane(
-                    mode = state.mode,
-                    localState = state.localModelStatus,
-                    onOpenSettings = onOpenSettings,
-                )
+                    }, onVoiceRelease = { holdingVoice = false; vm.stopVoiceInput() },
+                    onAttach = { if (!state.isSending && remainingSlots > 0) showAttachmentSources = true })
             }
         }
     }
-}
-
-@Composable
-private fun ChatActionStrip(onOpenTasks: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(17.dp),
-            modifier = Modifier
-                .height(34.dp)
-                .clickable(onClick = onOpenTasks),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ClawMateDesign.Colors.Border),
-        ) {
-            Text(
-                "下发任务",
-                fontSize = 12.sp,
-                color = ClawMateDesign.Colors.Text,
-                modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
-            )
+    if (showConfiguration) HarmonyModal({ showConfiguration = false }) {
+        Text(if (state.mode == ChatMode.LOCAL_INFERENCE) "本地推理不可用" else "云端模型尚未配置",
+            fontSize = 18.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)
+        Text(if (state.mode == ChatMode.LOCAL_INFERENCE) state.localModelStatus?.message ?: "请先配置并加载本地模型。"
+            else "请在模型与智能体设置中填写地址、密钥和模型名。配置完成前不会发送消息。",
+            fontSize = 14.sp, lineHeight = 22.sp, color = HarmonyTheme.secondaryText, modifier = Modifier.padding(vertical = 16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HarmonyButton("取消", { showConfiguration = false })
+            HarmonyButton("前往设置", { showConfiguration = false; onOpenSettings() })
         }
     }
+    if (showThinkingBoundary) HarmonyModal({ showThinkingBoundary = false }) {
+        Text("深度思考", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)
+        Text("当前 Android 模型适配器尚未接入单次深度思考参数，此开关暂不可用。",
+            fontSize = 14.sp, color = HarmonyTheme.secondaryText, modifier = Modifier.padding(vertical = 16.dp))
+        HarmonyButton("知道了", { showThinkingBoundary = false })
+    }
+    if (showAttachmentSources) HarmonyAttachmentSources({ showAttachmentSources = false },
+        onAlbum = { showAttachmentSources = false; pickImages() }, onCamera = {
+            showAttachmentSources = false
+            try {
+                val directory = java.io.File(context.cacheDir, "chat-camera").also { it.mkdirs() }
+                val file = java.io.File.createTempFile("capture-", ".jpg", directory)
+                val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                cameraUri = uri.toString()
+                camera.launch(uri)
+            } catch (_: Exception) { cameraUri?.let { runCatching { context.contentResolver.delete(android.net.Uri.parse(it), null, null) } }; cameraUri = null; vm.showAttachmentNote("无法启动系统相机，请使用相册选择图片。") }
+        })
 }
 
 @Composable
@@ -323,7 +315,7 @@ private fun ChatModeTabs(
 ) {
     Row(
         modifier = Modifier
-            .background(ClawMateDesign.Colors.Input, RoundedCornerShape(16.dp))
+            .background(HarmonyTheme.background("#F4F6FA"), RoundedCornerShape(16.dp))
             .padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -333,7 +325,7 @@ private fun ChatModeTabs(
                     .width(46.dp)
                     .height(28.dp)
                     .background(
-                        if (mode == option) ClawMateDesign.Colors.Text else Color.Transparent,
+                        HarmonyTheme.background(if (mode == option) "#111827" else "#F4F6FA"),
                         RoundedCornerShape(14.dp),
                     )
                     .clickable(enabled = enabled) { onSelect(option) },
@@ -343,108 +335,11 @@ private fun ChatModeTabs(
                     if (option == ChatMode.LOCAL_INFERENCE) "本地" else "云端",
                     fontSize = 12.sp,
                     fontWeight = if (mode == option) FontWeight.Bold else FontWeight.Normal,
-                    color = if (mode == option) ClawMateDesign.Colors.Surface else ClawMateDesign.Colors.TextMuted,
+                    color = HarmonyTheme.text(if (mode == option) "#FFFFFF" else "#5D6472"),
                 )
             }
         }
     }
-}
-
-/**
- * The session list shown in the navigation drawer: a "new session" action plus
- * every persisted session with a delete action. Selecting a session (or the new
- * one) is delegated up to [ChatViewModel].
- */
-@Composable
-private fun SessionDrawer(
-    sessions: List<ChatSession>,
-    activeSessionId: String,
-    onClose: () -> Unit,
-    onNewSession: () -> Unit,
-    onSelect: (String) -> Unit,
-    onDelete: (String) -> Unit,
-) {
-    ModalDrawerSheet(modifier = Modifier.fillMaxSize(0.85f)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "历史会话",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = "收起历史会话")
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(onClick = onNewSession) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text(" 新会话", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.weight(1f)) {
-            items(sessions, key = { it.id }) { session ->
-                SessionDrawerItem(
-                    session = session,
-                    active = session.id == activeSessionId,
-                    onClick = { onSelect(session.id) },
-                    onDelete = { onDelete(session.id) },
-                )
-            }
-            if (sessions.isEmpty()) {
-                item(key = "__empty__") {
-                    Text(
-                        "暂无会话，点上方新建",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SessionDrawerItem(
-    session: ChatSession,
-    active: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    NavigationDrawerItem(
-        icon = {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "删除会话")
-            }
-        },
-        label = {
-            Column(modifier = Modifier.padding(end = 4.dp)) {
-                Text(
-                    text = session.displayTitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                )
-                Text(
-                    text = "${session.messageCount} 条消息 · ${session.preview}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        },
-        selected = active,
-        onClick = onClick,
-    )
 }
 
 @Composable
@@ -455,6 +350,7 @@ private fun MessageList(
     vm: ChatViewModel,
     listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
+    insets: PaddingValues = PaddingValues(16.dp),
 ) {
     if (messages.isEmpty()) {
         Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -468,7 +364,7 @@ private fun MessageList(
                     )
                 }
             } else {
-                EmptyChatWelcome(onPrompt = vm::onInputChange, voice = voice)
+                HarmonyChatWelcome(vm::onInputChange, voice, insets, insets.calculateBottomPadding())
             }
         }
         return
@@ -476,14 +372,15 @@ private fun MessageList(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = insets,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         items(messages, key = { it.id }) { message ->
             MessageBubble(
                 message = message,
                 voice = voice,
                 vm = vm,
+                mode = state.mode,
             )
         }
         if (state.activeToolTrace != null) {
@@ -497,98 +394,6 @@ private fun MessageList(
                     CircularProgressIndicator(modifier = Modifier.padding(4.dp))
                     Text("模型思考中…", style = MaterialTheme.typography.bodyMedium)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyChatWelcome(onPrompt: (String) -> Unit, voice: VoiceSessionSnapshot) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.Start,
-    ) {
-        // The welcome "hero" digital avatar — the brand illustration as the
-        // foreground, animated by the *real* voice session (listens/thinks/speaks
-        // pulse the ring + wave bars; idle stays still). No faked motion.
-        DigitalAvatar(
-            size = DigitalAvatarSize.HERO,
-            visualState = DigitalAvatarVisualState.fromVoiceStatus(voice.status),
-            useDigitalAvatar = true,
-            fallbackText = "助",
-            foregroundPainter = painterResource(R.drawable.digital_avatar),
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Text(
-            text = "你好，今天想做什么？",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = ClawMateDesign.Colors.Text,
-            modifier = Modifier.padding(top = 10.dp),
-        )
-        Text(
-            text = "我可以帮你整理信息、执行任务",
-            style = MaterialTheme.typography.bodyLarge,
-            color = ClawMateDesign.Colors.TextMuted,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Column(modifier = Modifier.padding(top = 18.dp)) {
-            ChatPromptCard(
-                title = "整理今天截图里的关键信息",
-                description = "从图片和聊天里提取重点",
-                prompt = "整理今天截图里的关键信息",
-                onPrompt = onPrompt,
-            )
-            ChatPromptCard(
-                title = "规划一个自动化 workflow",
-                description = "拆解步骤并生成执行计划",
-                prompt = "规划一个收集微信聊天记录的 workflow",
-                onPrompt = onPrompt,
-            )
-            ChatPromptCard(
-                title = "淘宝搜索耳机比价",
-                description = "帮你比较价格和参数",
-                prompt = "淘宝搜索耳机比价",
-                onPrompt = onPrompt,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ChatPromptCard(
-    title: String,
-    description: String,
-    prompt: String,
-    onPrompt: (String) -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp)
-            .clickable { onPrompt(prompt) },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(ClawMateDesign.Colors.PrimaryContainer, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("·", color = ClawMateDesign.Colors.PrimaryStrong, fontWeight = FontWeight.Bold)
-            }
-            Column(modifier = Modifier.padding(start = 12.dp)) {
-                Text(title, fontWeight = FontWeight.Bold, color = ClawMateDesign.Colors.Text)
-                Text(description, color = ClawMateDesign.Colors.TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -611,99 +416,67 @@ private fun ToolStatusPill(traceLine: String) {
 }
 
 @Composable
-private fun MessageBubble(
-    message: ChatMessage,
-    voice: VoiceSessionSnapshot,
-    vm: ChatViewModel,
-) {
+private fun MessageBubble(message: ChatMessage, voice: VoiceSessionSnapshot, vm: ChatViewModel, mode: String) {
     val isUser = message.role == ChatMessageRole.USER
-
-    if (isUser) {
-        // User messages keep their current right-aligned, avatar-less layout.
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.End,
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(0.85f),
-            ) {
-                if (!message.isStreaming) {
-                    ChatMarkdownText(message.content, Modifier.padding(12.dp), MaterialTheme.colorScheme.onPrimaryContainer)
-                } else {
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
-            }
-            if (!message.isStreaming && message.content.isNotBlank()) {
-                CopyMessageButton(message.content)
-            }
-            ChatStoredImages(message.imagePaths)
-        }
-        return
+    val shape = RoundedCornerShape(17.dp)
+    val color = HarmonyTheme.background(when {
+        isUser -> "#111827"
+        message.kind == ChatMessageKind.CONTEXT_NOTICE -> "#FFFBEB"
+        message.kind == ChatMessageKind.TASK_RESULT -> "#ECFDF5"
+        message.kind == ChatMessageKind.TASK_TRACE -> "#F5F3FF"
+        else -> "#F8FAFD"
+    })
+    val border = HarmonyTheme.border(when(message.kind) {
+        ChatMessageKind.TASK_RESULT -> "#A7F3D0"
+        ChatMessageKind.CONTEXT_NOTICE -> "#FDE68A"
+        else -> "#E8ECF3"
+    })
+    val roleLabel = when {
+        isUser -> "你"
+        message.kind == ChatMessageKind.CONTEXT_NOTICE -> "上下文"
+        message.kind == ChatMessageKind.TASK_RESULT -> "任务结果"
+        message.kind == ChatMessageKind.TASK_TRACE -> "任务过程"
+        message.role == ChatMessageRole.SYSTEM -> "系统"
+        else -> ChatMode.label(mode)
     }
-
-    // Assistant / task / notice messages: in-line digital avatar (port of HarmonyOS
-    // chatAvatarRenderModel). Only the message the voice session is active on animates.
-    val visualState = visualStateForMessage(voice.status, voice.activeMessageId, message.id)
-    val render = chatAvatarRenderModel(message, modeMark = "", visualState = visualState)
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-    ) {
-        DigitalAvatar(
-            size = DigitalAvatarSize.MESSAGE,
-            visualState = render.visualState,
-            useDigitalAvatar = render.useDigitalAvatar,
-            fallbackText = render.fallbackText,
-            fallbackColorHex = render.fallbackColorHex,
-        )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 6.dp),
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (!message.isStreaming && message.role == ChatMessageRole.ASSISTANT && message.kind == ChatMessageKind.CHAT) {
-                    ChatMarkdownText(message.content, Modifier.padding(12.dp))
-                } else {
-                    // Preserve immediate streaming updates and exact notice text.
-                    Text(
-                        text = message.content + if (message.isStreaming) " ▌" else "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
+    val render = chatAvatarRenderModel(message, if (mode == ChatMode.LOCAL_INFERENCE) "本" else "云",
+        visualStateForMessage(voice.status, voice.activeMessageId, message.id))
+    val useCat = message.role == ChatMessageRole.ASSISTANT || message.role == ChatMessageRole.TASK
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
+        Column(Modifier.fillMaxWidth(.96f)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
+                DigitalAvatar(size = DigitalAvatarSize.MESSAGE, useAssistantMascot = useCat,
+                    visualState = render.visualState, useDigitalAvatar = useCat,
+                    fallbackText = render.fallbackText, fallbackColorHex = render.fallbackColorHex)
             }
-            // Tool execution traces (agent loop) shown under assistant messages.
-            if (message.trace.isNotEmpty()) {
-                Text(
-                    text = message.trace.joinToString("\n"),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp, top = 4.dp),
-                )
-            }
-            // Phase-7 voice output controls for assistant messages (Android TTS).
-            if (!message.isStreaming && message.content.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CopyMessageButton(message.content)
-                    VoiceBubbleControls(
-                        messageId = message.id,
-                        text = message.content,
-                        voice = voice,
-                        vm = vm,
-                    )
+            Column(Modifier.fillMaxWidth().background(color, shape)
+                .then(if (isUser) Modifier else Modifier.border(androidx.compose.foundation.BorderStroke(1.dp, border), shape))
+                .padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(roleLabel, fontSize = 11.sp, color = HarmonyTheme.text(if (isUser) "#E5E7EB" else "#6B7280"), maxLines = 1)
+                    if (message.kind != ChatMessageKind.CONTEXT_NOTICE && (useCat || message.kind == ChatMessageKind.TASK_RESULT || message.kind == ChatMessageKind.TASK_TRACE))
+                        HarmonyAiBadge(Modifier.padding(start = 6.dp), compact = true)
+                    Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(message.createdAt)),
+                        fontSize = 10.sp, color = HarmonyTheme.text(if (isUser) "#D1D5DB" else "#9CA3AF"),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp))
+                    if (!message.isStreaming && message.content.isNotBlank()) CopyMessageButton(message.content, true, isUser)
                 }
+                if (message.trace.isNotEmpty()) Text("已执行 ${message.trace.size} 次工具调用", fontSize = 12.sp,
+                    color = HarmonyTheme.text("#9CA3AF"), modifier = Modifier.padding(top = 6.dp))
+                val foreground = HarmonyTheme.text(if (isUser) "#FFFFFF" else "#2F3645")
+                if (!message.isStreaming) ChatMarkdownText(message.content, Modifier.padding(top = 8.dp), foreground, 15f)
+                else Text(message.content + " ▌", fontSize = 15.sp, lineHeight = 22.sp, color = foreground, modifier = Modifier.padding(top = 8.dp))
+                if (message.trace.isNotEmpty()) {
+                    var expanded by remember(message.id) { androidx.compose.runtime.mutableStateOf(!message.collapsed) }
+                    HarmonyButton(if (expanded) "收起任务过程" else "展开任务过程", { expanded = !expanded }, Modifier.padding(top = 8.dp))
+                    if (expanded) Text(message.trace.joinToString("\n"), fontSize = 12.sp, lineHeight = 18.sp,
+                        color = HarmonyTheme.secondaryText, modifier = Modifier.padding(top = 8.dp))
+                }
+                if (message.role == ChatMessageRole.ASSISTANT && message.kind == ChatMessageKind.CHAT && !message.isStreaming && message.content.isNotBlank())
+                    VoiceBubbleControls(message.id, message.content, voice, vm)
+                ChatStoredImages(message.imagePaths)
             }
         }
     }
@@ -711,17 +484,22 @@ private fun MessageBubble(
 
 /** Copy the stored complete original, independent of visual formatting/selection. */
 @Composable
-internal fun CopyMessageButton(text: String) {
+internal fun CopyMessageButton(text: String, compact: Boolean = false, isUser: Boolean = false) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
-    TextButton(onClick = {
+    val copy = {
         try {
             clipboard.setText(AnnotatedString(text))
             Toast.makeText(context, "已复制消息", Toast.LENGTH_SHORT).show()
         } catch (_: Exception) {
             Toast.makeText(context, "复制失败，请重试或选中部分文字复制", Toast.LENGTH_SHORT).show()
         }
-    }) {
+    }
+    if (compact) HarmonyButton("复制", copy,
+        Modifier.padding(start = 8.dp).border(1.dp, Color(if (isUser) 0xFF41516A else 0xFFDCE4FF), RoundedCornerShape(13.dp)),
+        height = 26.dp, radius = 13.dp, fontSize = 11.sp, color = Color(if (isUser) 0xFFDBEAFE else 0xFF5968FF),
+        background = Color(if (isUser) 0xFF273449 else 0xFFEEF2FF), horizontalPadding = 8.dp)
+    else TextButton(onClick = copy) {
         Icon(Icons.Filled.ContentCopy, contentDescription = "复制整条消息", modifier = Modifier.size(16.dp))
         Text("复制", modifier = Modifier.padding(start = 4.dp), style = MaterialTheme.typography.labelSmall)
     }
@@ -740,35 +518,15 @@ private fun VoiceBubbleControls(
     val paused = voice.status == VoiceInteractionStatus.PAUSED && isActiveMessage
     val synthesizing = voice.status == VoiceInteractionStatus.SYNTHESIZING && isActiveMessage
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 8.dp, top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        when {
-            synthesizing -> Text("正在合成语音…", style = MaterialTheme.typography.labelSmall)
-            speaking -> {
-                // Tap while speaking stops (equivalent to a pause; no fake audio).
-                IconButton(onClick = { vm.speakMessage(messageId, text) }) {
-                    Icon(Icons.Filled.Stop, contentDescription = "停止朗读")
-                }
-                IconButton(onClick = { vm.replayMessage(messageId, text) }) {
-                    Icon(Icons.Filled.Replay, contentDescription = "重播")
-                }
-            }
-            paused -> {
-                IconButton(onClick = { vm.speakMessage(messageId, text) }) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "继续朗读")
-                }
-            }
-            else -> {
-                IconButton(onClick = { vm.speakMessage(messageId, text) }) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "朗读")
-                }
-                IconButton(onClick = { vm.replayMessage(messageId, text) }) {
-                    Icon(Icons.Filled.Replay, contentDescription = "重播")
-                }
-            }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(30.dp).background(HarmonyTheme.background(if (speaking) "#5968FF" else if (synthesizing) "#E0E7FF" else "#EEF2FF"), RoundedCornerShape(15.dp))
+            .clickable(enabled = !synthesizing) { vm.speakMessage(messageId, text) }, contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.Image(painterResource(if (speaking) R.drawable.voice_pause_light else R.drawable.voice_speaker_blue),
+                if (speaking) "停止朗读" else if (paused) "继续朗读" else "朗读", Modifier.size(18.dp))
+        }
+        Box(Modifier.size(30.dp).background(HarmonyTheme.background("#EEF2FF"), RoundedCornerShape(15.dp))
+            .clickable(enabled = !synthesizing) { vm.replayMessage(messageId, text) }, contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.Image(painterResource(R.drawable.voice_replay_blue), "重播", Modifier.size(18.dp))
         }
     }
 }
@@ -776,152 +534,18 @@ private fun VoiceBubbleControls(
 /** Live listening/transcribing status + the accumulated partial transcript. */
 @Composable
 private fun VoiceStatusBanner(voice: VoiceSessionSnapshot) {
-    val listening = voice.status == VoiceInteractionStatus.LISTENING
-    val transcribing = voice.status == VoiceInteractionStatus.TRANSCRIBING
-    if (!listening && !transcribing) return
-    val showing = if (voice.partialTranscript.isNotBlank()) voice.partialTranscript else voice.finalTranscript
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.padding(2.dp))
-            Text(
-                text = if (listening) "正在聆听…" else "正在转写…",
-                style = MaterialTheme.typography.labelMedium,
-            )
-            if (showing.isNotBlank()) {
-                Text(
-                    text = showing,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                )
-            }
-        }
+    if (voice.status == VoiceInteractionStatus.IDLE || voice.status == VoiceInteractionStatus.SPEAKING) return
+    val label = when(voice.status) {
+        VoiceInteractionStatus.LISTENING -> "正在聆听…"
+        VoiceInteractionStatus.TRANSCRIBING -> "正在转写…"
+        VoiceInteractionStatus.THINKING -> "正在思考…"
+        VoiceInteractionStatus.SYNTHESIZING -> "正在合成语音…"
+        VoiceInteractionStatus.PAUSED -> "语音已暂停"
+        else -> "语音不可用"
     }
-}
-
-@Composable
-private fun InputBar(
-    value: String,
-    onChange: (String) -> Unit,
-    onSend: () -> Unit,
-    sending: Boolean,
-    onMicClicked: () -> Unit,
-    pendingAttachments: List<PendingChatAttachment>,
-    onAttachClicked: () -> Unit,
-    onRemoveAttachment: (String) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Selected image attachments (in-memory projection). Each shows only its
-        // source label — never the underlying content URI or any path.
-        if (pendingAttachments.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                pendingAttachments.forEach { attachment ->
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.padding(top = 4.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = attachment.displayName,
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                            if (attachment.state == PendingAttachmentState.UPLOAD_UNSUPPORTED) {
-                                Text(
-                                    text = "未上传",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(start = 6.dp),
-                                )
-                            }
-                            IconButton(
-                                onClick = { onRemoveAttachment(attachment.id) },
-                                enabled = !sending,
-                                modifier = Modifier.size(24.dp),
-                            ) {
-                                Icon(Icons.Filled.Close, contentDescription = "移除图片", modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 22.dp)
-                .shadow(14.dp, RoundedCornerShape(26.dp))
-                .background(Color.White, RoundedCornerShape(26.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(
-                onClick = onAttachClicked,
-                enabled = !sending,
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.White, RoundedCornerShape(20.dp)),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "添加图片", modifier = Modifier.size(24.dp))
-            }
-            BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                enabled = !sending,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 40.dp, max = 120.dp)
-                    .padding(start = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = ClawMateDesign.Colors.Text),
-                maxLines = 4,
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-                    ) {
-                        if (value.isBlank()) {
-                            Text(
-                                "输入消息…",
-                                color = ClawMateDesign.Colors.TextSecondary,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
-            )
-            Button(
-                onClick = {
-                    if (value.isNotBlank() || pendingAttachments.isNotEmpty()) onSend()
-                    else onMicClicked()
-                },
-                enabled = !sending,
-                modifier = Modifier.size(width = 82.dp, height = 40.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (value.isBlank() && pendingAttachments.isEmpty()) ClawMateDesign.Colors.Primary else ClawMateDesign.Colors.Text,
-                    disabledContainerColor = ClawMateDesign.Colors.Disabled,
-                ),
-            ) {
-                if (value.isBlank() && pendingAttachments.isEmpty()) {
-                    Icon(Icons.Filled.Mic, contentDescription = "语音输入", modifier = Modifier.size(20.dp))
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送", modifier = Modifier.size(18.dp))
-                    Text("发送", modifier = Modifier.padding(start = 4.dp))
-                }
-            }
-        }
+    Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 6.dp).height(26.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 11.sp, color = HarmonyTheme.text("#5968FF"), maxLines = 1)
     }
 }
 
@@ -958,103 +582,6 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onDismiss) { Text("关闭") }
-        }
-    }
-}
-
-/**
- * Honest, actionable not-ready state shown instead of the input bar when the
- * **current mode's** backend is not usable. It never pretends the model is
- * available and points the user to the real in-app configuration path (Settings
- * → 模型与智能体, applied to the runtime on save).
- *
- * Mode-aware: the cloud mode explains the missing cloud endpoint, while the
- * local mode surfaces the **real** on-device [LocalModelState] (status +
- * message from [LocalModelCapability]) — it does not recycle the cloud copy
- * (fixes the "本地" tab wrongly showing "云端模型尚未配置").
- */
-@Composable
-private fun MissingConfigPane(
-    mode: String,
-    localState: LocalModelState?,
-    onOpenSettings: () -> Unit,
-) {
-    val isLocal = mode == ChatMode.LOCAL_INFERENCE
-    val icon = if (isLocal) Icons.Filled.Memory else Icons.Filled.CloudOff
-    val title = if (isLocal) "本地推理不可用" else "云端模型尚未配置"
-    val detail = if (isLocal) {
-        localState?.message?.takeIf { it.isNotBlank() } ?: "当前没有可用的本地推理模型。"
-    } else {
-        "配置完成前不会发送消息。"
-    }
-    val steps: List<String> = if (isLocal) {
-        listOf(
-            "1. 本地推理需要设备端 MNN/LLM 推理库与已下载的模型",
-            "2. 当前构建为 JNI 桩，未内置 MNN 推理运行时",
-            "3. 缺少推理库时会显示“不支持（缺少原生推理库）”",
-        )
-    } else {
-        listOf(
-            "1. 打开设置中心的“模型与智能体”",
-            "2. 填写地址、密钥和模型名",
-            "3. 返回聊天页即可生效，无需重启",
-        )
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(18.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ClawMateDesign.Colors.Border),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = ClawMateDesign.Colors.PrimaryStrong,
-                    modifier = Modifier.size(36.dp),
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 10.dp),
-                )
-                Text(
-                    text = detail,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                    color = ClawMateDesign.Colors.TextMuted,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    steps.forEach { step ->
-                        Text(step, fontSize = 14.sp, lineHeight = 20.sp)
-                    }
-                }
-                Button(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.padding(top = 16.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ClawMateDesign.Colors.PrimaryStrong),
-                ) {
-                    Icon(Icons.Filled.Settings, contentDescription = null)
-                    Text("  打开设置中心")
-                }
-            }
         }
     }
 }
