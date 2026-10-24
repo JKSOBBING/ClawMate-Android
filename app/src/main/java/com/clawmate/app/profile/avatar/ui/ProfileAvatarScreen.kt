@@ -36,6 +36,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,6 +53,8 @@ import com.clawmate.app.profile.avatar.domain.AvatarGenerationState
 import com.clawmate.app.profile.avatar.domain.LocalAvatarProfile
 import com.clawmate.app.ui.ClawMateInput
 import com.clawmate.app.ui.theme.ClawMateDesign
+import com.clawmate.app.ui.*
+import com.clawmate.app.ui.theme.HarmonyTheme
 
 /**
  * Profile / Avatar screen — the real Android-visible "数字分身" page.
@@ -83,6 +87,13 @@ fun ProfileAvatarScreen(
     val state by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current.applicationContext
+    var panel by remember { mutableStateOf("generate") }
+    var selectedVersion by remember { mutableStateOf<AvatarVersionRecord?>(null) }
+    var referencePhoto by remember { mutableStateOf<String?>(null) }
+    var photoBoundary by remember { mutableStateOf(false) }
+    val pickReference = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) referencePhoto = uri.toString()
+    }
 
     val pickImage = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -103,7 +114,10 @@ fun ProfileAvatarScreen(
     val launchPicker = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
     LaunchedEffect(state.savedOk) {
-        if (state.savedOk) snackbar.showSnackbar("本地画像已保存")
+        if (state.savedOk) {
+            snackbar.showSnackbar("本地画像已保存")
+            viewModel.consumeSavedOk()
+        }
     }
     LaunchedEffect(state.assetMessage) {
         state.assetMessage?.let { message ->
@@ -112,7 +126,23 @@ fun ProfileAvatarScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF4F8FF))) {
+    if (panel == "generate") HarmonyAvatarGeneration(state, referencePhoto, onClose,
+        onPickReference = { pickReference.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onPhotoGenerate = { photoBoundary = true }, onGenerate = viewModel::generateAvatar,
+        onHistory = { panel = "history" }, onManage = { panel = "manage" })
+    if (panel == "history") {
+        val version = selectedVersion
+        if (version == null) HarmonyAvatarHistory(state.versionHistory, viewModel::resolveLocalAssetPath,
+            onClose = { panel = "generate" }, onVersion = { selectedVersion = it })
+        else HarmonyAvatarVersion(version, viewModel::resolveLocalAssetPath, onBack = { selectedVersion = null })
+    }
+    if (photoBoundary) HarmonyModal({ photoBoundary = false }) {
+        AvatarOverlayHeader("照片参考生成", "关闭", { photoBoundary = false })
+        Text("照片参考已选择。Android 尚未接入照片参考生成；本次没有上传照片，也没有发起生成。", color = HarmonyTheme.secondaryText,
+            modifier = Modifier.padding(top = 12.dp))
+    }
+    if (panel == "manage") HarmonyFullScreen({ panel = "generate" }) {
+    Box(modifier = Modifier.fillMaxSize().background(HarmonyTheme.page)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -124,28 +154,13 @@ fun ProfileAvatarScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回首页")
+                IconButton(onClick = { panel = "generate" }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回数字分身")
                 }
                 Column(modifier = Modifier.padding(start = 4.dp)) {
-                    Text("数字分身", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("本地画像与分身生成状态", fontSize = 12.sp, color = Color(0xFF6F7684))
+                    Text("本地画像与照片管理", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
             }
-
-            // Honest generation status
-            GenerationStatusCard(
-                state = state.generationState,
-                guidance = state.generationGuidance,
-                completeness = state.completeness,
-                runState = state.runState,
-                runStateLabel = state.runStateLabel,
-                generationError = state.generationError,
-                isGenerating = state.runState == com.clawmate.app.profile.avatar.domain.AvatarRunState.RUNNING,
-                canGenerate = state.generationState == AvatarGenerationState.READY &&
-                    state.runState != com.clawmate.app.profile.avatar.domain.AvatarRunState.RUNNING,
-                onGenerate = viewModel::generateAvatar,
-            )
 
             // Local avatar asset card (display + import + history + clear)
             LocalAvatarAssetCard(
@@ -176,6 +191,7 @@ fun ProfileAvatarScreen(
         }
 
         SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
     }
 }
 

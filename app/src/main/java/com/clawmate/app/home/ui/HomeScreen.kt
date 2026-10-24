@@ -101,16 +101,6 @@ fun HomeScreen(
     // (local profile editing + honest generation boundary) instead of staying a
     // dead disabled button.
     var showAvatar by remember { mutableStateOf(false) }
-    if (showAvatar) {
-        com.clawmate.app.ui.InsetSecondaryPage {
-            ProfileAvatarHost(onClose = { showAvatar = false }, supplementaryContent = {
-                ProfileGenerationSection(profileGeneration, viewModel::generateProfile)
-                EmptyRecommendationsState(generation, viewModel::generateRecommendations)
-            })
-        }
-        return
-    }
-
     when (val s = state) {
         is HomeUiState.Loading -> HomeStateWithHeader {
             LoadingBox(modifier = Modifier.weight(1f))
@@ -130,6 +120,10 @@ fun HomeScreen(
             onOpenSettings = onOpenSettings,
         )
     }
+    if (showAvatar) ProfileAvatarHost(onClose = { showAvatar = false }, supplementaryContent = {
+        ProfileGenerationSection(profileGeneration, viewModel::generateProfile)
+        EmptyRecommendationsState(generation, viewModel::generateRecommendations)
+    })
 }
 
 @Composable

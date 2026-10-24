@@ -351,4 +351,11 @@
 - 修复原有素材映射把资源名当成页面 ID 比较、导致三张插图不显示的问题；三张 PNG 与参考源码哈希一致，移动至 drawable-nodpi，避免 Android 密度自动放大。
 - 实际 ui-avatar-details-build.log 构建成功 3m58s；ui-avatar-details-device-tests.log 共 13 项通过，其中引导 2 项（双向滑动/下一页同步、第四页完成与内存仓库版本保存）。截图 ui-onboarding-first-fixture.png、ui-onboarding-guide-fixture.png 已导出检查；没有重置用户已完成的引导状态。GalleryQuestionDeviceTest 同步新问答按钮的选择器并通过 2 项回归。
 - 横向分页使用 Android 原生分页动画；鸿蒙系统 Swiper 的默认曲线仍待双端录屏对照。
+
+### UI-10：数字分身生成、历史与版本依据弹层（2026-10-25）
+
+- 按 HomePage.ets 的 AvatarGenerationOverlay、AvatarHistoryOverlay、AvatarVersionDetailOverlay 重建选项行、88%/90% 弹层、64×82 历史缩略图和 220 高版本图片。首页保持在遮罩后，关闭弹层回到原位置；本地画像编辑、照片导入/删除/清空与 NFC 入口集中保留在“本地画像与照片管理”。
+- 画像生成仍连接原 ViewModel 与配置门控；照片参考可通过系统选择器真实预览，但 Android 照片参考生成尚未接入，点击生成明确说明没有上传/调用生成。旧版本只存 Prompt 和画像哈希，没有参数/授权/领域快照时明确显示未记录，且本机导入不标成 AI 生成。
+- 实际 ui-avatar-details-build.log 主包/测试包构建成功 3m58s；两包安装 PKB110 Success。ui-avatar-details-device-tests.log 共 13 项通过，其中分身 3 项：选项回调独立、历史/管理返回及保存入口可达、本机导入不补造 AI 参数。真实首页头像入口已点击检查，ui-avatar-home-overlay.png/xml 显示正确弹层；fixture 截图也已检查。没有运行真实模型生成或上传私人照片。
+- 剩余：历史数据缺少的快照属于数据层能力缺口；旧本地管理表单是 Android 扩展入口，HDS 阴影/系统字体等仍需鸿蒙同状态画面对照。
 - 剩余：月度真实云结果的精细展示、部分原生分析/扫描流程仍存在 Android 适配差异，图片详情/汇总事件详情在下一阶段继续；此阶段未分析用户照片或访问模型服务。
