@@ -48,7 +48,7 @@ class DestinationTest {
                 R.drawable.tab_summary,
                 R.drawable.tab_chat,
                 R.drawable.tab_task,
-                R.drawable.tab_settings,
+                R.drawable.tab_mine,
             ),
             Destination.items.map { it.icon },
         )

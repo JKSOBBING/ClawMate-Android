@@ -29,12 +29,14 @@ class HomeTaskSuggestionsDeviceTest {
             { _, _ -> context }, { _, _ -> tasks })
         compose.setContent { MaterialTheme { HomeTaskSuggestionsCard(vm, emptyList(), { openedTasks.incrementAndGet() }, {}) } }
         assertTrue(vm.state.value.tasks.isEmpty())
-        compose.onNodeWithText("生成任务建议").performClick()
+        compose.onNodeWithText("生成推荐").performClick()
         compose.waitUntil(5000) { vm.state.value.tasks.size == 3 }
-        compose.onNodeWithText("生活 · 设备建议1").performClick()
-        compose.onNodeWithText("设备测试：咖啡偏好", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("尚未接入 Android", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNode(hasText("查看可用流程") and hasAnyAncestor(isDialog())).performClick()
+        compose.onNodeWithText("设备建议1").performClick()
+        compose.onNodeWithText("设备测试：咖啡偏好", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("执行这个任务").performClick()
+        compose.onNodeWithText("开始手机执行").performClick()
+        compose.onNodeWithText("尚未接入 Android", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("查看可用流程").performClick()
         compose.runOnIdle {
             assertEquals(1, openedTasks.get())
             assertNull(vm.state.value.selected)
@@ -45,7 +47,7 @@ class HomeTaskSuggestionsDeviceTest {
         val openedSettings = AtomicInteger()
         val vm = HomeTaskSuggestionViewModel({ null }, { _, _ -> error("no record read") }, { _, _ -> error("no network") })
         compose.setContent { MaterialTheme { HomeTaskSuggestionsCard(vm, emptyList(), {}, { openedSettings.incrementAndGet() }) } }
-        compose.onNodeWithText("生成任务建议").performClick()
+        compose.onNodeWithText("生成推荐").performClick()
         compose.onNodeWithText("填写并保存", substring = true).assertIsDisplayed()
         compose.onNodeWithText("打开设置").performClick()
         compose.runOnIdle { assertEquals(1, openedSettings.get()) }

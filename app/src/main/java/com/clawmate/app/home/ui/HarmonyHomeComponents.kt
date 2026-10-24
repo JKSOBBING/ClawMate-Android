@@ -43,7 +43,7 @@ internal fun homeDomainIcon(domain: String) = when (domain) {
 
 @Composable
 internal fun AiBadge(compact: Boolean = true) {
-    Text("AI 生成", fontSize = (if (compact) 10 else 11).sp, fontWeight = FontWeight.Bold,
+    Text("AI生成", fontSize = (if (compact) 10 else 11).sp, fontWeight = FontWeight.Bold,
         color = HarmonyTheme.text("#5B50C7"), maxLines = 1,
         modifier = Modifier.background(HarmonyTheme.background("#EEEAFE"), RoundedCornerShape(7.dp))
             .padding(horizontal = (if (compact) 5 else 7).dp, vertical = (if (compact) 2 else 3).dp))
