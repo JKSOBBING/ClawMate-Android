@@ -45,7 +45,7 @@ fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
     val detail by vm.detail.collectAsState()
     val settings by remember(context) { SettingsComponent.repository(context).settings }.collectAsState(initial = AppSettings())
     detail?.let {
-        InsetSecondaryPage { IndexedCollectionGroupDetailScreen(it, vm::closeDetail) }
+        IndexedCollectionGroupDetailScreen(it, vm::closeDetail)
         return
     }
     val scroll = rememberScrollState()
