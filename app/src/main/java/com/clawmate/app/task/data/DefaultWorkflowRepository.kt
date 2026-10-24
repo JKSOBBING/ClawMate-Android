@@ -63,12 +63,30 @@ class DefaultWorkflowRepository(
             // Mark the task as user-modified (persisted to the index).
             writeIndex(tasks.map {
                 if (it.id == task.id) it.copy(
+                    sceneId = task.sceneId,
                     isUserModified = true,
                     title = metadata?.description?.takeIf(String::isNotBlank) ?: it.title,
                     source = metadata?.name?.takeIf(String::isNotBlank) ?: it.source,
                 ) else it
             })
         }
+
+    override suspend fun createConfigJson(sceneId: Int, newJson: String): WorkflowTask = withContext(Dispatchers.IO) {
+        require(WorkflowEditValidator.error(newJson) == null) { "Invalid workflow configuration" }
+        val scene = com.clawmate.app.task.model.WorkflowSceneConfig.scenes.firstOrNull { it.sceneId == sceneId }
+            ?: error("未知任务分类")
+        val existing = loadTasks()
+        val id = "custom_" + java.util.UUID.randomUUID().toString().replace("-", "")
+        val metadata = (WorkflowJsonParser.parse(newJson) as WorkflowJsonParser.Result.Ok).definition.metadata
+        val task = WorkflowTask(id, sceneId, scene.label.take(1), scene.colorHex,
+            metadata?.description?.takeIf(String::isNotBlank) ?: "新建任务",
+            metadata?.name?.takeIf(String::isNotBlank) ?: "custom_workflow", false, "$id.json",
+            "未运行", "尚未执行", "", isUserModified = true)
+        val file = resolvedConfigFile(task.configFileName)
+        replaceText(file, newJson)
+        try { writeIndex(existing + task) } catch (error: Exception) { file.delete(); throw error }
+        task
+    }
 
     override suspend fun setTaskEnabled(taskId: String, enabled: Boolean): Unit =
         withContext(Dispatchers.IO) {
