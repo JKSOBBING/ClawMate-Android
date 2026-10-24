@@ -102,7 +102,12 @@ fun HomeScreen(
     // dead disabled button.
     var showAvatar by remember { mutableStateOf(false) }
     if (showAvatar) {
-        com.clawmate.app.ui.InsetSecondaryPage { ProfileAvatarHost(onClose = { showAvatar = false }) }
+        com.clawmate.app.ui.InsetSecondaryPage {
+            ProfileAvatarHost(onClose = { showAvatar = false }, supplementaryContent = {
+                ProfileGenerationSection(profileGeneration, viewModel::generateProfile)
+                EmptyRecommendationsState(generation, viewModel::generateRecommendations)
+            })
+        }
         return
     }
 
@@ -116,10 +121,6 @@ fun HomeScreen(
         is HomeUiState.Ready -> HomeContent(
             profile = s.profile,
             list = list,
-            generation = generation,
-            profileGeneration = profileGeneration,
-            onGenerateRecommendations = { viewModel.generateRecommendations() },
-            onGenerateProfile = { viewModel.generateProfile() },
             onToggleShowAll = viewModel::setShowAll,
             onPrevious = viewModel::previousPage,
             onNext = viewModel::nextPage,
@@ -178,10 +179,6 @@ private fun ErrorBox(message: String, modifier: Modifier = Modifier) {
 private fun HomeContent(
     profile: HomeProfileViewModel,
     list: RecommendationListUi,
-    generation: HomeRecommendationGenerationState,
-    profileGeneration: com.clawmate.app.datamanager.ProfileGenerationState,
-    onGenerateRecommendations: () -> Unit,
-    onGenerateProfile: () -> Unit,
     onToggleShowAll: (Boolean) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -199,15 +196,7 @@ private fun HomeContent(
         ProfileOverview(profile, list.recommendations.count { !it.completed }, onOpenAvatar)
 
         // --------------------------------------------------- recommendations
-        RecommendationsSection(
-            list = list,
-            generation = generation,
-            onGenerateRecommendations = onGenerateRecommendations,
-            onToggleShowAll = onToggleShowAll,
-            onPrevious = onPrevious,
-            onNext = onNext,
-            onSetCompleted = onSetCompleted,
-        )
+        HomeRemindersSection(list, onToggleShowAll, onPrevious, onNext, onSetCompleted, onOpenTasks)
 
         // Keep the real indexed-profile generation flow available after the
         // Harmony-aligned first viewport, rather than inserting an extra card
@@ -215,8 +204,6 @@ private fun HomeContent(
         HomeTaskSuggestionsSection(profile.domains, onOpenTasks, onOpenSettings)
         HomeComfortSection(onOpenSettings)
 
-        // Existing generation action remains reachable while its avatar overlay is ported.
-        ProfileGenerationSection(profileGeneration, onGenerateProfile)
       }
     }
 }
@@ -343,373 +330,6 @@ private fun ProfileGenerateButton(
 }
 
 @Composable
-private fun AvatarSectionCard(profile: HomeProfileViewModel, onOpenAvatar: () -> Unit) {
-    val avatar = profile.avatar
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFEDF5FF)),
-    ) {
-        if (avatar.hasAvatarImage && avatar.imageUri.isNotBlank()) {
-            AsyncImage(
-                model = avatar.imageUri,
-                contentDescription = "数字分身",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 8.dp)
-                    .height(270.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFFE8F1FF)),
-            )
-        } else {
-            Image(
-                painter = painterResource(R.drawable.digital_avatar),
-                contentDescription = "默认数字分身",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 8.dp)
-                    .height(270.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFFE8F1FF)),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FeaturePill(
-                icon = R.drawable.home_feature_understand,
-                title = "理解你",
-                description = "更懂你的偏好",
-                modifier = Modifier.weight(1f),
-            )
-            FeaturePill(
-                icon = R.drawable.home_feature_protect,
-                title = "守护你",
-                description = "隐私安全可靠",
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FeaturePill(
-                icon = R.drawable.home_feature_companion,
-                title = "陪伴你",
-                description = "服务你的生活",
-                modifier = Modifier.weight(1f),
-            )
-            FeaturePill(
-                icon = R.drawable.home_feature_growth,
-                title = "成就你",
-                description = "助力你的成长",
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 16.dp, bottom = 16.dp)
-                .height(48.dp)
-                .shadow(10.dp, RoundedCornerShape(24.dp))
-                .background(Color.White, RoundedCornerShape(24.dp))
-                .padding(horizontal = 18.dp)
-                .clickable(onClick = onOpenAvatar),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(if (avatar.status == AvatarStatus.CURRENT) Color(0xFF7669FF) else Color(0xFFB1B7C6), RoundedCornerShape(4.dp)),
-            )
-            Text(
-                avatar.statusLabel,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1B2030),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 10.dp),
-            )
-            Text(
-                avatar.updatedLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF7B8190),
-                modifier = Modifier.padding(start = 10.dp),
-            )
-            Text(">", fontSize = 17.sp, color = Color(0xFF8B909A), modifier = Modifier.padding(start = 6.dp))
-        }
-    }
-}
-
-@Composable
-private fun FeaturePill(
-    icon: Int,
-    title: String,
-    description: String,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .height(66.dp)
-            .background(Color.White, RoundedCornerShape(16.dp))
-            .padding(start = 14.dp, end = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .background(Color(0xFFF2F6FF), RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(icon),
-                contentDescription = null,
-                modifier = Modifier.size(30.dp),
-            )
-        }
-        Column(
-            modifier = Modifier.padding(start = 12.dp),
-            horizontalAlignment = Alignment.Start,
-        ) {
-            Text(
-                title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF172033),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                description,
-                fontSize = 12.sp,
-                color = Color(0xFF6F7684),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 3.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun CompletenessCard(completeness: Int) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("画像完整度", style = MaterialTheme.typography.bodyLarge, color = Color(0xFF272C38))
-            LinearProgressIndicator(
-                progress = { completeness / 100f },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
-                    .height(6.dp),
-                color = Color(0xFF8066FF),
-                trackColor = Color(0xFFE6E8F3),
-            )
-            Text(
-                "$completeness%",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF8066FF),
-            )
-        }
-    }
-}
-
-@Composable
-private fun PillarsRow(domains: List<HomeDomainViewModel>) {
-    val pillars = domains.take(4)
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(82.dp)
-                .padding(horizontal = 12.dp),
-        ) {
-            pillars.forEachIndexed { index, item ->
-                PillarCell(item = item, modifier = Modifier.weight(1f))
-                if (index < pillars.size - 1) {
-                    HorizontalDivider(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(34.dp)
-                            .align(Alignment.CenterVertically),
-                        color = Color(0xFFE5E7EF),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PillarCell(item: HomeDomainViewModel, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().background(Color.Transparent, RoundedCornerShape(18.dp)),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = item.title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = parseHomeColor(item.color),
-        )
-        Text(
-            text = item.desc,
-            fontSize = 11.sp,
-            color = Color(0xFF818795),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-    }
-}
-
-@Composable
-private fun RecommendationsSection(
-    list: RecommendationListUi,
-    generation: HomeRecommendationGenerationState,
-    onGenerateRecommendations: () -> Unit,
-    onToggleShowAll: (Boolean) -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onSetCompleted: (String, Boolean) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "为你推荐",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF11182F),
-            )
-            FilterChip(
-                label = "未完成",
-                selected = !list.showAll,
-                onClick = { onToggleShowAll(false) },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 16.dp),
-            )
-            Text("", modifier = Modifier.width(8.dp))
-            FilterChip(
-                label = "全部",
-                selected = list.showAll,
-                onClick = { onToggleShowAll(true) },
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-
-        if (list.recommendations.isEmpty()) {
-            EmptyRecommendationsState(generation, onGenerateRecommendations)
-            return
-        }
-
-        val page = list.page
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            page.items.chunked(2).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    rowItems.forEach { item ->
-                        RecommendationCard(
-                            item = item,
-                            modifier = Modifier.weight(1f),
-                            onSetCompleted = onSetCompleted,
-                        )
-                    }
-                    if (rowItems.size == 1) {
-                        Box(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = onPrevious,
-                enabled = page.hasPrevious,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF0ECFF)),
-                modifier = Modifier.padding(end = 8.dp),
-            ) {
-                Text("上一页", fontSize = 12.sp, color = if (page.hasPrevious) Color(0xFF8066FF) else Color(0xFFA7ADBA))
-            }
-            Text(
-                page.pageLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF6D7481),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                onClick = onNext,
-                enabled = page.hasNext,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF0ECFF)),
-                modifier = Modifier.padding(start = 8.dp),
-            ) {
-                Text("下一页", fontSize = 12.sp, color = if (page.hasNext) Color(0xFF8066FF) else Color(0xFFA7ADBA))
-            }
-        }
-        Text("", modifier = Modifier.padding(bottom = 24.dp))
-    }
-}
-
-/**
- * Honest empty state with the explicit Phase-28 "生成推荐" action. Shows the real
- * lifecycle state of the earlier generation attempt (未配置 / 无数据 / 运行中 / 成功 /
- * 失败). Only an explicit button tap ever starts generation.
- */
-@Composable
 private fun EmptyRecommendationsState(
     generation: HomeRecommendationGenerationState,
     onGenerateRecommendations: () -> Unit,
@@ -795,116 +415,7 @@ private fun GenerateRecommendationsButton(
     }
 }
 
-@Composable
-private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(15.dp),
-        color = if (selected) Color(0xFF8066FF) else Color(0xFFF1F3F8),
-        modifier = modifier,
-    ) {
-        Text(
-            label,
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) Color.White else Color(0xFF6D7481),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-        )
-    }
-}
-
-@Composable
-private fun RecommendationCard(
-    item: HomeRecommendationViewModel,
-    modifier: Modifier = Modifier,
-    onSetCompleted: (String, Boolean) -> Unit,
-) {
-    val accent = parseHomeColor(recommendationColor(item.domain))
-    Card(
-        modifier = modifier.clickable { },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp),
-    ) {
-        Column(modifier = Modifier.padding(bottom = 12.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(82.dp)
-                    .background(if (item.thumbnailUri.isNotBlank()) Color.Transparent else Color(0xFFEEF2F7)),
-            ) {
-                if (item.thumbnailUri.isNotBlank()) {
-                    AsyncImage(
-                        model = item.thumbnailUri,
-                        contentDescription = item.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("暂无图片", fontSize = 12.sp, color = Color(0xFF8B93A4))
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (item.completed) accent.copy(alpha = 0.6f) else accent,
-                    modifier = Modifier.padding(start = 8.dp, top = 8.dp),
-                ) {
-                    Text(
-                        if (item.completed) "已完成" else item.tag.ifBlank { "未完成" },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
-            Text(
-                item.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (item.completed) Color(0xFFA0A7B5) else Color(0xFF151A28),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-            Text(
-                item.desc.ifBlank { "暂无描述" },
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF787F8E),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    item.meta,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF7C8494),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Checkbox(
-                    checked = item.completed,
-                    onCheckedChange = { checked -> onSetCompleted(item.id, checked) },
-                    colors = CheckboxDefaults.colors(checkedColor = accent),
-                    modifier = Modifier.size(36.dp),
-                )
-            }
-        }
-    }
-}
-
-/** Parse `#RRGGBB` strings used throughout the source theme. */
+/** Color parser retained for model-provided recommendation colors. */
 fun parseHomeColor(hex: String): Color {
     val h = hex.removePrefix("#")
     return if (h.length == 6) {
