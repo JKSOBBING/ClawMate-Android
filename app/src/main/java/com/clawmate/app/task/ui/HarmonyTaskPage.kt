@@ -212,9 +212,11 @@ private fun TaskCreatePanel(scenes: List<WorkflowScene>, onCreate: () -> Unit) {
     TaskSurface(padding = 20, background = HarmonyTheme.background("#F8FAFD"), border = HarmonyTheme.border("#E3E8F1")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("新建任务", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)
-                Text("图形编排", fontSize = 11.sp, color = HarmonyTheme.text("#148F73"),
-                    modifier = Modifier.padding(top = 4.dp).background(HarmonyTheme.background("#EAF8F3"), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("新建任务", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)
+                    Text("图形编排", fontSize = 11.sp, color = HarmonyTheme.text("#148F73"),
+                        modifier = Modifier.padding(start = 10.dp).background(HarmonyTheme.background("#EAF8F3"), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
+                }
                 Text("选择场景后用节点连接定义 workflow", fontSize = 12.sp, color = HarmonyTheme.text("#6F7584"), modifier = Modifier.padding(top = 7.dp))
             }
             Column {
