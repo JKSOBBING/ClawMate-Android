@@ -238,7 +238,10 @@ private fun MainTabScaffold(
                 }
                 Destination.Summary.route -> CollectionSummaryScreen(
                     context = LocalContext.current,
-                    onOpenSettings = { selectedRoute = Destination.Settings.route },
+                    onOpenSettings = {
+                        settingsSectionToOpen = SettingsSectionId.DataCollection.ordinalIndex
+                        selectedRoute = Destination.Settings.route
+                    },
                 )
                 Destination.Chat.route -> ChatScreen(
                     context = LocalContext.current,
