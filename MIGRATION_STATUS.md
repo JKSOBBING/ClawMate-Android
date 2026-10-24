@@ -344,4 +344,11 @@
 - 修复背景点击区域合并正文语义导致不能滚动的问题；详情正文点击不会关闭弹层。源码没有显式窗口转场，取消 Android 默认窗口淡入，避免叠影；状态栏按系统主题设置。
 - 实际构建 ui-details-build.log、ui-details-onboarding-build.log、ui-avatar-details-build.log 均成功。第一轮详情测试 6 项中 1 项失败（滚动语义），已定位修复；修复后 10 项及最终 13 项真机回归均通过，其中详情 2 项。最终构建 3m58s，两包安装 PKB110 均 Success。已检查最终 ui-gallery-detail-fixture.png、ui-indexed-detail-fixture.png；测试数据仅在独立测试界面中创建。
 - 尚未取得鸿蒙运行截图/录屏，当前为源码布局与 Android 行为验证，不代表双端像素级验收。
+
+### UI-09：首次引导四页与原版插图（2026-10-25）
+
+- 按 FirstLaunchOnboarding.ets 对齐安全区、标题/计数、方形插图、字号/行高、圆点和底部 56 高按钮；移除源码没有的跳过入口。接入真实横向分页，滑动与下一页共享同一页码，第四页保留可滚动使用指南和原完成版本持久化。
+- 修复原有素材映射把资源名当成页面 ID 比较、导致三张插图不显示的问题；三张 PNG 与参考源码哈希一致，移动至 drawable-nodpi，避免 Android 密度自动放大。
+- 实际 ui-avatar-details-build.log 构建成功 3m58s；ui-avatar-details-device-tests.log 共 13 项通过，其中引导 2 项（双向滑动/下一页同步、第四页完成与内存仓库版本保存）。截图 ui-onboarding-first-fixture.png、ui-onboarding-guide-fixture.png 已导出检查；没有重置用户已完成的引导状态。GalleryQuestionDeviceTest 同步新问答按钮的选择器并通过 2 项回归。
+- 横向分页使用 Android 原生分页动画；鸿蒙系统 Swiper 的默认曲线仍待双端录屏对照。
 - 剩余：月度真实云结果的精细展示、部分原生分析/扫描流程仍存在 Android 适配差异，图片详情/汇总事件详情在下一阶段继续；此阶段未分析用户照片或访问模型服务。

@@ -1,5 +1,13 @@
 package com.clawmate.app.home.ui.onboarding
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.snapshotFlow
+import com.clawmate.app.ui.HarmonyButton
+import com.clawmate.app.ui.theme.HarmonyTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -30,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -46,11 +55,11 @@ import com.clawmate.app.home.domain.FirstLaunchOnboardingSlide
 import com.clawmate.app.home.domain.FirstLaunchOnboardingSlideKind
 import com.clawmate.app.home.domain.FirstLaunchUsageGuideItem
 
-private val ONBOARDING_BACKGROUND: Color = Color(0xFFF4F8FF)
-private val ONBOARDING_TEXT_PRIMARY: Color = Color(0xFF101B3D)
-private val ONBOARDING_TEXT_SECONDARY: Color = Color(0xFF768197)
-private val ONBOARDING_CARD_BACKGROUND: Color = Color(0xFFFFFFFF)
-private val ONBOARDING_DOT_INACTIVE: Color = Color(0xFFDCE3F0)
+private val ONBOARDING_BACKGROUND @Composable get() = HarmonyTheme.background("#F4F8FF")
+private val ONBOARDING_TEXT_PRIMARY @Composable get() = HarmonyTheme.text("#101B3D")
+private val ONBOARDING_TEXT_SECONDARY @Composable get() = HarmonyTheme.text("#768197")
+private val ONBOARDING_CARD_BACKGROUND @Composable get() = HarmonyTheme.background("#FFFFFF")
+private val ONBOARDING_DOT_INACTIVE @Composable get() = HarmonyTheme.background("#DCE3F0")
 
 /** Parse a `#RRGGBB`/`#AARRGGBB` string into a Compose color. */
 fun onboardingColor(hex: String): Color =
@@ -64,21 +73,22 @@ private fun parseColorStrict(hex: String): Long {
 
 /** Map a slide's [FirstLaunchOnboardingSlide.mediaResourceName] to its bundled hero illustration. */
 private fun onboardingHeroDrawable(mediaResourceName: String?): Int? = when (mediaResourceName) {
-    FIRST_LAUNCH_ONBOARDING_SLIDE_DATA_HOME -> R.drawable.onboarding_data_home
-    FIRST_LAUNCH_ONBOARDING_SLIDE_AVATAR -> R.drawable.onboarding_avatar
-    FIRST_LAUNCH_ONBOARDING_SLIDE_AGENT -> R.drawable.onboarding_agent
+    "onboarding_data_home" -> R.drawable.onboarding_data_home
+    "onboarding_avatar" -> R.drawable.onboarding_avatar
+    "onboarding_agent" -> R.drawable.onboarding_agent
     else -> null
 }
 
 /**
  * Real first-launch onboarding (Compose), ported from
  * `pages/onboarding/FirstLaunchOnboarding.ets`. It renders the three capability
- * preview slides plus a usage-guide page, with 下一页 / skip / 进入首页 actions and
+ * preview slides plus a usage-guide page, with 下一页 / 进入首页 actions and
  * progress dots.
  *
  * This composable only renders the flow; the shell decides whether to show it
  * and [OnboardingViewModel] persists the completion version on finish.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FirstLaunchOnboardingScreen(
     repository: OnboardingRepository,
@@ -94,93 +104,29 @@ fun FirstLaunchOnboardingScreen(
 
     val active = state as? OnboardingUiState.Active
     val slideIndex = active?.index ?: 0
-    val slide = remember(slideIndex) { FIRST_LAUNCH_ONBOARDING_SLIDES[slideIndex] }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ONBOARDING_BACKGROUND),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 30.dp, end = 30.dp, top = 28.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "ClawMate",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = ONBOARDING_TEXT_PRIMARY,
-            )
-            Text(
-                text = active?.counterLabel ?: "",
-                fontSize = 15.sp,
-                color = ONBOARDING_TEXT_SECONDARY,
-            )
+    val slide = FIRST_LAUNCH_ONBOARDING_SLIDES[slideIndex]
+    val pager = rememberPagerState(initialPage = slideIndex, pageCount = { FIRST_LAUNCH_ONBOARDING_SLIDES.size })
+    LaunchedEffect(slideIndex) { if (pager.currentPage != slideIndex) pager.animateScrollToPage(slideIndex) }
+    LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { viewModel.setIndex(it) } }
+    Column(Modifier.fillMaxSize().background(ONBOARDING_BACKGROUND).statusBarsPadding().navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 28.dp),
+            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("ClawMate", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = ONBOARDING_TEXT_PRIMARY)
+            Text(active?.counterLabel.orEmpty(), fontSize = 15.sp, color = ONBOARDING_TEXT_SECONDARY)
         }
-
-        SlidePage(
-            slide = slide,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            FIRST_LAUNCH_ONBOARDING_SLIDES.forEachIndexed { i, s ->
-                val selected = i == slideIndex
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(width = if (selected) 24.dp else 8.dp, height = 8.dp)
-                        .background(
-                            color = if (selected) onboardingColor(s.accentColor) else ONBOARDING_DOT_INACTIVE,
-                            shape = RoundedCornerShape(4.dp),
-                        ),
-                )
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("onboarding-pager"), key = { FIRST_LAUNCH_ONBOARDING_SLIDES[it].id }) { index ->
+            SlidePage(FIRST_LAUNCH_ONBOARDING_SLIDES[index], Modifier.fillMaxSize())
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            FIRST_LAUNCH_ONBOARDING_SLIDES.forEachIndexed { index, item ->
+                Box(Modifier.padding(horizontal = 4.dp).size(if (index == slideIndex) 24.dp else 8.dp, 8.dp)
+                    .background(if (index == slideIndex) HarmonyTheme.background(item.accentColor) else ONBOARDING_DOT_INACTIVE, RoundedCornerShape(4.dp)))
             }
         }
-
-        // Skip hint (only before the last page).
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(36.dp)
-                .padding(top = 10.dp),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            if (!(active?.isLast ?: true)) {
-                Text(
-                    text = "跳过",
-                    fontSize = 14.sp,
-                    color = ONBOARDING_TEXT_SECONDARY,
-                    modifier = Modifier.clickable { viewModel.skip() },
-                )
-            }
-        }
-
-        Button(
-            onClick = { viewModel.next() },
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = onboardingColor(slide.accentColor)),
-            modifier = Modifier
-                .fillMaxWidth(0.84f)
-                .padding(bottom = 34.dp)
-                .height(56.dp),
-        ) {
-            Text(
-                text = active?.buttonText ?: "下一页",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        HarmonyButton(active?.buttonText ?: "下一页", { viewModel.next() }, Modifier.padding(top = 26.dp, bottom = 34.dp).fillMaxWidth(.84f),
+            height = 56.dp, radius = 18.dp, fontSize = 18.sp, bold = true, color = HarmonyTheme.text("#FFFFFF"),
+            background = HarmonyTheme.fill(slide.accentColor))
     }
 }
 
@@ -196,7 +142,7 @@ private fun SlidePage(slide: FirstLaunchOnboardingSlide, modifier: Modifier = Mo
 @Composable
 private fun PreviewSlidePage(slide: FirstLaunchOnboardingSlide, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.padding(horizontal = 30.dp),
+        modifier = modifier.padding(horizontal = 30.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -204,15 +150,15 @@ private fun PreviewSlidePage(slide: FirstLaunchOnboardingSlide, modifier: Modifi
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .padding(10.dp)
-                .background(ONBOARDING_CARD_BACKGROUND, RoundedCornerShape(28.dp)),
+                .background(ONBOARDING_CARD_BACKGROUND, RoundedCornerShape(28.dp))
+                .padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
                     .size(148.dp)
                     .background(
-                        onboardingColor(slide.softBackgroundColor).copy(alpha = 0.78f),
+                        HarmonyTheme.background(slide.softBackgroundColor).copy(alpha = 0.78f),
                         RoundedCornerShape(74.dp),
                     ),
             )
@@ -220,7 +166,7 @@ private fun PreviewSlidePage(slide: FirstLaunchOnboardingSlide, modifier: Modifi
             if (heroDrawable != null) {
                 Image(
                     painter = painterResource(id = heroDrawable),
-                    contentDescription = null,
+                    contentDescription = "${slide.title}功能预览",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -303,7 +249,7 @@ private fun UsageGuideCard(item: FirstLaunchUsageGuideItem) {
         Row(
             modifier = Modifier
                 .size(42.dp)
-                .background(onboardingColor(item.softBackgroundColor), RoundedCornerShape(14.dp)),
+                .background(HarmonyTheme.background(item.softBackgroundColor), RoundedCornerShape(14.dp)),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -311,10 +257,10 @@ private fun UsageGuideCard(item: FirstLaunchUsageGuideItem) {
                 text = item.iconText,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = onboardingColor(item.accentColor),
+                color = HarmonyTheme.text(item.accentColor),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
                 text = item.title,
                 fontSize = 20.sp,
@@ -326,7 +272,7 @@ private fun UsageGuideCard(item: FirstLaunchUsageGuideItem) {
                 text = item.entryLabel,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = onboardingColor(item.accentColor),
+                color = HarmonyTheme.text(item.accentColor),
                 maxLines = 1,
             )
             Text(
