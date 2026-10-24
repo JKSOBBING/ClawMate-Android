@@ -32,6 +32,8 @@ import com.clawmate.app.ui.theme.HarmonyTheme
 internal fun HarmonyTaskPage(state: TaskUiState, onToggle: (WorkflowTask) -> Unit,
     onViewConfig: (WorkflowTask) -> Unit, onRun: (WorkflowTask) -> Unit,
     onBatchRun: () -> Unit, onCancel: () -> Unit, onRefresh: () -> Unit, onSettings: () -> Unit,
+    onCreate: ((Int, String) -> Unit)? = null, onViewGraph: ((WorkflowTask) -> Unit)? = null,
+    editor: (@Composable () -> Unit)? = null, onCloseEditor: () -> Unit = {},
 ) {
     var configuring by rememberSaveable { mutableStateOf(false) }
     var sceneId by rememberSaveable { mutableIntStateOf(0) }
@@ -43,22 +45,30 @@ internal fun HarmonyTaskPage(state: TaskUiState, onToggle: (WorkflowTask) -> Uni
     val openConfig: (WorkflowTask?) -> Unit = { task ->
         focusedId = task?.id.orEmpty(); task?.let { sceneId = it.sceneId }; configuring = true
     }
-    BackHandler(configuring) { configuring = false }
+    LaunchedEffect(state.sceneFilter) { state.sceneFilter?.let { sceneId = it } }
+    BackHandler(configuring && editor == null) { configuring = false }
+    LaunchedEffect(editor != null) {
+        if (editor != null) { configuring = true; list.scrollToItem(1) }
+    }
     LaunchedEffect(configuring, focusedId) {
         if (configuring && focusedId.isNotEmpty()) {
             val index = filtered.indexOfFirst { it.id == focusedId }
-            if (index >= 0) list.scrollToItem(2 + index)
+            if (index >= 0 && editor == null) list.scrollToItem(2 + index)
         } else list.scrollToItem(0)
     }
     HarmonyPage(background = HarmonyTheme.background("#F4F7FB"),
         scrollOffset = { if (list.firstVisibleItemIndex > 0) 8f else list.firstVisibleItemScrollOffset.toFloat() },
         header = { ClawMateHeader(if (configuring) "配置任务" else "自定义任务",
-            onBack = if (configuring) ({ configuring = false }) else null,
+            onBack = if (configuring) ({ if (editor != null) onCloseEditor() else configuring = false }) else null,
             actionLabel = if (configuring) "刷新" else null, onAction = onRefresh) }) { insets ->
-        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = insets,
+        LazyColumn(Modifier.fillMaxSize().then(if (editor != null) Modifier.imePadding() else Modifier), state = list, contentPadding = insets,
             horizontalAlignment = Alignment.CenterHorizontally) {
             if (configuring) {
-                item("create") { TaskCreatePanel(state.scenes) { boundary = "新建与图形编排界面仍在迁移，请先通过现有任务的 JSON 入口查看和编辑配置。" } }
+                item("create") { TaskCreatePanel(state.scenes) { mode ->
+                    if (onCreate != null && !busy) onCreate(sceneId, mode)
+                    else boundary = "当前无法新建任务，请等待执行完成后重试。"
+                } }
+                if (editor != null) item("editor") { editor() }
                 item("scenes") {
                     Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 16.dp).horizontalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -69,7 +79,7 @@ internal fun HarmonyTaskPage(state: TaskUiState, onToggle: (WorkflowTask) -> Uni
                     }
                 }
                 items(filtered, key = { it.id }) { task -> HarmonyTaskConfigCard(task, focusedId == task.id, busy,
-                    { onToggle(task) }, { onRun(task) }, { onViewConfig(task) },
+                    { onToggle(task) }, { onRun(task) }, { onViewConfig(task) }, { (onViewGraph ?: onViewConfig)(task) },
                     { action -> boundary = "$action 尚未完成 Android 适配，请先使用 JSON 入口编辑现有任务。" }) }
                 if (filtered.isEmpty()) item { TaskSurface(Modifier.padding(bottom = 18.dp), 22) {
                     Text("当前场景暂无任务", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)
@@ -208,7 +218,7 @@ private fun TaskBatchPanel(state: TaskUiState, onRun: () -> Unit, onCancel: () -
 }
 
 @Composable
-private fun TaskCreatePanel(scenes: List<WorkflowScene>, onCreate: () -> Unit) {
+private fun TaskCreatePanel(scenes: List<WorkflowScene>, onCreate: (String) -> Unit) {
     TaskSurface(padding = 20, background = HarmonyTheme.background("#F8FAFD"), border = HarmonyTheme.border("#E3E8F1")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -220,8 +230,8 @@ private fun TaskCreatePanel(scenes: List<WorkflowScene>, onCreate: () -> Unit) {
                 Text("选择场景后用节点连接定义 workflow", fontSize = 12.sp, color = HarmonyTheme.text("#6F7584"), modifier = Modifier.padding(top = 7.dp))
             }
             Column {
-                HarmonyButton("图新建", onCreate, Modifier.width(76.dp), height = 34.dp, radius = 10.dp, color = HarmonyTheme.text("#FFFFFF"), background = HarmonyTheme.fill("#276EF1"), horizontalPadding = 0.dp)
-                HarmonyButton("JSON", onCreate, Modifier.width(76.dp).padding(top = 8.dp), height = 30.dp, radius = 9.dp, fontSize = 11.sp, color = HarmonyTheme.text("#276EF1"), background = HarmonyTheme.background("#EEF4FF"), horizontalPadding = 0.dp)
+                HarmonyButton("图新建", { onCreate("graph") }, Modifier.width(76.dp), height = 34.dp, radius = 10.dp, color = HarmonyTheme.text("#FFFFFF"), background = HarmonyTheme.fill("#276EF1"), horizontalPadding = 0.dp)
+                HarmonyButton("JSON", { onCreate("json") }, Modifier.width(76.dp).padding(top = 8.dp), height = 30.dp, radius = 9.dp, fontSize = 11.sp, color = HarmonyTheme.text("#276EF1"), background = HarmonyTheme.background("#EEF4FF"), horizontalPadding = 0.dp)
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(28.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -233,7 +243,7 @@ private fun TaskCreatePanel(scenes: List<WorkflowScene>, onCreate: () -> Unit) {
 
 @Composable
 private fun HarmonyTaskConfigCard(task: WorkflowTask, focused: Boolean, busy: Boolean, onToggle: () -> Unit,
-    onRun: () -> Unit, onJson: () -> Unit, onUnavailable: (String) -> Unit,
+    onRun: () -> Unit, onJson: () -> Unit, onGraph: () -> Unit, onUnavailable: (String) -> Unit,
 ) {
     TaskSurface(Modifier.padding(bottom = 16.dp), 18, border = HarmonyTheme.border(if (focused) "#276EF1" else "#E3E8F1")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -253,7 +263,7 @@ private fun HarmonyTaskConfigCard(task: WorkflowTask, focused: Boolean, busy: Bo
         }
         Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(44.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HarmonyButton("运行", onRun, Modifier.width(82.dp), height = 36.dp, radius = 10.dp, color = HarmonyTheme.text("#FFFFFF"), background = HarmonyTheme.background(if (busy) "#A9B7E9" else "#276EF1"), enabled = !busy, horizontalPadding = 0.dp)
-            HarmonyButton("图编辑", { onUnavailable("图编辑") }, Modifier.width(86.dp), height = 36.dp, radius = 10.dp, color = HarmonyTheme.text("#148F73"), background = HarmonyTheme.background("#EAF8F3"), horizontalPadding = 0.dp)
+            HarmonyButton("图编辑", onGraph, Modifier.width(86.dp), height = 36.dp, radius = 10.dp, color = HarmonyTheme.text("#148F73"), background = HarmonyTheme.background("#EAF8F3"), horizontalPadding = 0.dp, enabled = !busy)
             HarmonyButton("JSON", onJson, Modifier.width(82.dp), height = 36.dp, radius = 10.dp, color = HarmonyTheme.text("#276EF1"), background = HarmonyTheme.background("#EEF4FF"), horizontalPadding = 0.dp)
             HarmonyButton("复制", { onUnavailable("复制任务") }, Modifier.width(82.dp), height = 36.dp, radius = 10.dp, color = HarmonyTheme.text("#276EF1"), background = HarmonyTheme.background("#EEF4FF"), horizontalPadding = 0.dp)
             HarmonyButton("删除", { onUnavailable("删除任务") }, Modifier.width(82.dp), height = 36.dp, radius = 10.dp, color = HarmonyTheme.text("#B42318"), background = HarmonyTheme.background("#FFF0ED"), horizontalPadding = 0.dp)

@@ -63,8 +63,11 @@ data class WorkflowConfigUiState(
     val notice: String? = null,
     val showDiscardDialog: Boolean = false,
     val closeAfterDiscard: Boolean = false,
+    val isNew: Boolean = false,
+    val editorMode: String = "json",
+    val originalSceneId: Int = task.sceneId,
 ) {
-    val hasChanges: Boolean get() = draft != null && draft != text
+    val hasChanges: Boolean get() = draft != null && (draft != text || isNew || task.sceneId != originalSceneId)
 }
 
 /**
@@ -86,7 +89,7 @@ class TaskViewModel(
     private val _config = MutableStateFlow<WorkflowConfigUiState?>(null)
     val config: StateFlow<WorkflowConfigUiState?> = _config.asStateFlow()
 
-    fun openConfig(task: WorkflowTask) {
+    fun openConfig(task: WorkflowTask, editorMode: String = "json") {
         if (_config.value?.isSaving == true || _config.value?.hasChanges == true) return
         configJob?.cancel()
         val request = ++configRequest
@@ -109,8 +112,24 @@ class TaskViewModel(
             }
             // A slow read must never reopen a dismissed view or replace a
             // newer selection, including reselecting the very same task.
-            if (request == configRequest) _config.value = result
+            if (request == configRequest) _config.value = result.copy(editorMode = editorMode)
         }
+    }
+
+    fun openNewConfig(sceneId: Int, editorMode: String) {
+        if (_config.value?.isSaving == true || _config.value?.hasChanges == true ||
+            _state.value.runningTaskId != null || _state.value.batchRunning) return
+        ++configRequest; configJob?.cancel()
+        val text = com.clawmate.app.task.json.WorkflowGraphDraft.empty()
+        val scene = WorkflowSceneConfig.sceneById(sceneId)
+        val task = WorkflowTask("__new__", scene.sceneId, scene.label.take(1), scene.colorHex, "新建任务", "custom_workflow", false, "", "未运行", "尚未执行", "")
+        _config.value = WorkflowConfigUiState(task, isLoading = false, text = text, draft = text, isNew = true, editorMode = editorMode)
+    }
+
+    fun updateConfigScene(sceneId: Int) {
+        val current = _config.value ?: return
+        if (current.draft == null || current.isSaving || WorkflowSceneConfig.scenes.none { it.sceneId == sceneId }) return
+        _config.value = current.copy(task = current.task.copy(sceneId = sceneId))
     }
 
     fun closeConfig() {
@@ -159,33 +178,37 @@ class TaskViewModel(
         val current = _config.value ?: return
         if (current.isSaving) return
         if (current.closeAfterDiscard) dismissConfig()
-        else _config.value = current.copy(draft = null, editError = null, showDiscardDialog = false)
+        else _config.value = current.copy(draft = null, task = current.task.copy(sceneId = current.originalSceneId), editError = null, showDiscardDialog = false)
     }
 
     fun saveConfig() {
         val current = _config.value ?: return
         val draft = current.draft ?: return
-        if (current.isSaving || current.truncated || !current.hasChanges) return
+        if (current.isSaving || current.truncated) return
+        if (_state.value.runningTaskId != null || _state.value.batchRunning) return
         val error = WorkflowEditValidator.error(draft)
         if (error != null) {
             _config.value = current.copy(editError = error)
             return
         }
+        if (!current.hasChanges) { dismissConfig(); return }
         val request = configRequest
         _config.value = current.copy(isSaving = true, editError = null)
         configJob = viewModelScope.launch {
             try {
-                repository.saveConfigJson(current.task, draft)
+                val created = if (current.isNew) repository.createConfigJson(current.task.sceneId, draft)
+                    else { repository.saveConfigJson(current.task, draft); null }
                 if (request != configRequest) return@launch
                 val metadata = (WorkflowJsonParser.parse(draft) as? WorkflowJsonParser.Result.Ok)?.definition?.metadata
-                val savedTask = current.task.copy(
+                val savedTask = created ?: current.task.copy(
                     isUserModified = true,
                     title = metadata?.description?.takeIf(String::isNotBlank) ?: current.task.title,
                     source = metadata?.name?.takeIf(String::isNotBlank) ?: current.task.source,
                 )
-                _config.value = current.copy(task = savedTask, text = draft, draft = null, notice = "配置已保存")
+                _config.value = current.copy(task = savedTask, text = draft, draft = null, notice = "配置已保存", isNew = false, originalSceneId = savedTask.sceneId)
                 _state.update { state -> state.copy(
-                    tasks = state.tasks.map { if (it.id == savedTask.id) savedTask else it },
+                    tasks = if (current.isNew) state.tasks + savedTask else state.tasks.map { if (it.id == savedTask.id) savedTask else it },
+                    sceneFilter = savedTask.sceneId,
                     stepSummary = emptyList(),
                     activeResult = null,
                 ) }

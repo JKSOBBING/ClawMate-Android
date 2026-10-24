@@ -65,18 +65,18 @@ fun TaskScreen(
     val state by vm.state.collectAsState()
     val config by vm.config.collectAsState()
 
-    config?.let { document ->
-        BackHandler(onBack = vm::closeConfig)
-        InsetSecondaryPage { WorkflowConfigScreen(
-            document, onBack = vm::closeConfig, onRetry = { vm.openConfig(document.task) },
-            canEdit = state.runningTaskId == null && !state.batchRunning,
-            onEdit = vm::editConfig, onDraftChange = vm::updateConfigDraft,
-            onSave = vm::saveConfig, onCancelEdit = vm::cancelConfigEdit,
-            onDiscard = vm::discardConfigEdits, onKeepEditing = vm::keepConfigEditing,
-        ) }
-        return
+    val editor: (@Composable () -> Unit)? = config?.let { document ->
+        val content: @Composable () -> Unit = {
+        HarmonyWorkflowEditor(document, canEdit = state.runningTaskId == null && !state.batchRunning,
+            onClose = vm::closeConfig, onEdit = vm::editConfig, onChange = vm::updateConfigDraft,
+            onScene = vm::updateConfigScene, onSave = vm::saveConfig,
+            onRetry = { vm.closeConfig(); vm.openConfig(document.task, document.editorMode) },
+            onDiscard = vm::discardConfigEdits, onKeepEditing = vm::keepConfigEditing)
+        }
+        content
     }
-
-    Box(modifier) { HarmonyTaskPage(state, vm::toggleEnabled, vm::openConfig, vm::run,
-        vm::runEnabledTasks, vm::cancelRun, vm::reload, onOpenSettings) }
+    Box(modifier) { HarmonyTaskPage(state, vm::toggleEnabled, { vm.openConfig(it) }, vm::run,
+        vm::runEnabledTasks, vm::cancelRun, vm::reload, onOpenSettings,
+        onCreate = vm::openNewConfig, onViewGraph = { vm.openConfig(it, "graph") }, editor = editor, onCloseEditor = vm::closeConfig) }
+    BackHandler(config != null, onBack = vm::closeConfig)
 }
