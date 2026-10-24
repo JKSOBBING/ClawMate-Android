@@ -221,7 +221,7 @@ private fun MainTabScaffold(
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (selectedRoute == Destination.Chat.route || selectedRoute == Destination.Task.route)
+                .then(if (selectedRoute == Destination.Task.route)
                     Modifier.statusBarsPadding().navigationBarsPadding().padding(bottom = 88.dp) else Modifier),
         ) {
             when (selectedRoute) {

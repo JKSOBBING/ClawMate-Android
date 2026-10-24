@@ -313,3 +313,12 @@
 - 实际验证：ui-settings-build.log 中设置/日志 103 项单元测试通过；最终 ui-settings-build-3.log 构建主包、测试包并复跑 SettingsConcurrentSaveTest 通过（6m56s）。PKB110 安装两包均 Success，ui-settings-device-tests-4.log 为 OK (5 tests)。冷启动 487ms；已检查 ui-settings-mine-verified、ui-settings-collection-verified 的截图和 XML。
 - 失败记录：早两次尺寸测试读取内部编辑区域 26dp，已改为独立外框节点并验证 42/86dp；第三轮误写测试类名导致初始化失败，改为仓库真实 HomeTaskSuggestionsDeviceTest 后五项全部通过。以上失败未计为通过。
 - 边界：本阶段不验证服务端请求、HMS 登录、HDC 配对和模型推理；不是像素级或鸿蒙原生动画最终验收。独立 dev 包保留原应用及其数据。
+
+### UI-05：聊天欢迎页、输入栏、抽屉与头像反馈（2026-10-24）
+
+- 依据 ChatPage / ChatPageTypes / ChatSessionDrawer / ChatMessageList 重建固定顶栏、原始猫素材、三张欢迎卡片、时段问候、云端/本地标签和消息气泡。输入栏按源码 UTF-16/换行规则在 58–124dp 间增长；短按发送、长按 450ms 语音、松开结束、忙碌时停止，连接原有 VM。未配置仍可编辑，尝试发送时说明配置要求。手机键盘弹出时输入栏上移、底部导航隐藏。
+- 抽屉 320dp、云端/本地分组与长按管理；重命名（40 字）和置顶保存在 app 私有 presentation 偏好中，不改写消息。删除继续调用真实仓库。附件面板保留显式图片发送确认，接入系统拍照/相册入口；相机实拍和 ASR/TTS 服务未做真机验收。
+- 头像使用原始 chat_assistant_avatar；按源码加入 170/340ms 点击帧、560ms 防重复、光晕/阴影、760/620/360ms 呼吸/前景/波形过渡。原生曲线和材质依然需要鸿蒙运行录屏比对。深度思考当前适配器未支持时明确说明，未伪造开关生效；“下发任务”暂进入现有任务页，未声称已下发。
+- 发现并修复深色主题默认文字和系统栏图标对比度问题。ui-chat-dark-verified / ui-settings-dark-fixed 的图像已人工检查；原夜间设置恢复为 no。
+- 实际验证：ui-chat-build.log 主包构建通过 5m13s；ui-chat-build-2.log 主/测试包和 83 项聊天布局/语音/导航单元测试通过（6m54s，零失败）。最终与任务页合并工作树构建 ui-task-chat-build.log 通过 2m48s。PKB110 两包安装均 Success；ui-task-chat-device-tests.log 为 12 项通过（聊天 6、任务 3、固定顶栏 1、设置 2）；ui-chat-markdown-regression.log 另外 4 项 Markdown/复制回归通过。
+- 真机检查证据：ui-chat-welcome、ui-chat-draft、ui-chat-keyboard、ui-chat-drawer、ui-chat-dark-verified。头像测试实际检查点击前后像素发生变化且 150dp 容器尺寸不变；这不等于已比对鸿蒙动画帧。工具思考细分模块、原生媒体预览和前端剩余页继续迁移，不宣称全部一比一完成。

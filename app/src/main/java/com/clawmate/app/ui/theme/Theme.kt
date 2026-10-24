@@ -3,6 +3,10 @@ package com.clawmate.app.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -49,6 +53,17 @@ fun ClawMateTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val view = LocalView.current
+    if (!view.isInEditMode) SideEffect {
+        var host = view.context
+        while (host is android.content.ContextWrapper && host !is android.app.Activity) host = host.baseContext
+        (host as? android.app.Activity)?.window?.let { window ->
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
     MaterialTheme(
         colorScheme = (if (darkTheme) DarkColors else LightColors).copy(
             primary = colorResource(R.color.ui_fill_blue),
@@ -63,7 +78,8 @@ fun ClawMateTheme(
     ) {
         // ArkUI sizes text from its requested font. Material's inherited 24sp
         // line height otherwise makes even 10sp badges consume a full body row.
-        CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyLarge.copy(
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+            LocalTextStyle provides MaterialTheme.typography.bodyLarge.copy(
             lineHeight = TextUnit.Unspecified,
             platformStyle = PlatformTextStyle(includeFontPadding = false),
         ), content = content)
