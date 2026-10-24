@@ -64,6 +64,10 @@ fun TaskScreen(
     )
     val state by vm.state.collectAsState()
     val config by vm.config.collectAsState()
+    val fileStore = androidx.compose.runtime.remember(context.applicationContext) {
+        com.clawmate.app.task.data.LocalWorkflowFiles(context.applicationContext.filesDir)
+    }
+    val fileRevision = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
     val editor: (@Composable () -> Unit)? = config?.let { document ->
         val content: @Composable () -> Unit = {
@@ -76,7 +80,8 @@ fun TaskScreen(
         content
     }
     Box(modifier) { HarmonyTaskPage(state, vm::toggleEnabled, { vm.openConfig(it) }, vm::run,
-        vm::runEnabledTasks, vm::cancelRun, vm::reload, onOpenSettings,
-        onCreate = vm::openNewConfig, onViewGraph = { vm.openConfig(it, "graph") }, editor = editor, onCloseEditor = vm::closeConfig) }
+        vm::runEnabledTasks, vm::cancelRun, { vm.reload(); fileRevision.intValue++ }, onOpenSettings,
+        onCreate = vm::openNewConfig, onViewGraph = { vm.openConfig(it, "graph") }, editor = editor, onCloseEditor = vm::closeConfig,
+        fileManager = { HarmonyWorkflowFiles(fileStore, fileRevision.intValue to state.tasks) }) }
     BackHandler(config != null, onBack = vm::closeConfig)
 }

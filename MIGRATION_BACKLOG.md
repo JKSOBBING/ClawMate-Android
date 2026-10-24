@@ -1,5 +1,7 @@
 # 鸿蒙 → Android 迁移待办清单
 
+**状态：2026-10-25 已按用户要求收尾并停止迁移。** 下列未完成项仅保留记录，当前不继续执行；后续恢复由用户另行提出。最新前端覆盖与差异见 [UI_PARITY.md](UI_PARITY.md)，本轮最终验证见 [中文更新日志](MIGRATION_STATUS.md) UI-12。
+
 鸿蒙参考仓库：`doulujiyao12/mobiinfra-oh`，分支 `clawmate_dev`，提交
 `cd69b68bf16b9ed352be5073939eb24d042de583`，源码只读。
 Android 基线：`7f76afb`；迁移分支：`codex/android-migration`。
