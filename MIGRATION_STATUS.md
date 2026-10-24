@@ -322,3 +322,10 @@
 - 发现并修复深色主题默认文字和系统栏图标对比度问题。ui-chat-dark-verified / ui-settings-dark-fixed 的图像已人工检查；原夜间设置恢复为 no。
 - 实际验证：ui-chat-build.log 主包构建通过 5m13s；ui-chat-build-2.log 主/测试包和 83 项聊天布局/语音/导航单元测试通过（6m54s，零失败）。最终与任务页合并工作树构建 ui-task-chat-build.log 通过 2m48s。PKB110 两包安装均 Success；ui-task-chat-device-tests.log 为 12 项通过（聊天 6、任务 3、固定顶栏 1、设置 2）；ui-chat-markdown-regression.log 另外 4 项 Markdown/复制回归通过。
 - 真机检查证据：ui-chat-welcome、ui-chat-draft、ui-chat-keyboard、ui-chat-drawer、ui-chat-dark-verified。头像测试实际检查点击前后像素发生变化且 150dp 容器尺寸不变；这不等于已比对鸿蒙动画帧。工具思考细分模块、原生媒体预览和前端剩余页继续迁移，不宣称全部一比一完成。
+
+### UI-06：任务执行页与配置入口（2026-10-24）
+
+- 依照 TaskPage、TaskDeviceControlPanel、CollectionReminderPanel 重建毛玻璃固定顶栏、86% 宽执行概览、控制方式卡片、21:00 默认提醒时间、场景分组、紧凑任务行、44×26 开关及批量执行面板。任务行打开配置与开关分开响应；不再显示旧的“查看配置”额外按钮。
+- “配置任务”现在进入任务配置列表，而不是跳转通用设置。配置列表展示真实任务状态、分组、运行和现有 JSON 查看/编辑入口；文件面板可展开索引中的真实配置文件。运行/取消/保存仍使用原有 VM，未调用新的后端。
+- Android 控制方式切换、提醒调度、新建/图编辑/复制/删除仍显示明确受限说明，提醒始终不伪装成已启用。时间可本机保存，但不声称通知已注册。配置新建面板、图编辑、上下文变量与完整文件管理布局仍需继续逐项对齐。
+- 实际构建 ui-task-chat-build.log 通过（2m48s）；主包/测试包安装 PKB110 均 Success。ui-task-chat-device-tests.log 中任务 3 项通过：配置入口不走设置、开关不误触导航、未接入提醒不显示启用；同轮总 12 项真机测试通过。ui-task-execution 和 ui-task-config 截图/XML 已检查；未点击运行真实任务。
