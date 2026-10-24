@@ -145,7 +145,11 @@ private fun HomeTaskExecutionSheet(task: HomeSuggestedTask, onClose: () -> Unit,
     var qwenDraft by remember(task.id) { mutableStateOf(HomeTaskSuggestions.compact(task.qwenTask, 60)) }
     var error by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onClose, containerColor = HarmonyTheme.surface) {
-        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("选择执行方式", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = HarmonyTheme.primaryText, modifier = Modifier.weight(1f))
+            HarmonyButton("×", onClose, Modifier.size(32.dp), radius = 16.dp, fontSize = 22.sp, horizontalPadding = 0.dp)
+        }
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(task.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = HarmonyTheme.primaryText)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HarmonyButton("操控手机完成", { qwen = false; error = false }, Modifier.weight(1f), height = 44.dp, radius = 14.dp, fontSize = 14.sp,

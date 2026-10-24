@@ -17,6 +17,7 @@ import com.clawmate.app.ui.theme.ClawMateTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.clawmate.app.log.AppLogger.debugLoggingEnabled = getSharedPreferences("clawmate-ui", MODE_PRIVATE).getBoolean("debug", false)
         enableEdgeToEdge()
         setContent {
             ClawMateTheme {

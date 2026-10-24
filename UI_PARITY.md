@@ -23,13 +23,13 @@
 | 毛玻璃页面 | `components/FrostedPage.ets` | 固定顶栏、滚动穿透、24 模糊、32 渐隐、安全区 | Android 适配；HDS 材质待实机对照 |
 | 悬浮底栏 | `pages/main/FloatingMainTabs.ets`、`MainTabConfig.ets` | 64 高、左右 20、底部 12、88 内容避让、五项图标/选中状态 | 已实现；系统选择动画为 Android 近似，待对照 |
 | 首页概览 | `pages/home/HomePage.ets:159` | 原始背景、待处理数、完整度、四领域、头像入口、宽屏分支 | 已重建；验证中 |
-| 为你提醒 | `pages/home/HomePage.ets:1099` | 连续列表、空态猫图、过滤、分页、详情覆盖层 | 待对齐 |
-| 猜你喜欢 | `pages/home/HomePage.ets:1755` | 三列任务建议、刷新按钮、加载/错误、任务详情 | 待对齐 |
-| 帮你解闷 | `pages/home/HomeComfortSection.ets` | 话题列表、空态、全屏聊天覆盖层 | 待对齐 |
-| 汇总 | `pages/collection/CollectionPage.ets` | 下划线标签、足迹概览、时间线、分页、两行入口 | 固定顶栏已接入；内容待对齐 |
+| 为你提醒 | `pages/home/HomePage.ets:1099` | 连续列表、空态猫图、过滤、分页、详情覆盖层 | 源码布局及真实回调已接入，真机通过；系统面板动效待对照 |
+| 猜你喜欢 | `pages/home/HomePage.ets:1755` | 三列任务建议、刷新按钮、加载/错误、任务详情 | 已重建并通过真机测试；未接入执行能力明确报错 |
+| 帮你解闷 | `pages/home/HomeComfortSection.ets` | 话题列表、空态、全屏聊天覆盖层 | 已重建并通过真机测试；真实后端响应未验收 |
+| 汇总 | `pages/collection/CollectionPage.ets` | 下划线标签、足迹概览、时间线、分页、两行入口 | 源码布局已重建并通过真机测试；详情内部继续对齐 |
 | 聊天 | `pages/chat/ChatPage.ets` | 空态、模式标签、消息、工具状态、底部输入、键盘、会话抽屉 | 待对齐 |
 | 任务 | `pages/task/TaskPage.ets` | 执行概览、设备控制、提醒、任务列表、配置/编辑/文件管理 | 待对齐 |
-| 我的 | `pages/settings/SettingsCenterPage.ets` | 账号、Debug、桌面/HDC 入口、五组设置、详情表单 | 固定顶栏已接入；内容待对齐 |
+| 我的 | `pages/settings/SettingsCenterPage.ets` | 账号、Debug、桌面/HDC 入口、五组设置、详情表单 | 主列表、表单尺寸及保存交互已重建并验证；HMS/HDC 为明确受限适配 |
 | 图库及详情 | `pages/gallery/`、`pages/collection/CollectionGroupDetailPage.ets` | 分类、分析状态、图像预览、分组详情、返回 | 待对齐 |
 | 引导与隐私 | `pages/onboarding/`、相关隐私页 | 分页、选择、按钮、许可和确认弹窗 | 待对齐 |
 | 数字分身 | `pages/chat/DigitalAvatarView.ets`、首页分身覆盖层 | 呼吸 760ms、按压/阴影、生成/历史/版本 | 待对齐；不新增生成后端 |
@@ -57,3 +57,7 @@
 ### UI-03 实际检查（2026-10-24）
 
 汇总标签、概览、时间线、5 组分页和两行入口已按源码重建；入口可直接进入数据采集设置。8 项针对性单元测试和含首页在内的 11 项真机测试通过。`ui-summary-layout.png/xml` 与 `ui-summary-data-collection-route.png/xml` 已检查。微信采集仍为明确的未接入状态，分组详情/图库内部页面及 HDS 默认材质继续对齐。
+
+### UI-04 实际检查（2026-10-24）
+
+我的列表和设置控件已对齐源码尺寸/颜色，真实保存竞态已修复。103 项设置/日志单元测试通过；最终构建和并发保存回归通过；5 项真机测试通过。证据：ui-settings-build-3.log、ui-settings-device-tests-4.log、ui-settings-mine-verified.png/xml、ui-settings-collection-verified.png/xml。HMS、小艺、手机 HDC 为受限适配，尚未完成原生页视觉验收。

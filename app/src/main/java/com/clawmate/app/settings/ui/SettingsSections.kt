@@ -35,19 +35,21 @@ fun PrivacySection(state: SettingsUiState, vm: SettingsViewModel, context: Conte
         onClick = { vm.hide(SettingKeys.AutoConfirm) },
     )
 
+    PrivacyHarmonyEntries()
+
     SettingsGroupCard(
         title = "Agent 确认策略",
         subtitle = "控制本地与云端 Agent 动作是否需要人工确认",
     ) {
         AutoConfirmToggleRow(
             label = "本地 Agent 自动同意",
-            desc = "关闭后每次端侧模型动作都会弹出确认",
+            desc = "关闭后每次端侧模型动作都会弹窗确认",
             selected = state.draft.agentLocalConfirm == AutoConfirmMode.AutoApprove,
             onChecked = { vm.setLocalAutoConfirm(if (it) AutoConfirmMode.AutoApprove else AutoConfirmMode.Ask) },
         )
         AutoConfirmToggleRow(
             label = "云端 Agent 自动同意",
-            desc = "关闭后云端模型动作需要手动确认后发送",
+            desc = "关闭后云端模型动作需要手动确认后发给 PC",
             selected = state.draft.agentCloudConfirm == AutoConfirmMode.AutoApprove,
             onChecked = { vm.setCloudAutoConfirm(if (it) AutoConfirmMode.AutoApprove else AutoConfirmMode.Ask) },
         )
@@ -57,12 +59,12 @@ fun PrivacySection(state: SettingsUiState, vm: SettingsViewModel, context: Conte
         title = "数字分身图片服务",
         subtitle = "配置头像生成服务地址、密钥、模型与图片尺寸",
     ) {
-        SettingInput("图片服务 URL", state.draft.avatarImageBaseUrl,
+        SettingInput("数字分身图片服务", state.draft.avatarImageBaseUrl,
             placeholder = "输入图片服务 URL") { vm.setAvatarBaseUrl(it) }
         SensitiveSettingInput(
             key = SettingsKeys.AVATAR_IMAGE_API_KEY,
             revealedKeys = state.revealedSensitiveKeys,
-            label = "图片 API Key",
+            label = "数字分身图片 API Key",
             value = maskedOrText(state.draft.avatarImageApiKey),
             placeholder = "图片服务密钥",
             onReveal = { vm.reveal(SettingsKeys.AVATAR_IMAGE_API_KEY) },
@@ -72,28 +74,12 @@ fun PrivacySection(state: SettingsUiState, vm: SettingsViewModel, context: Conte
         )
         SettingInput("文生图模型", state.draft.avatarTextToImageModel,
             placeholder = "文生图模型") { vm.setAvatarModel(it) }
+        SettingInput("图生图模型", "", placeholder = "图生图能力尚未接入", enabled = false) {}
         SettingInput("图片尺寸", state.draft.avatarImageSize,
             placeholder = "图片尺寸，如 2K") { vm.setAvatarSize(it) }
     }
 
-    SettingsGroupCard(
-        title = "一碰分享（NFC）",
-        subtitle = "Android 显式 NFC 会话适配器；未点击时不会启用或监听",
-    ) {
-        SettingsActionRow(
-            actions = listOf(
-                SettingsAction(
-                    label = "打开 NFC 画像分享",
-                    kind = SettingsActionKind.Primary,
-                    onClick = {
-                        context.startActivity(
-                            android.content.Intent(context, com.clawmate.app.profile.share.nfc.NfcProfileShareActivity::class.java),
-                        )
-                    },
-                ),
-            ),
-        )
-    }
+
 }
 
 @Composable
