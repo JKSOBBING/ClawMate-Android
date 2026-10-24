@@ -30,10 +30,12 @@ class HomeComfortTopicsDeviceTest {
             HomeComfortCard(conversations) {}
             HomeComfortTopicsCard(topics, { conversations.open(it) }, {})
         } } }
-        compose.onNodeWithText("生成陪伴话题").performClick()
+        compose.onNodeWithText("重新看看").performClick()
         compose.waitUntil(5000) { topics.state.value.topics.size == 1 }
         compose.onNodeWithText("设备话题").performClick()
-        compose.onNodeWithText("设备测试：最近工作很累", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("设备话题") and hasAnyAncestor(isDialog())).performClick()
+        compose.onNodeWithText("设备测试：最近工作很累", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("关闭").performClick()
         compose.onNodeWithText("设备模型开场").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { assertEquals(topic.id, conversations.state.value.topic!!.id) }
     }
@@ -41,8 +43,8 @@ class HomeComfortTopicsDeviceTest {
     @Test fun emptyResultShowsAnHonestNoTopicState() {
         val vm = HomeComfortTopicsViewModel({ config }, { context }, { _, _ -> emptyList() })
         compose.setContent { MaterialTheme { HomeComfortTopicsCard(vm, { error("no topic") }, {}) } }
-        compose.onNodeWithText("生成陪伴话题").performClick()
+        compose.onNodeWithText("重新看看").performClick()
         compose.waitUntil(5000) { vm.state.value.generated }
-        compose.onNodeWithText("没有找到可直接支持的话题", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("和我随便聊聊，我会读心术").assertIsDisplayed()
     }
 }

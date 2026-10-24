@@ -37,8 +37,10 @@ class HarmonyBackdrop internal constructor() {
 val LocalHarmonyBackdrop = compositionLocalOf<HarmonyBackdrop?> { null }
 
 @Composable
-fun rememberHarmonyBackdrop(key: Any? = Unit): HarmonyBackdrop? = remember(key) {
-    if (Build.VERSION.SDK_INT >= 31) HarmonyBackdrop() else null
+fun rememberHarmonyBackdrop(key: Any? = Unit): HarmonyBackdrop? {
+    val backdrop = remember(key) { if (Build.VERSION.SDK_INT >= 31) HarmonyBackdrop() else null }
+    DisposableEffect(backdrop) { onDispose { if (Build.VERSION.SDK_INT >= 31) backdrop?.node?.discardDisplayList() } }
+    return backdrop
 }
 
 fun Modifier.recordBackdrop(backdrop: HarmonyBackdrop?): Modifier {
@@ -126,5 +128,5 @@ fun HarmonyPage(
 @Composable
 fun InsetSecondaryPage(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(HarmonyTheme.page).statusBarsPadding()
-        .navigationBarsPadding().padding(bottom = 88.dp)) { content() }
+        .navigationBarsPadding().padding(bottom = 88.dp).recordBackdrop(LocalHarmonyBackdrop.current)) { content() }
 }

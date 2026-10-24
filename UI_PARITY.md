@@ -49,3 +49,7 @@
 - 手机检查：首页、汇总、“我的”导航和顶栏正常；小字号行高已按实际 XML 核查纠正。
 - 证据：外部验证目录中的 `ui-shell-home-3.png/xml`、`ui-shell-mine-3.png/xml` 和 `ui-shell-device-test-3.log`。
 - 此阶段不代表全部页面或像素级视觉验收通过。
+
+### UI-02 实际检查（2026-10-24）
+
+首页主内容已切换为“为你提醒”“猜你喜欢”“帮你解闷”的源码布局；完成过滤、真实回调、建议溯源和陪伴覆盖层已接入。完整单元回归 1315/1315 通过，首页 9 项真机测试通过，之后与汇总一起重建的 11 项测试也通过。证据为 `ui-home-sections.png/xml`、`ui-home-scrolled.png/xml`、`ui-home-comfort-cover.png/xml`、`ui-home-device-tests-2.log`。执行能力未接入时显示错误；原生面板材质/转场仍待鸿蒙运行画面对照。

@@ -78,6 +78,7 @@ import com.clawmate.app.ui.theme.ClawMateDesign
 fun ProfileAvatarScreen(
     viewModel: ProfileAvatarViewModel,
     onClose: () -> Unit,
+    supplementaryContent: @Composable () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -168,6 +169,7 @@ fun ProfileAvatarScreen(
                 onSave = { viewModel.saveDraft() },
                 saveError = state.saveError,
             )
+            supplementaryContent()
         }
 
         SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))

@@ -26,7 +26,7 @@ import com.clawmate.app.settings.SettingsComponent
  *    + size present).
  */
 @Composable
-fun ProfileAvatarHost(onClose: () -> Unit) {
+fun ProfileAvatarHost(onClose: () -> Unit, supplementaryContent: @Composable () -> Unit = {}) {
     val context = LocalContext.current.applicationContext
     val vm: ProfileAvatarViewModel = viewModel(
         factory = ProfileAvatarViewModel.Factory(
@@ -36,5 +36,5 @@ fun ProfileAvatarHost(onClose: () -> Unit) {
             provider = SeedreamAvatarProvider.withDefaultClient(),
         ),
     )
-    ProfileAvatarScreen(viewModel = vm, onClose = onClose)
+    ProfileAvatarScreen(viewModel = vm, onClose = onClose, supplementaryContent = supplementaryContent)
 }
