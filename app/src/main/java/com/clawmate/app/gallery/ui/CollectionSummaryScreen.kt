@@ -41,6 +41,8 @@ import com.clawmate.app.gallery.GalleryComponent
 import com.clawmate.app.gallery.collection.IndexedCollectionTab
 import com.clawmate.app.gallery.collection.IndexedEventCollectionService
 import com.clawmate.app.task.model.WorkflowSceneConfig
+import com.clawmate.app.ui.HarmonyPage
+import com.clawmate.app.ui.theme.HarmonyTheme
 import com.clawmate.app.ui.ClawMateHeader
 import com.clawmate.app.ui.theme.ClawMateDesign
 
@@ -49,10 +51,10 @@ import com.clawmate.app.ui.theme.ClawMateDesign
 fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
     var showGallery by remember { mutableStateOf(false) }
     if (showGallery) {
-        GalleryScreen(
+        com.clawmate.app.ui.InsetSecondaryPage { GalleryScreen(
             onBack = { showGallery = false },
             onOpenSettings = onOpenSettings,
-        )
+        ) }
         return
     }
 
@@ -67,19 +69,19 @@ fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
 
     val openDetail = detail
     if (openDetail != null) {
-        IndexedCollectionGroupDetailScreen(detail = openDetail, onBack = indexVm::closeDetail)
+        com.clawmate.app.ui.InsetSecondaryPage { IndexedCollectionGroupDetailScreen(detail = openDetail, onBack = indexVm::closeDetail) }
         return
     }
 
+    val scroll = rememberScrollState()
+    HarmonyPage(scrollOffset = { scroll.value.toFloat() }, header = { ClawMateHeader("你的足迹") }) { insets ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(ClawMateDesign.Colors.PageBackground)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 84.dp),
+            .verticalScroll(scroll)
+            .padding(insets),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ClawMateHeader(title = "你的足迹", iconRes = R.drawable.header_footprint)
         SummarySceneTabs(
             selected = selectedTab,
             onSelect = { indexVm.selectTab(it.sceneId) },
@@ -108,6 +110,7 @@ fun CollectionSummaryScreen(context: Context, onOpenSettings: () -> Unit = {}) {
             onOpenGallery = { showGallery = true },
             onOpenSettings = onOpenSettings,
         )
+    }
     }
 }
 

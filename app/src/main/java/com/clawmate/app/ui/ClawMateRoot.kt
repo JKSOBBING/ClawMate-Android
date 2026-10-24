@@ -2,6 +2,23 @@ package com.clawmate.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import com.clawmate.app.ui.theme.HarmonyTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,7 +86,7 @@ sealed class Destination(
     data object Summary : Destination("summary", "汇总", R.drawable.tab_summary)
     data object Chat : Destination("chat", "聊天", R.drawable.tab_chat)
     data object Task : Destination("task", "任务", R.drawable.tab_task)
-    data object Settings : Destination("settings", "设置", R.drawable.tab_settings)
+    data object Settings : Destination("settings", "我的", R.drawable.tab_mine)
 
     companion object {
         // Do not cache this list during Destination class initialization.
@@ -197,19 +214,15 @@ private fun MainTabScaffold(
     var selectedRoute by rememberSaveable { mutableStateOf(Destination.Home.route) }
     var settingsSectionToOpen by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    Scaffold(
-        containerColor = com.clawmate.app.ui.theme.NearWhite,
-        bottomBar = {
-            MainBottomBar(
-                selectedRoute = selectedRoute,
-                onSelect = { selectedRoute = it },
-            )
-        },
-    ) { innerPadding ->
+    val backdrop = rememberHarmonyBackdrop(selectedRoute)
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    CompositionLocalProvider(LocalHarmonyBackdrop provides backdrop) {
+      Box(Modifier.fillMaxSize().background(HarmonyTheme.page)) {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .then(if (selectedRoute == Destination.Chat.route || selectedRoute == Destination.Task.route)
+                    Modifier.statusBarsPadding().navigationBarsPadding().padding(bottom = 88.dp) else Modifier),
         ) {
             when (selectedRoute) {
                 Destination.Home.route -> {
@@ -254,6 +267,14 @@ private fun MainTabScaffold(
                 )
             }
         }
+        if (!keyboardVisible) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(112.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, HarmonyTheme.mask))))
+            Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp, start = 20.dp, end = 20.dp)) {
+                MainBottomBar(selectedRoute, { selectedRoute = it }, backdrop)
+            }
+        }
+      }
     }
 }
 
@@ -262,52 +283,55 @@ private fun MainTabScaffold(
 private fun MainBottomBar(
     selectedRoute: String,
     onSelect: (String) -> Unit,
+    backdrop: HarmonyBackdrop?,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .navigationBarsPadding(),
+    val shape = RoundedCornerShape(32.dp)
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier.widthIn(max = 560.dp).fillMaxWidth().height(64.dp)
+            .shadow(12.dp, shape, ambientColor = Color(0x18000000), spotColor = Color(0x18000000))
+            .clip(shape).harmonyGlass(backdrop, HarmonyTheme.glass)
+            .border(1.dp, HarmonyTheme.glassBorder, shape).selectableGroup(),
     ) {
+        val cellWidth = maxWidth / 5
+        val selection by animateDpAsState(cellWidth * Destination.items.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0),
+            spring(dampingRatio = .85f, stiffness = 500f), label = "tab selection")
+        Box(Modifier.padding(start = selection + 4.dp, top = 6.dp).width(cellWidth - 8.dp).height(52.dp)
+            .background(HarmonyTheme.background("#EEF0FF").copy(alpha = .6f), RoundedCornerShape(26.dp)))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(58.dp),
+                .height(64.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Destination.items.forEach { destination ->
                 val selected = selectedRoute == destination.route
+                val tint by animateColorAsState(HarmonyTheme.text(if (selected) "#5B5CE2" else "#747B87"), label = "tab tint")
                 Column(
                     modifier = Modifier
-                        .width(72.dp)
-                        .height(58.dp)
-                        .clickable { onSelect(destination.route) },
+                        .weight(1f)
+                        .height(64.dp)
+                        .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(destination.route) }),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .background(
-                                if (selected) com.clawmate.app.ui.theme.TabIndicator else Color.Transparent,
-                                RoundedCornerShape(16.dp),
-                            ),
+                            .size(28.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             painter = painterResource(destination.icon),
                             contentDescription = destination.label,
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(21.dp),
+                            tint = tint,
+                            modifier = Modifier.size(24.dp),
                         )
                     }
                     Text(
                         destination.label,
-                        fontSize = 13.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) com.clawmate.app.ui.theme.TabSelected else com.clawmate.app.ui.theme.MutedText,
-                        modifier = Modifier.padding(top = 2.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = tint,
                         maxLines = 1,
                     )
                 }
