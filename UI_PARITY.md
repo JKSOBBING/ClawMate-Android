@@ -28,7 +28,7 @@
 | 帮你解闷 | `pages/home/HomeComfortSection.ets` | 话题列表、空态、全屏聊天覆盖层 | 已重建并通过真机测试；真实后端响应未验收 |
 | 汇总 | `pages/collection/CollectionPage.ets` | 下划线标签、足迹概览、时间线、分页、两行入口 | 源码布局已重建并通过真机测试；详情内部继续对齐 |
 | 聊天 | `pages/chat/ChatPage.ets`、`ChatMessageList.ets`、`ChatSessionDrawer.ets` | 空态、模式标签、消息、工具状态、底部输入、键盘、会话抽屉 | 欢迎/输入/抽屉/气泡已重建并验证；深度思考参数与精细工具模块尚未接入 |
-| 任务 | `pages/task/TaskPage.ets` | 执行概览、设备控制、提醒、任务列表、配置/编辑/文件管理 | 待对齐 |
+| 任务 | `pages/task/TaskPage.ets` | 执行概览、设备控制、提醒、任务列表、配置/编辑/文件管理 | 执行页及配置入口已重建并验证；图编辑/新建/完整文件管理继续对齐 |
 | 我的 | `pages/settings/SettingsCenterPage.ets` | 账号、Debug、桌面/HDC 入口、五组设置、详情表单 | 主列表、表单尺寸及保存交互已重建并验证；HMS/HDC 为明确受限适配 |
 | 图库及详情 | `pages/gallery/`、`pages/collection/CollectionGroupDetailPage.ets` | 分类、分析状态、图像预览、分组详情、返回 | 待对齐 |
 | 引导与隐私 | `pages/onboarding/`、相关隐私页 | 分页、选择、按钮、许可和确认弹窗 | 待对齐 |
@@ -65,3 +65,7 @@
 ### UI-05 实际检查（2026-10-24）
 
 聊天欢迎、输入、抽屉和消息气泡已按源码重建；83 项针对性单元测试通过，聊天 6 项真机测试与 4 项 Markdown/复制回归通过。真机已检查键盘/日夜主题/草稿卡片/抽屉，头像点击像素变化和固定容器通过。最终构建与 UI-06 一起验证。深度思考参数、下发任务、原生媒体和工具细分模块仍有差异；未做真实模型、相机实拍或 ASR 服务验收。
+
+### UI-06 实际检查（2026-10-24）
+
+任务执行页、配置导航、分场景任务卡和 JSON 真实入口已重建；3 项针对性真机测试通过。证据：ui-task-chat-build.log、ui-task-chat-device-tests.log、ui-task-execution.png/xml、ui-task-config.png/xml。配置新建面板/图编辑/上下文变量/完整文件管理尚未完成，控制方式和采集提醒有明确 Android 能力限制；未运行真实任务。

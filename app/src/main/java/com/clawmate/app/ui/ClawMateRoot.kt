@@ -220,9 +220,7 @@ private fun MainTabScaffold(
       Box(Modifier.fillMaxSize().background(HarmonyTheme.page)) {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
-                .fillMaxSize()
-                .then(if (selectedRoute == Destination.Task.route)
-                    Modifier.statusBarsPadding().navigationBarsPadding().padding(bottom = 88.dp) else Modifier),
+                .fillMaxSize(),
         ) {
             when (selectedRoute) {
                 Destination.Home.route -> {
