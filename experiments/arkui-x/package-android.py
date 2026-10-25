@@ -12,10 +12,11 @@ import zipfile
 parser = argparse.ArgumentParser()
 parser.add_argument('--project', required=True, type=Path)
 parser.add_argument('--sdk', required=True, type=Path)
+parser.add_argument('--android-app', type=Path, help='Generated Android runtime staging directory')
 args = parser.parse_args()
 project = args.project.resolve()
 sdk = args.sdk.resolve()
-app = project / '.arkui-x/android/app'
+app = args.android_app.resolve() if args.android_app else project / '.arkui-x/android/app'
 assets = app / 'src/main/assets/arkui-x'
 entry = assets / 'entry'
 entry.mkdir(parents=True, exist_ok=True)

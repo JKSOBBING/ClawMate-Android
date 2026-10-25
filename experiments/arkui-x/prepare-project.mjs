@@ -5,8 +5,17 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const allowed = new Set(['--raw', '--original-transport', '--simulate-upstream', '--help']);
-for (const argument of process.argv.slice(2)) {
+const valueOptions = new Set(['--project', '--entry', '--extra-lock', '--overlay', '--routes']);
+const options = new Map();
+const allowed = new Set(['--raw', '--original-transport', '--simulate-upstream', '--help', '--keep-facade']);
+for (let index = 2; index < process.argv.length; index++) {
+  const argument = process.argv[index];
+  if (valueOptions.has(argument)) {
+    const value = process.argv[++index];
+    if (!value || value.startsWith('--')) throw new Error(`Missing value: ${argument}`);
+    options.set(argument, value);
+    continue;
+  }
   if (!allowed.has(argument)) throw new Error(`Unknown argument: ${argument}`);
 }
 if (process.argv.includes('--help')) {
@@ -16,8 +25,14 @@ if (process.argv.includes('--help')) {
 const repo = path.resolve(here, '../..');
 const scratch = path.join(repo, '.arkui-x-validation');
 const reference = path.join(scratch, 'reference');
-const project = path.join(scratch, 'project');
+const project = path.resolve(options.get('--project') || path.join(scratch, 'project'));
+if (!project.startsWith(scratch + path.sep)) throw new Error('Generated project must remain in the ignored workspace');
 const lock = JSON.parse(fs.readFileSync(path.join(here, 'ui-upstream-lock.json'), 'utf8'));
+if (options.has('--extra-lock')) {
+  const extra = JSON.parse(fs.readFileSync(options.get('--extra-lock'), 'utf8'));
+  if (extra.ref !== lock.ref) throw new Error('Additional inputs must pin the same source revision');
+  lock.files.push(...extra.files.filter(file => !lock.files.some(existing => existing.path === file.path)));
+}
 const sources = new Map();
 for (const file of lock.files) {
   const bytes = fs.readFileSync(path.join(reference, file.path));
@@ -30,6 +45,7 @@ const raw = process.argv.includes('--raw');
 const originalTransport = process.argv.includes('--original-transport');
 const simulateUpstream = process.argv.includes('--simulate-upstream');
 if (!raw) {
+  if (!process.argv.includes('--keep-facade')) {
   const facade = sources.get('datamanager/DataManagerFacade.ets');
   const names = ['createHomeProfileAvatarDefaults', 'defaultHomeDomains', 'defaultRecommendations',
     'createEmptyHomeProfileViewModel'];
@@ -41,6 +57,7 @@ if (!raw) {
   sources.set('datamanager/DataManagerFacade.ets',
     "import { HomeProfileViewModel, HomeDomainViewModel, HomeRecommendationViewModel } from './DataManagerTypes';\n" +
     "import { AvatarHomeViewModel, createEmptyAvatarHomeViewModel } from './avatar/AvatarTypes';\n" + functions.join('\n\n'));
+  }
 
   const frosted = sources.get('components/FrostedPage.ets');
   const start = frosted.indexOf('      Navigation() {');
@@ -153,7 +170,15 @@ if (simulateUpstream) {
   sources.set('pages/home/HomePage.ets', home.replace("Text('今日概览')", "Text('今日概览 · 同步验证')"));
 }
 
-const entry = fs.readFileSync(path.join(here, 'probe/Index.ets'), 'utf8');
+if (options.has('--overlay')) {
+  const overlay = path.resolve(options.get('--overlay'));
+  for (const item of fs.readdirSync(overlay, { recursive: true, withFileTypes: true })) {
+    if (!item.isFile() || !item.name.endsWith('.ets')) continue;
+    const file = path.join(item.parentPath, item.name);
+    sources.set(path.relative(overlay, file).split(path.sep).join('/'), fs.readFileSync(file, 'utf8'));
+  }
+}
+const entry = fs.readFileSync(options.get('--entry') || path.join(here, 'probe/Index.ets'), 'utf8');
 sources.set('pages/Index.ets', entry);
 const picked = new Set();
 function visit(name) {
@@ -168,9 +193,13 @@ function visit(name) {
   }
 }
 visit('pages/Index.ets');
+if (options.has('--routes')) {
+  const routes = JSON.parse(fs.readFileSync(options.get('--routes'), 'utf8')).src;
+  for (const route of routes) { visit(route + '.ets'); }
+}
 const stage = path.join(project, 'entry/src/main/ets');
 // Only remove files from this generated probe that were staged by this script.
-const previousManifestPath = path.join(scratch, 'staged-sources.json');
+const previousManifestPath = options.has('--project') ? path.join(project, 'staged-sources.json') : path.join(scratch, 'staged-sources.json');
 if (fs.existsSync(previousManifestPath)) {
   for (const file of JSON.parse(fs.readFileSync(previousManifestPath, 'utf8')).files) {
     const destination = path.resolve(stage, file.path);

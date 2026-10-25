@@ -1,0 +1,30 @@
+plugins {
+    id 'com.android.application' version '8.5.2'
+    id 'org.jetbrains.kotlin.android' version '1.9.24'
+}
+
+def runtimeDir = file('../.arkui-x-validation/application/runtime')
+android {
+    namespace 'com.clawmate.shared'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.clawmate.shared'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.2-shared'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    kotlinOptions { jvmTarget = '17' }
+    sourceSets.main { assets.srcDirs = [new File(runtimeDir, 'src/main/assets')]; jniLibs.srcDirs = [new File(runtimeDir, 'libs')] }
+    packagingOptions { jniLibs { useLegacyPackaging true } }
+}
+dependencies { implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar']) }
+tasks.named('preBuild').configure {
+    doFirst {
+        if (!new File(runtimeDir, 'src/main/assets/arkui-x/entry/ets/modules.abc').isFile()) {
+            throw new GradleException('Compile and package shared-frontend first; see shared-frontend/README.md')
+        }
+    }
+}

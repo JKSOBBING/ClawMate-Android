@@ -13,9 +13,14 @@ the Android platform can support them.
 
 ## Working rules
 
-- Work only under /home/yydh/ClawMate-Android.
-- Use Kotlin and a current Android Gradle project. Prefer Jetpack Compose for new
-  UI unless an existing Android dependency makes Views the better choice.
+- Approved workspaces are /home/yydh/ClawMate-Android and the current Windows
+  repository C:\Users\Askeladd\Documents\ChatGPT\ClawMate_Android. The user
+  authorized Windows work while the remote host was unavailable.
+- Follow the user's accepted shared-frontend strategy: reuse ArkTS/ArkUI with
+  ArkUI-X, and keep Android-specific adapters in Kotlin. The shared Android host
+  is shared-app/ and the source preparation/overlays are shared-frontend/.
+  Preserve app/ (the existing Compose product) as a regression baseline until a
+  production switch and data migration have been separately verified.
 - Keep commits small and reviewable. Every meaningful phase must end with a
   commit and a short note in MIGRATION_STATUS.md.
 - Never claim a build, test, or runtime check passed unless the command actually
@@ -78,6 +83,12 @@ Do not silently remove a feature or pretend that a mock response is real.
   Android doc lookup). Consult its `references/` for device-interaction details.
 
 ## Build environment
+
+For the Windows shared frontend, see shared-frontend/README.md and build.ps1.
+Use the locked SDK pair and pass local JDK/Android SDK paths as parameters; keep
+generated SDKs, upstream inputs and runtime libraries in the ignored workspace.
+Do not replace the original application ID or copy its private data as part of
+ordinary frontend checks. The Linux command below remains for the Compose baseline.
 
 The Android build environment lives at `~/Android/Sdk` on the DSH host. Gradle
 operations may need elevated permissions because the wrapper and daemon write
