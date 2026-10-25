@@ -1,7 +1,23 @@
 import { image } from '@kit.ImageKit';
+import { NativeCapabilities } from '../../platform/NativeCapabilities';
 export class GalleryOcrService {
+  private generation: number = 0;
+  private activeIds: Set<string> = new Set();
   async recognize(pixelMap: image.PixelMap): Promise<string> {
-    throw new Error('安卓 OCR 尚未接入；可在图库设置明确选择“跳过 OCR”后使用自配视觉模型');
+    throw new Error('安卓本地识别需要图片 URI，请使用系统选图入口');
   }
-  async release(): Promise<void> {}
+  async recognizeUri(uri: string): Promise<string> {
+    let generation = this.generation;
+    let operation = '';
+    try {
+      return await NativeCapabilities.recognize(uri, (id: string): void => { operation = id; this.activeIds.add(id); },
+        (): boolean => generation !== this.generation);
+    } finally { this.activeIds.delete(operation); }
+  }
+  async release(): Promise<void> {
+    this.generation += 1;
+    let ids: string[] = Array.from(this.activeIds);
+    this.activeIds.clear();
+    for (let id of ids) { await NativeCapabilities.cancelRecognition(id); }
+  }
 }

@@ -420,3 +420,15 @@
 - 实际执行 :android-capabilities:testDebugUnitTest :app:assembleDebug :shared-app:assembleDebug 成功（architecture-extraction-build-2.log，8m7s）；新增操作检查后单独重跑 :android-capabilities:testDebugUnitTest 成功（48s），共 24 项零失败/错误/跳过。
 - 首次 --offline 构建因 Android library 插件标记尚未缓存而失败；允许联网的同一构建完成依赖解析并成功，失败记录保留。未改动旧包数据、授权、端点或模型配置。
 - 架构和数据归属记录在 docs/SHARED_ARCHITECTURE.md；两个安装包继续保留，生产包名切换和旧数据导入另行验证。前一阶段提交：ff68bde。
+
+## 2026-10-26 SH-03：导航对齐与共用能力桥接
+
+- 以同一锁定提交的原 Index/FloatingMainTabs 为依据，提取原导航图标、字体/配色样式和 64vp 高、20vp 侧距、12vp 底距；共享版改为标准 ArkUI 悬浮胶囊，首页/聊天按原 88vp 避让。保留原页面、固定顶栏、插图与日夜间颜色资源；HDS 沉浸材质与温控光效只作基础模糊近似，不宣称系统材质一致。
+- 首页分身/历史/版本与推荐详情补齐 Android 返回事件。共享宿主读取真实系统主题、键盘及语音状态，键盘/会话抽屉出现时收起胶囊；原生系统栏随配置更新。功能已编译，最终深色/键盘/弹层交互仍待本轮真机检查。
+- 原图库仅将 OCR 入口改为 URI 桥接，后台调用共用本地引擎；限制本地路径、并发、等待与取消，拒绝远程 URL、目录越界及取消后的迟到结果。空文本和失败保持区别。原聊天朗读/暂停/重播按钮连接同一个 Android TTS，引擎状态和实际回调驱动 UI，不伪造音频缓存 URI。
+- 两版共用 TTS 增加当前 utterance 校验，停止后迟到回调不会把旧语音重新标为播放；释放时清空监听。离开前台、切换会话/模式和删除当前会话会停止朗读；UI 分发超时会取消仍在排队的动作。HMS/A2A、ASR、任务执行、照片附件、云服务与 MNN 边界继续明确保留。
+- 全部 120 个唯一只读输入锁定，最终 130 个 ArkTS 文件中 81 个逐字不变、32 个适配、17 个新平台代码；仅为本次编译输入统计。新增 7 项主机桥接/导航契约，合计 21 项主机检查通过。
+- shared-integration-build-5.log 中 ArkTS 构建成功 16.314s、共享 APK 构建成功 58s；shared-integration-regression-5.log 中两版构建、测试 APK 及完整回归成功 6m11s，旧版 1320 项、共用库 27 项均零失败/错误/跳过。最后一处仅共享宿主的 UI 超时处理再通过 shared-integration-native-final.log 构建验证；产物/命令和状态见 shared-frontend/verification-integration.json。
+- 失败保留：首次 ArkTS 编译因静态方法 this 与语音状态类型失败，修正后成功；首次原生接线误用不可见的协程依赖，改由能力库提供明确的后台调用接口；路径策略检查发现 Windows 非法路径异常类型不统一，修正后 27 项通过。未关闭编译检查。
+- 中间版本 APK 实际安装 Success，OPPO PKB110 冷启动 762ms，悬浮底栏及首页/聊天导航已运行，截图 integrated-home.png。最终原生修正版本尚待重新安装与验收。真机测试包 com.clawmate.shared.test 的安装器要求手动安全拼图，已请求用户本人完成；截至本记录，实际 OCR、TTS 及最终深色/键盘检查仍待验证，不计为通过。未读取私人照片、调用真实模型或迁移旧数据。
+- 页面对齐边界在 docs/FRONTEND_PARITY.md，架构与单一数据写入归属在 docs/SHARED_ARCHITECTURE.md。前一阶段提交：010852f。

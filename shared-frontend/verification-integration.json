@@ -1,0 +1,190 @@
+{
+  "phase": "SH-03",
+  "date": "2026-10-26",
+  "status": "code_and_host_checks_complete_device_acceptance_pending",
+  "upstreamCommit": "cd69b68bf16b9ed352be5073939eb24d042de583",
+  "previousArchitectureCommit": "010852f",
+  "architecture": {
+    "gradleRoot": "settings.gradle.kts",
+    "modules": [
+      "app",
+      "shared-app",
+      "android-capabilities"
+    ],
+    "capabilities": "One shared Kotlin OCR and TTS implementation; no application UI/storage dependency.",
+    "dataOwnership": "Shared ArkTS owns shared package JSON/preferences. Compose baseline retains its existing Room/DataStore; no dual writes or data migration.",
+    "applicationIds": [
+      "com.clawmate.app",
+      "com.clawmate.shared"
+    ]
+  },
+  "sourceCounts": {
+    "uniqueLockedInputs": 120,
+    "compiledArkTS": 130,
+    "unchanged": 81,
+    "adapted": 32,
+    "authored": 17,
+    "scope": "This compilation input set only, not whole-product reuse."
+  },
+  "presentation": {
+    "navigation": "Standard ArkUI floating capsule with source-derived dimensions/styles; HDS material is approximated.",
+    "barHeightVp": 64,
+    "barSideMarginVp": 20,
+    "barBottomMarginVp": 12,
+    "homeChatInsetVp": 88,
+    "sourceRoutes": 9,
+    "latestDarkKeyboardAndOverlayChecks": "pending"
+  },
+  "checks": {
+    "hostContracts": [
+      {
+        "command": "node shared-frontend/verify.mjs",
+        "passed": 6
+      },
+      {
+        "command": "node shared-frontend/verify-native.mjs",
+        "passed": 7
+      },
+      {
+        "command": "node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/reference",
+        "passed": 8
+      }
+    ],
+    "junit": {
+      "app": {
+        "tests": 1320,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "android-capabilities": {
+        "tests": 27,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "builds": [
+      {
+        "log": "shared-integration-build-5.log",
+        "arkts": "BUILD SUCCESSFUL in 16 s 314 ms",
+        "android": "BUILD SUCCESSFUL in 58s"
+      },
+      {
+        "log": "shared-integration-regression-5.log",
+        "command": ":android-capabilities:testDebugUnitTest :shared-app:assembleDebugAndroidTest :app:testDebugUnitTest :app:assembleDebug --offline --no-daemon --console=plain",
+        "result": "BUILD SUCCESSFUL in 6m 11s"
+      },
+      {
+        "log": "shared-integration-native-final.log",
+        "command": ":shared-app:assembleDebug :shared-app:assembleDebugAndroidTest --offline --no-daemon --console=plain",
+        "result": "BUILD SUCCESSFUL in 42s"
+      }
+    ]
+  },
+  "device": {
+    "manufacturer": "OPPO",
+    "model": "PKB110",
+    "android": "16",
+    "api": 36,
+    "intermediateApk": {
+      "installed": "Success",
+      "coldStartTotalTimeMs": 762,
+      "checked": [
+        "Floating capsule home screen",
+        "Primary chat tab navigation"
+      ],
+      "evidence": [
+        "integrated-home.png",
+        "integrated-home.xml",
+        "integrated-chat-empty.xml"
+      ]
+    },
+    "latestApk": "Built and archived; final install/runtime acceptance pending",
+    "testPackage": "com.clawmate.shared.test",
+    "testStatus": "Installation waiting for user to manually complete phone security puzzle; no test pass claimed",
+    "plannedDeviceCases": [
+      "Real Chinese OCR from an app-generated text image",
+      "Cancellation and refusal of remote/private out-of-scope paths",
+      "Real TTS start/stop callbacks or an explicit unavailable outcome"
+    ],
+    "pendingUiChecks": [
+      "System dark theme and system bars",
+      "Keyboard avoids composer and hides/restores capsule",
+      "Home overlay hardware back",
+      "Actual message speech buttons"
+    ],
+    "privatePhotosReadOrUploaded": false,
+    "realCloudModelCalled": false,
+    "oldAppDataModified": false
+  },
+  "limitations": [
+    "No matching-state HarmonyOS screenshots/recordings; no pixel/material/animation equivalence claim.",
+    "Actual cloud/image providers, ASR, image attachments, automatic summary, workflow/GUI execution and MNN integrations remain pending.",
+    "Two APK identities retained; no production application-ID switch or old-data migration.",
+    "Only one OPPO phone has intermediate UI evidence; no other OEM/iOS/API22 certification.",
+    "Full debug runtime with ML Kit; release signing/trimming/size/performance remain unverified."
+  ],
+  "artifacts": [
+    {
+      "path": "shared-app/build/outputs/apk/debug/shared-app-debug.apk",
+      "bytes": 107899769,
+      "sha256": "ba9529f9ec2c969c2fddca82802e98aa2cfb5d27cc97dbe75a4dba5e8a8cfc3e"
+    },
+    {
+      "path": "shared-app/build/outputs/apk/androidTest/debug/shared-app-debug-androidTest.apk",
+      "bytes": 261602,
+      "sha256": "f6581e613a920f6c53b17003746047413477a2d4d247c86ecfc99887523939f8"
+    },
+    {
+      "path": ".arkui-x-validation/application/clawmate-shared-integrated.apk",
+      "bytes": 107899769,
+      "sha256": "ba9529f9ec2c969c2fddca82802e98aa2cfb5d27cc97dbe75a4dba5e8a8cfc3e"
+    },
+    {
+      "path": ".arkui-x-validation/application/architecture-extraction-build-2.log",
+      "bytes": 16023,
+      "sha256": "9c94aae7295e1415b4f5bc2831b58629de11cf7ca3c3bbfee4b3b91f74bef641"
+    },
+    {
+      "path": ".arkui-x-validation/application/shared-integration-build-5.log",
+      "bytes": 45695,
+      "sha256": "70acf2220b841c753c62622fc6a30be44386fbe5127e5997a1fc65627ed80422"
+    },
+    {
+      "path": ".arkui-x-validation/application/shared-integration-regression-5.log",
+      "bytes": 31976,
+      "sha256": "3c03755f5f50e395fa85c9a561207b92da011cede89d86d6c305bef1297ec202"
+    },
+    {
+      "path": ".arkui-x-validation/application/shared-integration-native-final.log",
+      "bytes": 7844,
+      "sha256": "386ff6c438cee8b41a85b79e7693f0ce34c621ca65c1f9dbf87d7b9ed6b5caf8"
+    },
+    {
+      "path": ".arkui-x-validation/application/shared-integration-host-checks.log",
+      "bytes": 2328,
+      "sha256": "81f5b1f5ac92c8bd03c8c16382daa2d8b255cbffe66db5cc6b150693743126b4"
+    },
+    {
+      "path": ".arkui-x-validation/application/integrated-home.png",
+      "bytes": 1094487,
+      "sha256": "e2e153f180457f3299603689810ceb38aa1491ba296240a72ea4f9e233865e65"
+    },
+    {
+      "path": ".arkui-x-validation/application/integrated-home.xml",
+      "bytes": 46230,
+      "sha256": "f7ef4429648a8dce6c79679b68823de29691e952ab1fd940bf0488bc30b2fe32"
+    },
+    {
+      "path": ".arkui-x-validation/application/integrated-chat-empty.xml",
+      "bytes": 33267,
+      "sha256": "69ce519d0cfe95463ece6cd910fd30c8fd81d8e4d457dfd4b3e9b6d15245f71a"
+    },
+    {
+      "path": ".arkui-x-validation/application/integrated-test-install-continued.xml",
+      "bytes": 5414,
+      "sha256": "bea8eb09ea75dd0f2be0497c2afaba4f3588ecf6638ff8568c4a2e7831e77229"
+    }
+  ]
+}

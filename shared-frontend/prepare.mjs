@@ -44,6 +44,41 @@ const overlay = (name, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, value);
 };
+const mainTabs = read('pages/main/FloatingMainTabs.ets');
+const navigationConstants = ['TAB_BAR_HEIGHT', 'TAB_BAR_BOTTOM_MARGIN', 'TAB_BAR_SIDE_MARGIN'].map(name => {
+  const match = mainTabs.match(new RegExp(`const ${name}: number = \\d+;`));
+  if (!match) throw new Error('Upstream navigation metric changed: ' + name);
+  return 'export ' + match[0];
+});
+const sourceIndex = read('pages/Index.ets');
+const navigationMethods = ['tabIconResource', 'tabBarStyle'].map(name => {
+  const match = sourceIndex.match(new RegExp(`  private ${name}\\([^]*?\\n  \\}`));
+  if (!match) throw new Error('Upstream navigation method changed: ' + name);
+  return match[0].replace('private ', 'static ').replaceAll('this.tabIconResource', 'NavigationStyle.tabIconResource');
+});
+overlay('platform/NavigationStyle.ets', "import { AppTheme } from '../utils/AppTheme';\n" +
+  "import { MainTabIndex, mainTabIcon, mainTabLabel } from '../pages/main/MainTabConfig';\n" +
+  navigationConstants.join('\n') + '\nexport const MAIN_NAVIGATION_INSET: number = TAB_BAR_HEIGHT + TAB_BAR_BOTTOM_MARGIN + 12;\n' +
+  'export class NavigationStyle {\n' + navigationMethods.join('\n') + '\n}\n');
+overlay('utils/gallery/GalleryAnalyzer.ets', read('utils/gallery/GalleryAnalyzer.ets')
+  .replace('this.ocrService.recognize(pixelMap)', 'this.ocrService.recognizeUri(uri)'));
+let messageList = read('pages/chat/ChatMessageList.ets')
+  .replace("import { pasteboard } from '@kit.BasicServicesKit';", "import { pasteboard } from '../../platform/Pasteboard';");
+messageList = messageList.replace('  private replayAvailable(): boolean {',
+  "  private replayAvailable(): boolean {\n    if (this.detail.voice.provider === 'android-system-tts') { return this.voiceStatus !== 'synthesizing'; }");
+overlay('pages/chat/ChatMessageList.ets', messageList);
+let homePage = read('pages/home/HomePage.ets');
+for (const name of ['selectedRecommendationId', 'selectedTaskSuggestionId', 'avatarGenerationOpen', 'avatarHistoryOpen', 'selectedAvatarVersionId']) {
+  homePage = homePage.replace('@State ' + name + ':', "@State @Watch('reportAndroidOverlay') " + name + ':');
+}
+homePage = homePage.replace('  private isWideProfileOverview(): boolean {',
+  "  @StorageProp('androidHomeBackRequested') @Watch('handleAndroidBack') private androidBackRequest: number = 0;\n" +
+  "  private reportAndroidOverlay(): void { AppStorage.setOrCreate('androidHomeOverlayOpen', this.avatarGenerationOpen || this.avatarHistoryOpen || this.selectedAvatarVersionId.length > 0 || this.selectedRecommendationId.length > 0 || this.selectedTaskSuggestionId.length > 0); }\n" +
+  "  private handleAndroidBack(): void {\n    if (this.selectedAvatarVersionId.length > 0) { this.selectedAvatarVersionId = ''; }\n" +
+  "    else if (this.avatarHistoryOpen) { this.avatarHistoryOpen = false; }\n    else if (this.avatarGenerationOpen) { this.avatarGenerationOpen = false; }\n" +
+  "    else if (this.selectedTaskSuggestionId.length > 0) { this.selectedTaskSuggestionId = ''; }\n    else { this.selectedRecommendationId = ''; }\n  }\n" +
+  '  private isWideProfileOverview(): boolean {');
+overlay('pages/home/HomePage.ets', homePage);
 let debug = read('utils/DebugSettings.ets').replace("import native from 'libentry.so';\n", '')
   .replace(/^.*native\.(initLogFile|setDebugLogging).*\n/gm, '');
 overlay('utils/DebugSettings.ets', debug);

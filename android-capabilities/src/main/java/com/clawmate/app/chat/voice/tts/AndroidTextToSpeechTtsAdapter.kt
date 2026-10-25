@@ -74,6 +74,7 @@ class AndroidTextToSpeechTtsAdapter(
 
     @Volatile
     private var currentText: String = ""
+    @Volatile private var activeUtteranceId: String = ""
 
     /**
      * Initializes the TTS engine. Safe to call once; a second call while an
@@ -117,22 +118,26 @@ class AndroidTextToSpeechTtsAdapter(
         val active = engine ?: return
         active.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
+                if (utteranceId != activeUtteranceId) return
                 speaking = true
                 listener?.onStarted(utteranceId ?: "")
             }
 
             override fun onDone(utteranceId: String?) {
+                if (utteranceId != activeUtteranceId) return
                 speaking = false
                 listener?.onDone(utteranceId ?: "")
             }
 
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
+                if (utteranceId != activeUtteranceId) return
                 speaking = false
                 listener?.onError(utteranceId ?: "", "语音引擎错误")
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
+                if (utteranceId != activeUtteranceId) return
                 speaking = false
                 listener?.onError(utteranceId ?: "", "语音引擎错误：错误码 $errorCode")
             }
@@ -145,6 +150,7 @@ class AndroidTextToSpeechTtsAdapter(
         if (active == null || !ready) return TtsSpeakResult.NotReady(initState)
         currentText = text
         val utteranceId = "voice-tts-" + pendingUtteranceId.incrementAndGet()
+        activeUtteranceId = utteranceId
         val params = Bundle().apply {
             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
             putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_MUSIC)
@@ -173,6 +179,7 @@ class AndroidTextToSpeechTtsAdapter(
 
     /** Stops current playback. Idempotent. */
     fun stop() {
+        activeUtteranceId = ""
         val active = engine
         if (active == null) return
         try {
@@ -188,6 +195,8 @@ class AndroidTextToSpeechTtsAdapter(
 
     /** Frees the engine and clears listener. Idempotent. */
     fun release() {
+        activeUtteranceId = ""
+        listener = null
         val active = engine
         engine = null
         initState = TtsInitState.UNAVAILABLE

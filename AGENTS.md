@@ -19,6 +19,8 @@ the Android platform can support them.
 - Follow the user's accepted shared-frontend strategy: reuse ArkTS/ArkUI with
   ArkUI-X, and keep Android-specific adapters in Kotlin. The shared Android host
   is shared-app/ and the source preparation/overlays are shared-frontend/.
+  Root Gradle settings manage both hosts. Put reusable Android system capability
+  implementations in android-capabilities/, with no dependency on either app.
   Preserve app/ (the existing Compose product) as a regression baseline until a
   production switch and data migration have been separately verified.
 - Keep commits small and reviewable. Every meaningful phase must end with a

@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Looper
 import com.clawmate.app.gallery.analysis.OcrErrorKind
 import com.clawmate.app.gallery.analysis.OcrResult
 import com.google.mlkit.common.MlKitException
@@ -71,6 +72,11 @@ class LocalOcrRecognizer(
 
     suspend fun recognize(uri: String): OcrResult =
         withContext(Dispatchers.IO) { recognizeBlocking(uri) }
+
+    fun recognizeOnWorkerThread(uri: String): OcrResult {
+        check(Looper.myLooper() != Looper.getMainLooper()) { "本地识别不能阻塞界面线程" }
+        return recognizeBlocking(uri)
+    }
 
     private fun recognizeBlocking(sourceUri: String): OcrResult {
         val uri = runCatching { Uri.parse(sourceUri) }.getOrNull()

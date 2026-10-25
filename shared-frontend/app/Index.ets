@@ -8,7 +8,7 @@ import { CollectionPage } from '../pages/collection/CollectionPage';
 import { TaskPage } from '../pages/task/TaskPage';
 import { ChatPage } from '../pages/chat/ChatPage';
 import { SettingsCenterPage } from '../pages/settings/SettingsCenterPage';
-import { MAIN_TAB_ITEMS, MainTabItem, MainTabIndex, mainTabBackgroundColor } from '../pages/main/MainTabConfig';
+import { MainTabIndex, mainTabBackgroundColor } from '../pages/main/MainTabConfig';
 import { CHAT_MODE_CLOUD_AGENT, CHAT_MODE_LOCAL_INFERENCE } from '../pages/chat/ChatPageTypes';
 import { buildChatContextBudgetSettings, shouldCompressCloudContext } from '../pages/chat/ChatContextBudget';
 import { ChatMessage, ChatSessionSummary, ChatSessionRecord, createChatMessage,
@@ -28,6 +28,11 @@ import { HomeTaskSuggestion, buildHomeTaskSuggestionPrompt, parseHomeTaskSuggest
 import { HomeComfortConcern, HomeComfortChatMessage, buildHomeComfortConcernPrompt,
   parseHomeComfortConcerns, buildHomeComfortChatMessages, parseHomeComfortReply } from '../pages/home/HomeEmotionalSupport';
 import { nowIsoLocal } from '../datamanager/DataManagerUtils';
+import { AppTheme, APP_DARK_MODE_KEY } from '../utils/AppTheme';
+import { NativeCapabilities, AndroidRuntimeSnapshot } from '../platform/NativeCapabilities';
+import { MainNavigation } from '../platform/MainNavigation';
+import { NavigationStyle, MAIN_NAVIGATION_INSET } from '../platform/NavigationStyle';
+import { VoiceInteractionStatus, TtsVoiceRuntimeStatus, createTtsVoiceRuntimeMetadata, createVoiceErrorMetadata } from '../pages/chat/VoiceInteractionTypes';
 
 interface HomeModelState { suggestions: HomeTaskSuggestion[]; concerns: HomeComfortConcern[]; }
 
@@ -56,6 +61,10 @@ struct Index {
   @State localInput: string = '';
   @State deepThinking: boolean = false;
   @State thinking: boolean = false;
+  @State voiceStatus: VoiceInteractionStatus = 'idle';
+  @State voiceMessageId: string = '';
+  @State keyboardHeight: number = 0;
+  @StorageProp('androidHomeOverlayOpen') private homeOverlayOpen: boolean = false;
   @State drawer: boolean = false;
   @State sessions: ChatSessionSummary[] = [];
   @State sessionId: string = '';
@@ -79,17 +88,26 @@ struct Index {
   private generation: number = 0;
   private streamRaw: string = '';
   private saveTimer: number = -1;
+  private runtimeTimer: number = -1;
+  private runtimeBusy: boolean = false;
+  private runtimeGeneration: number = 0;
+  private voiceGeneration: number = 0;
+  private voicePending: boolean = false;
 
   private context(): common.UIAbilityContext { return getContext(this) as common.UIAbilityContext; }
   aboutToAppear(): void {
     this.initialize().catch((error: Error): void => { this.startupError = error.message; });
   }
-  onPageHide(): void { this.saveSettings(); this.persistChat(); }
-  aboutToDisappear(): void { this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
+  onPageShow(): void { this.startRuntime(); }
+  onPageHide(): void { this.stopRuntime(); this.stopVoice(); this.saveSettings(); this.persistChat(); }
+  aboutToDisappear(): void { this.stopRuntime(); this.stopVoice(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
   onBackPress(): boolean {
     this.saveSettings(); this.persistChat();
     if (Number(router.getLength()) > 1) { router.back(); return true; }
     if (this.drawer) { this.drawer = false; return true; }
+    if (this.tab === MainTabIndex.Home && this.homeOverlayOpen) {
+      AppStorage.setOrCreate('androidHomeBackRequested', Date.now()); return true;
+    }
     if (this.tab === MainTabIndex.Mine && this.settingsSection >= 0) { this.settingsSection = -1; return true; }
     if (this.tab === MainTabIndex.Task && this.configViewOpen) {
       AppStorage.setOrCreate('androidWorkflowBackRequested', Date.now()); return true;
@@ -101,6 +119,7 @@ struct Index {
   private async initialize(): Promise<void> {
     let context = this.context();
     SettingsStore.initialize(context);
+    AppTheme.syncSystemMode(context);
     await PrivacyConsent.initialize(context);
     this.onboarding = AppStorage.get<string>(FIRST_LAUNCH_ONBOARDING_STORAGE_KEY) !== FIRST_LAUNCH_ONBOARDING_VERSION;
     this.facade = new DataManagerFacade(context.filesDir);
@@ -111,7 +130,80 @@ struct Index {
     this.reloadSessions();
     if (this.sessions.length > 0) { await this.selectSession(this.sessions[0].id); }
     this.ready = true;
+    this.startRuntime();
   }
+
+  private startRuntime(): void {
+    if (this.runtimeTimer >= 0) { return; }
+    this.runtimeTimer = setInterval((): void => { this.pollRuntime(); }, 200);
+    this.pollRuntime();
+  }
+  private stopRuntime(): void {
+    this.runtimeGeneration += 1;
+    if (this.runtimeTimer >= 0) { clearInterval(this.runtimeTimer); this.runtimeTimer = -1; }
+  }
+  private async pollRuntime(): Promise<void> {
+    if (this.runtimeBusy) { return; }
+    this.runtimeBusy = true;
+    let generation = this.runtimeGeneration;
+    try {
+      let snapshot = await NativeCapabilities.runtime();
+      if (generation !== this.runtimeGeneration || this.runtimeTimer < 0) { return; }
+      this.keyboardHeight = snapshot.keyboardHeight;
+      AppStorage.setOrCreate(APP_DARK_MODE_KEY, snapshot.dark);
+      if (!this.voicePending) { this.applyVoiceSnapshot(snapshot); }
+    } catch (error) { this.recordRuntime('安卓能力状态读取失败'); }
+    finally { this.runtimeBusy = false; }
+  }
+  private applyVoiceSnapshot(snapshot: AndroidRuntimeSnapshot): void {
+    if (snapshot.voiceMessageId.length === 0 || snapshot.voiceMessageId !== this.voiceMessageId) { return; }
+    this.voiceStatus = snapshot.voiceStatus as VoiceInteractionStatus;
+    this.updateVoiceMetadata(snapshot.voiceError);
+  }
+  private updateVoiceMetadata(error: string = ''): void {
+    let message = this.messages.find((item: ChatMessage): boolean => item.id === this.voiceMessageId);
+    if (message === undefined) { return; }
+    let status: TtsVoiceRuntimeStatus = this.voiceStatus === 'speaking' ? 'playing' : this.voiceStatus === 'synthesizing' ? 'synthesizing' :
+      this.voiceStatus === 'paused' ? 'paused' : 'ready';
+    if (message.voice?.status === (this.voiceStatus === 'error' ? 'error' : status) && (message.voice?.error || '') === error) { return; }
+    message.voice = this.voiceStatus === 'error' ? createVoiceErrorMetadata('tts', 'android-system-tts', error, Date.now()) :
+      createTtsVoiceRuntimeMetadata('android-system-tts', 'system', '', status, Date.now());
+    this.messages = this.messages.slice(); this.scheduleChatSave();
+  }
+  private stopVoice(): void {
+    this.voiceGeneration += 1; this.voicePending = false;
+    if (this.voiceStatus === 'speaking' || this.voiceStatus === 'synthesizing') { this.voiceStatus = 'paused'; }
+    this.updateVoiceMetadata();
+    NativeCapabilities.stopSpeech().catch(() => {});
+  }
+  private async playVoice(id: string, text: string, replay: boolean = false): Promise<void> {
+    if (!replay && this.voiceMessageId === id && this.voiceStatus === 'speaking') { this.stopVoice(); return; }
+    this.stopVoice();
+    let generation = this.voiceGeneration;
+    this.voiceMessageId = id; this.voiceStatus = 'synthesizing'; this.voicePending = true; this.updateVoiceMetadata();
+    try {
+      await NativeCapabilities.initializeSpeech();
+      let deadline = Date.now() + 10000;
+      let ready = false;
+      while (Date.now() < deadline && generation === this.voiceGeneration) {
+        let snapshot = await NativeCapabilities.runtime();
+        if (snapshot.ttsEngineState === 'READY') { ready = true; break; }
+        if (snapshot.ttsEngineState === 'ENGINE_TTS_ERROR' || snapshot.ttsEngineState === 'UNAVAILABLE') {
+          throw new Error(snapshot.voiceError || '请在系统设置中安装或启用中文朗读引擎');
+        }
+        await NativeCapabilities.wait();
+      }
+      if (generation !== this.voiceGeneration) { return; }
+      if (!ready) { throw new Error('语音引擎初始化超时，请稍后重试'); }
+      await NativeCapabilities.speak(id, text);
+    } catch (error) {
+      if (generation === this.voiceGeneration) {
+        this.voiceStatus = 'error'; this.updateVoiceMetadata((error as Error).message);
+        showToastSafely('朗读失败：' + (error as Error).message);
+      }
+    } finally { if (generation === this.voiceGeneration) { this.voicePending = false; } }
+  }
+  private navigationInset(): number { return this.keyboardHeight > 0 ? 0 : MAIN_NAVIGATION_INSET; }
 
   private completeOnboarding(): void {
     try {
@@ -124,7 +216,7 @@ struct Index {
   private saveSettings(): void {
     try { SettingsStore.save(); } catch (error) { if (this.ready) { showToastSafely('设置保存失败，请重试'); } }
   }
-  private onNavigationChanged(): void { this.saveSettings(); this.persistChat(); this.drawer = false; }
+  private onNavigationChanged(): void { this.stopVoice(); this.saveSettings(); this.persistChat(); this.drawer = false; }
   private reloadData(): void {
     if (this.facade === null) { return; }
     this.profile = this.facade.loadHomeViewModel();
@@ -232,12 +324,14 @@ struct Index {
     this.saveTimer = setTimeout((): void => { this.saveTimer = -1; this.persistChat(); }, 350);
   }
   private createSession(mode: string): void {
+    this.stopVoice(); this.voiceMessageId = ''; this.voiceStatus = 'idle';
     this.cancelChat(); this.persistChat();
     this.activeRecord = ChatSessionStorage.createSession(this.context().filesDir, mode);
     this.mode = mode; this.sessionId = this.activeRecord.id; this.messages = []; this.drawer = false;
     this.reloadSessions();
   }
   private async selectSession(id: string): Promise<void> {
+    this.stopVoice(); this.voiceMessageId = ''; this.voiceStatus = 'idle';
     this.cancelChat(); this.persistChat();
     let record = ChatSessionStorage.loadSession(this.context().filesDir, id);
     if (record === null) { showToastSafely('会话不存在或读取失败'); return; }
@@ -248,7 +342,7 @@ struct Index {
     let choice = await promptAction.showDialog({ title: '删除会话', message: '删除后无法恢复，是否继续？',
       buttons: [{ text: '取消', color: '#65718B' }, { text: '删除', color: '#B42318' }] });
     if (choice.index !== 1) { return; }
-    if (id === this.sessionId) { this.cancelChat(); this.activeRecord = null; this.sessionId = ''; this.messages = []; }
+    if (id === this.sessionId) { this.stopVoice(); this.voiceMessageId = ''; this.cancelChat(); this.activeRecord = null; this.sessionId = ''; this.messages = []; }
     if (!ChatSessionStorage.deleteSession(this.context().filesDir, id)) { showToastSafely('删除会话失败'); }
     this.reloadSessions();
     if (this.activeRecord === null && this.sessions.length > 0) { await this.selectSession(this.sessions[0].id); }
@@ -333,15 +427,8 @@ struct Index {
     } catch (error) { showToastSafely((error as Error).message, 3000); }
   }
 
-  @Builder private TabLabel(item: MainTabItem) {
-    Column({ space: 3 }) {
-      Image($r('app.media.' + item.icon)).width(23).height(23)
-      Text(item.label).fontSize(11).fontColor(this.tab === item.index ? '#5B5CE2' : '#65718B')
-    }.width('100%').height(58).justifyContent(FlexAlign.Center)
-  }
-
   @Builder private Home() {
-    HomePage({ comfortChatStore: this.comfort, profile: this.profile, avatarVersions: this.avatarVersions,
+    HomePage({ navigationBottomInset: this.navigationInset(), comfortChatStore: this.comfort, profile: this.profile, avatarVersions: this.avatarVersions,
       taskSuggestions: this.suggestions, taskSuggestionsLoading: this.suggestionsLoading,
       comfortConcerns: this.concerns, comfortConcernsLoading: this.concernsLoading,
       onOpenTasks: (): void => { this.tab = MainTabIndex.Task; },
@@ -360,7 +447,8 @@ struct Index {
     })
   }
   @Builder private Chat() {
-    ChatPage({ chatMode: $mode, cloudUserInput: $cloudInput, userInput: $localInput, chatDeepThinkingEnabled: $deepThinking,
+    ChatPage({ navigationBottomInset: this.navigationInset(), voiceStatus: this.voiceStatus, voiceActiveMessageId: this.voiceMessageId,
+      chatMode: $mode, cloudUserInput: $cloudInput, userInput: $localInput, chatDeepThinkingEnabled: $deepThinking,
       sessions: this.sessions, activeSessionId: this.sessionId, messages: this.messages,
       cloudThinking: this.thinking, sessionDrawerOpen: this.drawer,
       onRunCloudPlanner: async (): Promise<void> => { await this.sendMessage(); },
@@ -372,7 +460,7 @@ struct Index {
       onRenameSession: async (id: string, title: string): Promise<boolean> => { return await this.renameSession(id, title); },
       onToggleSessionPinned: async (id: string): Promise<void> => { await this.pinSession(id); },
       onSwitchMode: async (mode: string): Promise<void> => {
-        this.cancelChat(); this.mode = mode;
+        this.stopVoice(); this.cancelChat(); this.mode = mode;
         if (mode === CHAT_MODE_LOCAL_INFERENCE) { this.unavailable('本地模型推理'); }
       },
       onToggleThinking: (id: string): void => { this.messages = toggleChatMessageThinkingCollapsed(this.messages, id); this.persistChat(); },
@@ -383,8 +471,8 @@ struct Index {
       onTakePhotoAttachment: async (): Promise<void> => { this.unavailable('拍照附件'); },
       onPickImageAttachment: async (): Promise<void> => { this.unavailable('图片附件'); },
       onToggleVoiceInput: async (): Promise<void> => { this.unavailable('语音识别'); },
-      onPlayVoiceMessage: async (): Promise<void> => { this.unavailable('语音朗读'); },
-      onReplayVoiceMessage: async (): Promise<void> => { this.unavailable('语音重播'); },
+      onPlayVoiceMessage: async (id: string, text: string): Promise<void> => { await this.playVoice(id, text); },
+      onReplayVoiceMessage: async (id: string, text: string): Promise<void> => { await this.playVoice(id, text, true); },
       onOpenRuntimeLogs: (): void => { router.pushUrl({ url: 'pages/LogView' }); }
     })
   }
@@ -418,6 +506,26 @@ struct Index {
     })
   }
 
+  @Builder private MainTabContents() {
+        TabContent() { this.Home() }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(0))
+        TabContent() {
+          CollectionPage({ collectionModule: $collectionScene, viewModels: this.collectionViews, refreshing: this.refreshing,
+            onRefresh: (): void => { this.refreshCollection(); },
+            onOpenDataCollectionSettings: (): void => { this.settingsSection = 1; this.tab = MainTabIndex.Mine; },
+            onRunWechatAutoSummary: async (): Promise<void> => { throw new Error('安卓微信自动采集尚未接入，未读取聊天数据'); }
+          })
+        }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(1))
+        TabContent() { this.Chat() }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(2))
+        TabContent() {
+          TaskPage({ taskScene: $taskScene, configViewOpen: $configViewOpen, active: this.tab === MainTabIndex.Task,
+            onEnsureDesktopCompanion: async (): Promise<boolean> => { this.unavailable('桌面控制'); return false; },
+            onRunWorkflow: async (): Promise<void> => { throw new Error('安卓工作流执行器尚未接入；配置可以浏览、编辑和保存'); },
+            onRunPhoneWorkflow: async (): Promise<void> => { throw new Error('安卓手机自动控制尚未接入；任务未执行'); }
+          })
+        }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(3))
+        TabContent() { this.Settings() }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(4))
+  }
+
   build() {
     if (!this.ready) {
       Column({ space: 16 }) {
@@ -427,27 +535,9 @@ struct Index {
     } else if (this.onboarding) {
       FirstLaunchOnboarding({ onComplete: (): void => { this.completeOnboarding(); } })
     } else {
-      Tabs({ index: this.tab, barPosition: BarPosition.End }) {
-        TabContent() { this.Home() }.tabBar(this.TabLabel(MAIN_TAB_ITEMS[0]))
-        TabContent() {
-          CollectionPage({ collectionModule: $collectionScene, viewModels: this.collectionViews, refreshing: this.refreshing,
-            onRefresh: (): void => { this.refreshCollection(); },
-            onOpenDataCollectionSettings: (): void => { this.settingsSection = 1; this.tab = MainTabIndex.Mine; },
-            onRunWechatAutoSummary: async (): Promise<void> => { throw new Error('安卓微信自动采集尚未接入，未读取聊天数据'); }
-          })
-        }.tabBar(this.TabLabel(MAIN_TAB_ITEMS[1]))
-        TabContent() { this.Chat() }.tabBar(this.TabLabel(MAIN_TAB_ITEMS[2]))
-        TabContent() {
-          TaskPage({ taskScene: $taskScene, configViewOpen: $configViewOpen, active: this.tab === MainTabIndex.Task,
-            onEnsureDesktopCompanion: async (): Promise<boolean> => { this.unavailable('桌面控制'); return false; },
-            onRunWorkflow: async (): Promise<void> => { throw new Error('安卓工作流执行器尚未接入；配置可以浏览、编辑和保存'); },
-            onRunPhoneWorkflow: async (): Promise<void> => { throw new Error('安卓手机自动控制尚未接入；任务未执行'); }
-          })
-        }.tabBar(this.TabLabel(MAIN_TAB_ITEMS[3]))
-        TabContent() { this.Settings() }.tabBar(this.TabLabel(MAIN_TAB_ITEMS[4]))
-      }.barMode(BarMode.Fixed).barHeight(64).scrollable(false)
-        .onChange((index: number): void => { this.tab = index; })
-        .width('100%').height('100%').backgroundColor(mainTabBackgroundColor(this.tab, this.messages.length > 0))
+      MainNavigation({ selectedIndex: $tab, showBar: !this.drawer && this.keyboardHeight <= 0,
+        pageBackgroundColor: mainTabBackgroundColor(this.tab, this.messages.length > 0),
+        contentBuilder: (): void => { this.MainTabContents(); } })
     }
   }
 }
