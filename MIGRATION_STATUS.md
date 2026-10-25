@@ -411,3 +411,12 @@
 - 主机检查为 shared-frontend/verify.mjs 6 项与原始 verify-contracts.mjs 8 项均通过；包括哈希、路由、偏好恢复/写失败重试、上下文边界、流式展示及 JSON/取消等。完整脚本实际运行 Hvigor assembleHap 与 Gradle assembleDebug 成功；最终日志及产物哈希见 shared-frontend/verification-results.json，详细截图/XML/日志在 .arkui-x-validation/application/。
 - 失败如实保留：最初缺 SDK 路径和 entry 包元数据导致配置失败，修正后进入编译；空默认值对象/可空偏好/焦点 API/文件 URI/返回栈长度类型错误均已修复。首次安装误用 APK 文件名未安装，读取 output-metadata 后改用真实产物并成功；以上不计为通过。
 - 尚未作生产切换。真实云/图片服务、照片参考上传、自动摘要、语音、通知、HMS/A2A、HDC/GUI/Python、MNN/HiAI、其他手机厂商及 iOS 均有明确未验收/未接入边界。详见 shared-frontend/README.md 的逐功能映射。前一阶段提交：86317b3。
+
+## 2026-10-26 SH-02：统一 Android 工程与共用能力
+
+- 根 Gradle 工程同时管理 app、shared-app 与 android-capabilities，移除共享宿主独立的 settings.gradle。共享构建脚本改为根工程的 :shared-app:assembleDebug。
+- 旧版真实 Android TTS、OCR 引擎、OCR 结果/映射/解码逻辑抽到共用能力库；Compose 的 OCR 仅保留领域模型到 URI 的薄适配。保留公开包名，避免无关调用点重命名；没有两份实际引擎。修复识别器构造失败时输入流未关闭的问题。
+- 原 20 项 OCR 单元测试随实现迁入能力库，新增 4 项后台操作检查，覆盖并发上限、生命周期、一次性交付、取消后的迟到结果与失败不变成文本。该阶段尚未接通 ArkTS 的语音/OCR 调用，不把工程依赖视为功能验收。
+- 实际执行 :android-capabilities:testDebugUnitTest :app:assembleDebug :shared-app:assembleDebug 成功（architecture-extraction-build-2.log，8m7s）；新增操作检查后单独重跑 :android-capabilities:testDebugUnitTest 成功（48s），共 24 项零失败/错误/跳过。
+- 首次 --offline 构建因 Android library 插件标记尚未缓存而失败；允许联网的同一构建完成依赖解析并成功，失败记录保留。未改动旧包数据、授权、端点或模型配置。
+- 架构和数据归属记录在 docs/SHARED_ARCHITECTURE.md；两个安装包继续保留，生产包名切换和旧数据导入另行验证。前一阶段提交：ff68bde。

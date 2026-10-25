@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ClawMate"
 include(":app")
+include(":shared-app", ":android-capabilities")

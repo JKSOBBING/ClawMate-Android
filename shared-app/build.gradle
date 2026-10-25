@@ -20,7 +20,10 @@ android {
     sourceSets.main { assets.srcDirs = [new File(runtimeDir, 'src/main/assets')]; jniLibs.srcDirs = [new File(runtimeDir, 'libs')] }
     packagingOptions { jniLibs { useLegacyPackaging true } }
 }
-dependencies { implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar']) }
+dependencies {
+    implementation project(':android-capabilities')
+    implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar'])
+}
 tasks.named('preBuild').configure {
     doFirst {
         if (!new File(runtimeDir, 'src/main/assets/arkui-x/entry/ets/modules.abc').isFile()) {

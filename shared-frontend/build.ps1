@@ -26,7 +26,7 @@ try {
     } finally { Pop-Location }
     python experiments/arkui-x/package-android.py --project $projectRoot --sdk (Join-Path $scratchRoot 'sdk/20/arkui-x') --android-app (Join-Path $scratchRoot 'application/runtime')
     if ($LASTEXITCODE -ne 0) { throw 'Runtime packaging failed' }
-    $gradleArguments = @('-p', 'shared-app', 'assembleDebug', '--no-daemon', '--console=plain')
+    $gradleArguments = @(':shared-app:assembleDebug', '--no-daemon', '--console=plain')
     if ($Offline) { $gradleArguments += '--offline' }
     & ./gradlew.bat @gradleArguments
     if ($LASTEXITCODE -ne 0) { throw 'Android build failed' }
