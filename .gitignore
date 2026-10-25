@@ -40,3 +40,9 @@ signing/
 
 # Phase-22 local backup of the delivery worktree gitdir pointer (target .git is untouched).
 .git-target-pointer
+
+# Isolated ArkUI-X verification: SDKs, downloaded references, generated packages and evidence.
+.arkui-x-validation/
+experiments/arkui-x/**/oh_modules/
+experiments/arkui-x/**/.hvigor/
+experiments/arkui-x/**/local.properties
