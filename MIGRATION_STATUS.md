@@ -386,3 +386,14 @@
 - 官方 ArkUI-X 6.0.2.118 / API 22 SDK 下载并校验成功；SDK 和所有验证输入/输出均隔离且忽略。Android SDK、JDK 17、PKB110 真机可用，ArkTS 编译工具仍在准备；旧官方 SDK 管理器只能列出 API 7–9。
 - 两个已有远程 SSH 连接均超时。最初主机检查的长命令未启动（Windows 命令长度限制），改为可重复脚本后通过。未复制疑似凭据配置、签名文件或用户数据。
 - 详细命令、适配边界和结果见 experiments/arkui-x/README.md。尚未决定替换前端架构。
+
+## 2026-10-25 ArkUI-X 复用验证：编译与真机
+
+- 在用户授权的 Windows 隔离目录完成官方 OpenHarmony API 20 + ArkUI-X API 20 匹配工具链，6 个 SDK 包 SHA-256 均验证。API 23/22 混搭被插件拒绝，未声称 API 22 已验证；初始平台 API 编译错误和首次 Gradle 离线缺依赖均保留记录。
+- 新增源码准备、Android 配置/打包脚本、原生平台桥接、进程内回环协议夹具和设备结果清单。77 个只读上游输入哈希锁定；最终基准 53 个 ArkTS 文件中 41 个逐字不变、8 个适配、4 个自编入口/平台接口。不是整项目复用率；HomePage 原样运行，ChatPage 适配输入法/焦点。
+- 原始传输在 Android 真机出现跨块中文损坏和取消 Promise 不结束，实验副本修正流式 UTF-8 状态与主动取消回调。隐私重授权失败来自验证器未等待保存，已修正验证器；PrivacyConsent 和 ChatSessionStorage 原样保留。鸿蒙源仓库、现有 Compose 产品及用户数据未改动。
+- 实际 Hvigor assembleHap 成功（修正版本 27.752s），Gradle :app:assembleDebug 成功（27s）；PKB110 / Android 16 安装并运行独立 com.clawmate.reuseprobe。8 项主机契约和最终 12 项真机夹具检查通过，覆盖桥接、登录门控、分块 SSE/工具调用、存储、HTTP 错误、取消、撤回和超时。不是实际模型或账号验收。
+- 本包进程停止后冷启动 660ms，原文件存储恢复 2 条测试消息。模拟共享源码更新仅修改生成副本 HomePage 文字，HAP/APK 重建均成功；真机 XML/截图确认文字同步，4 个 Android 原生源文件哈希不变。手机保留带“同步验证”标记的实验包；基准和模拟样本分别统计。
+- 运行结果与 APK/截图哈希见 experiments/arkui-x/verification-results.json；实际日志、SDK、原始输入、APK、截图全部忽略。约 86 MiB 调试 APK 包含全量插件，未作正式体积和性能验收。
+- 用户手动完成手机安全拼图。自动审批拒绝过端口映射与自动启动的组合操作，仅给出 blocked by policy；改用应用内回环夹具和页面按钮，未建立端口映射。旧主机夹具已停止。
+- 建议继续共享 ArkTS 界面/业务代码并隔离原生接口；保留 Compose 产品作为现阶段基线。图库/完整数据管理、工作流/代理、真实账号/模型、HDC/GUI、Python、MNN 和其他操作系统尚未验证。详细复现步骤和原始失败见 experiments/arkui-x/README.md。前一阶段提交：9ff69dd。

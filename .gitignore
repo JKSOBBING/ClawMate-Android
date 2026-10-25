@@ -43,6 +43,7 @@ signing/
 
 # Isolated ArkUI-X verification: SDKs, downloaded references, generated packages and evidence.
 .arkui-x-validation/
+.hvigor/
 experiments/arkui-x/**/oh_modules/
 experiments/arkui-x/**/.hvigor/
 experiments/arkui-x/**/local.properties
