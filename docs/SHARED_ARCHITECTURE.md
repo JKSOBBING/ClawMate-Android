@@ -73,3 +73,8 @@
 接收器不执行任务；宿主验证已发出的token/到期时间、前台及解锁状态，用户确认后先持久化当日领取收据，
 再启动原任务页的有界批量。只有ArkTS成功保存非空summary日志才通知原生更新时间。
 范围与时序限制见[采集提醒移植](COLLECTION_REMINDERS.md)。
+
+工作流`vlm_qa`通过可选`WorkflowModelTool`进入每次运行的邮箱，ArkTS在逐次确认后复用
+原云客户端和Decider设置处理图片；Kotlin等待有界回复，超时、取消或结束后拒绝迟到回复。
+模型原文只作为步骤数据，ArkTS单独标记模型来源并独占写入运行结果与成功摘要。
+Compose不注入模型端口；原GUI/HDC节点仍受限。兼容边界见[视觉问答移植](WORKFLOW_VLM_MIGRATION.md)。

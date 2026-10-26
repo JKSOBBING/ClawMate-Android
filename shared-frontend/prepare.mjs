@@ -186,6 +186,18 @@ overlay('datamanager/DataPipelineModelClient.ets', applyPatches(read('datamanage
   ['        dataManagerInfo(`Model request response:', '        config.ensureActive?.();\n        dataManagerInfo(`Model request response:']
 ]));
 let taskPage = read('pages/task/TaskPage.ets');
+taskPage = replaceChecked(taskPage, "import { AppTheme }", "import { WorkflowVlm } from '../../platform/WorkflowVlm';\nimport { AppTheme }");
+taskPage = replaceChecked(taskPage, '  @Builder ToolEditor() {', `  private async pickAndroidWorkflowImage(): Promise<void> {
+    let selected = this.selectedPath; let task = this.editingTaskId;
+    try {
+      let path = await WorkflowVlm.pickImage(this.filesDir, (): boolean => !this.editorOpen || this.selectedPath !== selected || this.editingTaskId !== task);
+      if (path.length > 0 && this.editorOpen && this.selectedPath === selected && this.editingTaskId === task) { this.updateSelectedToolInput('image', path); }
+    } catch (error) { showToastSafely((error as Error).message); }
+  }
+  @Builder ToolEditor() {`);
+taskPage = replaceChecked(taskPage, "        this.FieldLabel('图片变量')", `        this.FieldLabel('图片引用（Android 使用本机图片）')
+        Button('选择本机图片').fontSize(12).onClick(() => { this.pickAndroidWorkflowImage(); })
+        Text('使用已保存的 Decider 视觉模型；每次发送前确认。GUI 截图仍受限。').fontSize(11).fontColor(AppTheme.text('#6F7584'))`);
 taskPage = applyPatches(taskPage, [
   ['      this.lastAutomaticReminderRequest = request;', "      let choice = await promptAction.showDialog({ title: '执行已开启的任务？', message: '将依次执行已开启的 Android 有界任务；GUI 与未配置模型工具仍会阻断。可停止执行。', buttons: [{ text: '取消', color: '#65718B' }, { text: '执行任务', color: '#276EF1' }] });\n      if (choice.index !== 1) { CollectionReminderService.clearRequest(request); return; }\n      if (!this.active || !this.reminderWindowReady || this.reminderRequest !== request) { return; }\n      this.lastAutomaticReminderRequest = request;"],
   ['!CollectionReminderService.claim(reminderRequest)', '!await CollectionReminderService.claim(reminderRequest)'],

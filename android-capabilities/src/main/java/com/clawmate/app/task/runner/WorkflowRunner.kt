@@ -6,6 +6,8 @@ import com.clawmate.app.task.model.WorkflowStep
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -14,6 +16,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -27,7 +30,8 @@ import java.time.format.DateTimeFormatter
  *   - `loop`  -> bounded iteration over nested steps with `loop.index`/`loop.last`;
  *   - `if`    -> deterministic condition evaluation driving then/else branches;
  *   - `tool`  -> only a deterministic `echo` no-op and a real `summary` output
- *                step; any VLM/model tool is NOT_CONFIGURED.
+ *                step; `vlm_qa` uses an optional host model port. Without it,
+ *                model steps remain NOT_CONFIGURED.
  *
  * Every GUI / HDC / open-app / device-control step (`gui_task`, and `gui_action`
  * screenshot / swipe / click) is *never* executed and *never* fabricated: it is
@@ -106,6 +110,7 @@ class WorkflowRunnerImpl(
     private val dailyLogSink: WorkflowDailyLogSink? = null,
     /** Date provider for the `YYYY-MM-DD` run day (injectable for tests). */
     private val runDateProvider: () -> String = { LazyIsoDate.now() },
+    private val modelTool: WorkflowModelTool? = null,
 ) : WorkflowRunner {
 
     /** Injectable time source so tests avoid real delays. */
@@ -123,6 +128,8 @@ class WorkflowRunnerImpl(
         var blockedMessage: String = "",
         /** Phase 41: real structured summary output exposed by the workflow. */
         var resultSummary: String = "",
+          var loopIndex: Int = 0,
+          var loopLast: Boolean = false,
         val summaryStepId: MutableList<String> = mutableListOf(),
     )
 
@@ -214,7 +221,7 @@ class WorkflowRunnerImpl(
                 "GUI task automation (${step.taskDescription ?: step.name ?: ""}) requires a screenshot-driven VLM decider loop, which the safe device adapter does not orchestrate; only discrete gui_action protocol calls are exposed."
             )
             "gui_action" -> executeGuiAction(step, deadlineNanos)
-            "tool" -> executeTool(session, step)
+            "tool" -> executeTool(session, step, deadlineNanos)
             "loop" -> executeLoop(session, step, deadlineNanos)
             "if" -> executeIf(session, step, deadlineNanos)
             else -> StepOutcome.Unsupported("unknown step type '${step.type}' cannot be executed by this bounded runner.")
@@ -307,7 +314,7 @@ class WorkflowRunnerImpl(
             response.height?.let { put("height", JsonPrimitive(it)) }
         }
 
-    private suspend fun executeTool(session: Session, step: WorkflowStep): StepOutcome {
+    private suspend fun executeTool(session: Session, step: WorkflowStep, deadlineNanos: Long): StepOutcome {
         val toolName = step.toolName ?: return StepOutcome.Unsupported("tool step without tool_name.")
         return when (toolName) {
             // Deterministic no-op used to exercise the runner in tests.
@@ -318,10 +325,50 @@ class WorkflowRunnerImpl(
             // and never inferred from bare `echo`. A blank/missing text keeps the
             // summary empty so nothing is written.
             "summary" -> executeSummaryTool(session, step)
+            "vlm_qa" -> executeModelTool(session, step, deadlineNanos)
             else -> StepOutcome.NotConfigured(
                 "tool '$toolName' requires a cloud VLM/model that is not configured on this device; GUI instrumentation is unavailable."
             )
         }
+    }
+
+    private suspend fun executeModelTool(session: Session, step: WorkflowStep, deadline: Long): StepOutcome {
+        val port = modelTool ?: return StepOutcome.NotConfigured("vlm_qa未配置；请使用共享版并在发送前确认视觉模型及图片")
+        return try {
+            val inputs = step.raw["inputs"] as? JsonObject ?: error("vlm_qa需要inputs")
+            require(inputs.keys.all { it in setOf("mode", "question", "image", "json_schema", "blocking") }) { "vlm_qa包含不支持的输入字段" }
+            fun text(key: String, fallback: String = ""): String {
+                val raw = inputs[key] ?: return fallback
+                require(raw is JsonPrimitive && raw.isString) { "vlm_qa的${key}必须是文本" }
+                val value = WorkflowVariableResolver.resolve(raw.content) { expression ->
+                    WorkflowVariableResolver.lookup(session.stepOutputs, session.context, session.defaults, session.loopIndex, session.loopLast, expression)
+                }.trim()
+                require(!value.contains("\u0024{")) { "vlm_qa的${key}存在未解析变量" }
+                return value
+            }
+            val mode = text("mode", "answer")
+            val question = text("question")
+            val image = text("image")
+            require(mode in setOf("answer", "summary")) { "vlm_qa仅支持answer和summary" }
+            require(question.length in 1..8000 && image.length in 1..2000) { "vlm_qa需要有界question及本机图片引用" }
+            val schema = inputs["json_schema"]?.let { require(it is JsonObject && it.toString().length <= 8000) { "json_schema必须是有界JSON对象" }; it }
+            val remaining = ((deadline - nowNanos()) / 1_000_000L).coerceAtMost(60_000)
+            require(remaining > 0) { "工作流已超时" }
+            val response = withTimeout(remaining) { port.evaluate(WorkflowModelRequest("", mode, question, image, schema)) }.trim()
+            require(response.length in 1..16000) { "模型返回为空或超出限制" }
+            val structured = if (schema == null) null else (Json.parseToJsonElement(response) as? JsonObject
+                ?: error("模型未返回要求的JSON对象"))
+            if (mode == "summary") {
+                val summary = (structured?.get("summary") as? JsonPrimitive)?.contentOrNull ?: response
+                session.resultSummary = (session.resultSummary + "\n" + summary).trim().take(2000)
+            }
+            StepOutcome.Success(buildJsonObject {
+                put("tool_name", "vlm_qa"); put("mode", mode); put("question", question); put("response", response)
+                structured?.let { put("structured_output", it) }
+            })
+        } catch (timeout: TimeoutCancellationException) { StepOutcome.Failure("视觉问答超过工作流时间上限") }
+          catch (cancelled: CancellationException) { throw cancelled }
+          catch (error: Exception) { StepOutcome.Failure(error.message ?: "视觉模型调用失败") }
     }
 
     /** Resolve the real summary text of an explicit `summary` tool step. */
@@ -361,12 +408,16 @@ class WorkflowRunnerImpl(
             for (sub in step.steps) {
                 if (session.blocked != null) return StepOutcome.Container("stopped")
                 if (!ensureBudget(session, sub, "loop step")) return StepOutcome.Container("budget")
-                val out = execute(session, sub, deadlineNanos)
+                val previousIndex = session.loopIndex; val previousLast = session.loopLast
+                session.loopIndex = i + 1; session.loopLast = loopLast
+                val out = try { execute(session, sub, deadlineNanos) }
+                    finally { session.loopIndex = previousIndex; session.loopLast = previousLast }
                 when (out) {
                     is StepOutcome.Success -> {
-                        val resolved = out.output.resolve(session, loopIndex = i + 1, loopLast = loopLast)
+                        val resolved = if (sub.toolName == "vlm_qa") out.output else out.output.resolve(session, loopIndex = i + 1, loopLast = loopLast)
                         session.stepOutputs["${step.id}.${i + 1}"] = resolved
-                        session.results += StepResult(sub.id, sub.type, RunStatus.SUCCESS, sub.escapedName)
+                        if (sub.toolName == "vlm_qa") session.stepOutputs[sub.id] = resolved
+                        session.results += StepResult(sub.id, sub.type, RunStatus.SUCCESS, sub.escapedName, output = if (sub.toolName == "vlm_qa") resolved else null)
                     }
                     is StepOutcome.Container -> { /* walked itself */ }
                     else -> {
@@ -421,7 +472,7 @@ class WorkflowRunnerImpl(
         when (outcome) {
             is StepOutcome.Success -> {
                 session.stepOutputs[step.id] = outcome.output
-                session.results += StepResult(step.id, step.type, RunStatus.SUCCESS, step.escapedName)
+                session.results += StepResult(step.id, step.type, RunStatus.SUCCESS, step.escapedName, output = if (step.toolName == "vlm_qa") outcome.output else null)
             }
             is StepOutcome.Container -> { /* containers report via their internal branch results */ }
             is StepOutcome.Unsupported -> {

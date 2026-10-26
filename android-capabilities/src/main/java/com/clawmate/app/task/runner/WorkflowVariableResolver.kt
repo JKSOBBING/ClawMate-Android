@@ -43,6 +43,7 @@ data class StepResult(
     val status: RunStatus,
     val note: String,           // short description / reason
     val detail: String = "",    // longer reason text for blocked steps
+    val output: JsonObject? = null,
 )
 
 /** Immutable user-facing result of a workflow run. */
@@ -116,7 +117,7 @@ object WorkflowVariableResolver {
                 val out = stepOutputs[stepId] ?: return null
                 if (parts.getOrNull(2) == "output") {
                     val field = parts.drop(3).joinToString(".")
-                    out[field]
+                    out[field] ?: parts.drop(3).fold(out as JsonElement?) { current, key -> (current as? JsonObject)?.get(key) }
                 } else null
             }
             else -> null

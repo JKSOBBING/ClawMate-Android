@@ -24,6 +24,7 @@ import com.clawmate.platform.LocalImageAccess
 import com.clawmate.platform.NativeOperations
 import com.clawmate.platform.SharedNativeWork
 import com.clawmate.platform.reminder.CollectionReminderEngine
+import com.clawmate.app.task.runner.WorkflowModelMailbox
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.Closeable
@@ -34,6 +35,7 @@ class PlatformBridge(private val activity: StageActivity) :
     private val ocrJobs = NativeOperations<OcrResult>()
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
     private val workflowJobs = NativeOperations<WorkflowRunResult>(1)
+    private val workflowModels = java.util.concurrent.ConcurrentHashMap<String, WorkflowModelMailbox>()
     private var asr: AndroidSpeechRecognizerAsrAdapter? = null
     private val meeting = MeetingBridge(activity as SharedActivity)
     private val reminders = CollectionReminderEngine(activity)
@@ -129,7 +131,13 @@ class PlatformBridge(private val activity: StageActivity) :
     fun imagePrepareCancel(id: String): Boolean { imageJobs.cancel(id); return true }
     fun workflowStart(raw: String): String {
         require(raw.length <= 256000) { "工作流配置过长" }
-        return workflowJobs.start { SharedNativeWork.runWorkflow(raw) }
+        val mailbox = WorkflowModelMailbox()
+        return try {
+            val id = workflowJobs.start { try { SharedNativeWork.runWorkflow(raw, mailbox) } finally { mailbox.close() } }
+            workflowModels.keys.filter { it != id }.forEach { workflowModels.remove(it)?.close() }
+            workflowModels[id] = mailbox
+            id
+        } catch (error: Exception) { mailbox.close(); throw error }
     }
     fun workflowPoll(id: String): String {
         val operation = workflowJobs.poll(id)
@@ -140,10 +148,27 @@ class PlatformBridge(private val activity: StageActivity) :
             .put("steps", JSONArray(result.steps.map { step ->
                 JSONObject().put("id", step.stepId).put("status", step.status.name.lowercase())
                     .put("message", step.note).put("detail", step.detail)
+                    .put("output", step.output?.let { JSONObject(it.toString()) })
             })).toString()
-        return JSONObject().put("v", 1).put("status", operation.state).put("result", detail).toString()
+        val tool = workflowModels[id]?.peek()
+        if (operation.state != "running") workflowModels.remove(id)?.close()
+        return JSONObject().put("v", 1).put("status", operation.state).put("result", detail)
+            .put("tool", tool?.let { JSONObject().put("id", it.id).put("mode", it.mode).put("question", it.question)
+                .put("image", it.image).put("schema", it.schema?.let { schema -> JSONObject(schema.toString()) }) }).toString()
     }
-    fun workflowCancel(id: String): Boolean { workflowJobs.cancel(id); return true }
+    fun workflowToolReply(id: String, request: String, raw: String): Boolean {
+        require(raw.length <= 100000) { "模型结果超出限制" } // JSON escaping can expand the bounded 16K response.
+        val mailbox = workflowModels[id] ?: return false
+        if (mailbox.peek()?.id != request) return false
+        val reply = JSONObject(raw)
+        require(reply.keys().asSequence().all { it in setOf("response", "error") } &&
+            (!reply.has("response") || reply.get("response") is String) && (!reply.has("error") || reply.get("error") is String)) { "模型回复格式无效" }
+        return mailbox.reply(request, reply.optString("response"), reply.optString("error"))
+    }
+    fun workflowToolPending(id: String, request: String): Boolean = onUi {
+        (activity as SharedActivity).reminderWindowReady() && workflowModels[id]?.peek()?.id == request
+    }
+    fun workflowCancel(id: String): Boolean { workflowModels.remove(id)?.close(); workflowJobs.cancel(id); return true }
     fun captureStart(): String = onUi { (activity as SharedActivity).startCapture() }
     fun capturePoll(id: String): String = onUi { (activity as SharedActivity).pollCapture(id) }
     fun cameraDiscard(value: String): Boolean {
@@ -268,7 +293,7 @@ class PlatformBridge(private val activity: StageActivity) :
     override fun close() {
         meeting.close()
         ocrJobs.close()
-        imageJobs.close(); workflowJobs.close(); asrCancel()
+        imageJobs.close(); workflowModels.values.forEach { it.close() }; workflowModels.clear(); workflowJobs.close(); asrCancel()
         onUi { tts?.release(); tts = null; voice = Voice() }
     }
     fun platformInfo(): String = "Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}"

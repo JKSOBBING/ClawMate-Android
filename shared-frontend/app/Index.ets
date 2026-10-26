@@ -663,8 +663,8 @@ struct Index {
         TabContent() {
           TaskPage({ taskScene: $taskScene, configViewOpen: $configViewOpen, active: this.tab === MainTabIndex.Task,
             onEnsureDesktopCompanion: async (): Promise<boolean> => { return true; },
-            onRunWorkflow: async (task: WorkflowTask, cancellation: WorkflowCancellation): Promise<void> => { await AndroidWorkflow.run(this.context().filesDir, task, cancellation); },
-            onRunPhoneWorkflow: async (task: WorkflowTask, cancellation: WorkflowCancellation): Promise<void> => { await AndroidWorkflow.run(this.context().filesDir, task, cancellation); }
+            onRunWorkflow: async (task: WorkflowTask, cancellation: WorkflowCancellation): Promise<void> => { await AndroidWorkflow.run(this.context().filesDir, task, cancellation, async (): Promise<void> => { await this.authorizeCloud(); }); },
+            onRunPhoneWorkflow: async (task: WorkflowTask, cancellation: WorkflowCancellation): Promise<void> => { await AndroidWorkflow.run(this.context().filesDir, task, cancellation, async (): Promise<void> => { await this.authorizeCloud(); }); }
           })
         }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(3))
         TabContent() { this.Settings() }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(4))

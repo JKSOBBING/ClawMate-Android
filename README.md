@@ -62,8 +62,10 @@ Compose 基线仍可运行 `./gradlew.bat :app:assembleDebug`；不要用日常�
 旧 Compose 的可选配置模板为 `app/src/main/res/raw/config_example.properties`。
 凭据、签名、私有数据库、SDK路径和设备状态禁止提交。
 
-本机工作流支持有界等待、条件、循环、echo/summary 和取消；不支持的 GUI/模型工具明确返回受限状态。
-HDC/Python、微信采集、通知、MiMO、MNN/HiAI、照片参考分身及自动摘要等仍有待办。
+本机工作流支持有界等待、条件、循环、echo/summary 和取消；共享版另接本机图片`vlm_qa`，
+使用配置的Decider视觉模型并逐次确认；GUI和其他模型工具仍明确受限。
+每日采集提醒与聊天自动摘要已接通，实际后台送达与模型质量仍需验收。
+HDC/Python、微信采集、MiMO、MNN/HiAI、照片参考分身等仍有待办。
 当前证据来自一台 OPPO 手机，不能推断小米等厂商或 iOS 已通过。
 
 ## 开发与验证记录

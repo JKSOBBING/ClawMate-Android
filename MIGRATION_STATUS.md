@@ -6,7 +6,7 @@
 
 - 主前端：ArkTS/ArkUI + ArkUI-X；Android 宿主 `shared-app`，包名 `com.clawmate.shared`，版本 `0.3-integrated`。
 - 根 Gradle 同时管理共享宿主、Compose 基线 `app` 与共用 Kotlin 库 `android-capabilities`；原正式包和私有数据保留，共享版不双写或自动导入旧数据。
-- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前141个 ArkTS 编译输入中77个不变、36个适配、28个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
+- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前142个 ArkTS 编译输入中77个不变、36个适配、29个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
 - 当前交付分支：`codex/meeting-sdk-integration`；此前共享整合分支为`codex/android-migration`。未切换正式包名或合并 main。
 
 ## 功能覆盖
@@ -23,6 +23,7 @@
 | 图库、汇总、集合 F07–F09 | 原分析/检索/问答/照片引用、12类记忆、详情和分页；本地OCR共用，完整私人图库与真实视觉服务待验收 |
 | 数据管理、长期记忆 F03 | `MemorySyncPage`→`DataManagerFacade`/`ChatMemorySync`→日志/索引；近7天范围确认、保存的模型名、进度/取消、检查点去重及无网络索引重建 |
 | 工作流 F10 | 原图/JSON、上下文、新建/保存/复制/删除和文件查看；`AndroidWorkflow`调用共用执行器，支持等待/条件/有限循环/echo/summary、单任务/批量停止，限60秒/200步；真实结果写入run_summary.json，成功summary进入日志 |
+| 视觉工具 F11 | 本机图片选择/私有保存、Decider视觉模型、逐次确认、可取消模型邮箱、answer输出与summary日志；GUI截图、完整schema校验及真实模型质量另需验收 |
 | 采集提醒 F14 | 原面板/策略与任务页；Kotlin独占每日闹钟、权限/渠道、通知及防重收据，点击通知后前台解锁确认再执行有界任务；近似时间，省电送达仍待验收 |
 | 语音、数字分身 | 原控件接共用系统ASR/TTS，按需申请权限；原分身生成/历史/版本和文生图协议；真人识别、实拍和实际生成效果待验收，照片参考生成仍受限 |
 | 云模型与授权 | Android兼容HTTP/SSE、超时/取消/授权撤回；端点、模型和凭据本地配置，图片与聊天记忆另作范围确认 |
@@ -178,3 +179,33 @@ SH-09～12已创建fork Draft PR #6，以既有共享功能PR #5分支为基底�
 通过GitHub CLI实际读取/修改并复核标题、状态、head/base；文档diff检查通过。
 本轮仅修改文档和PR元数据，未重跑构建/设备测试；未删除/改名/合并分支或强制推送。
 下一项`vlm_qa`开发在`codex/workflow-vlm-qa`，未完成实现/验证，不纳入本次文档提交。
+
+## SH-13：本机图片工作流视觉问答（2026-10-27）
+
+独立分支`codex/workflow-vlm-qa`，以导航整理提交`245a3a9`为基底；没有并入PR #6或新增PR。
+按锁定鸿蒙`WorkflowRunner.runTool`和原ToolEditor契约移植`vlm_qa`的answer/summary。
+工具编辑器新增系统选图与去元数据JPEG私有保存；使用已保存的HTTPS Decider视觉模型，
+逐次确认目标地址、模型、图片和完整问题。复用原云客户端/隐私撤回，发送及提交前核对授权、配置、
+前台解锁和运行归属；网络期间失效主动取消。共用Kotlin执行器通过可选模型端口和单请求邮箱等待，
+随机请求ID、防重回复、取消和总预算生效；Compose仍默认NOT_CONFIGURED，GUI/HDC不因接入模型而启用。
+真实回答保存为步骤output；summary只在整个任务成功后由ArkTS写日志，标记模型来源并保留已有来源。
+不把模型返回文本作为GUI命令或递归变量模板。当前142个编译输入：77不变、36适配、29平台文件。
+
+验证：原81项及新增17项主机检查，**98项通过**；两次prepare一致，编译来源校验通过。
+实际完成ArkTS/HAP、匹配运行库、共享APK与测试APK构建/安装。
+强制完整JVM回归Compose1243 + 共用能力120 + 会议SDK15 = **1378项通过**，零失败/错误/跳过；
+最后边界修正后重新执行共用库全部120项。OPPO PKB110 / Android16最终包**12项设备检查通过**：
+视觉问答3、原生/会议7、聊天上下文1、提醒拒绝权限1。未重新申请通知授权，权限保持关闭。
+模型设备专项包含实际桥接/执行器输出、防重、取消、16K转义文本往返及私有根目录拒绝，
+并通过真实ArkTS任务页检查确认取消和`.invalid`模型实际传输失败，均无成功摘要写入。
+受控回复不代表真实推理成功；既有提醒两个正向通知专项仍以SH-12记录为准，本轮未重跑。
+
+初次Kotlin插值与ArkTS ArrayBuffer类型编译失败已修正；设备脚本补齐“配置任务”导航和滚动。
+随后实际页面发现Android标准`file:/`引用被过严的`file://`检查拒绝，已兼容并补主机检查，
+最终重构建后页面专项通过。测试恢复设置、隐私和任务索引，删除自身合成图片/配置/运行记录及私有备份；
+会议公开样例仍按原回归设计保留。精确命令、失败及证据见[验证报告](shared-frontend/verification-workflow-vlm.json)。
+
+最终APK SHA256：`59775bd88a46258d7b8a3485bb4e3b0199a6d2b7acaabd6f4d248924a5f5713f`。
+负载和ZIP16 KB对齐通过；会议依赖`libandroid-complex-math.so`仍只有4 KB ELF对齐，发布门禁返回1。
+完整JSON Schema验证/字段归一化、后台并行摘要、导入图片引用回收和真实视觉模型质量仍待补齐；
+本项不代表默认GUI采集任务或微信自动采集已可执行。范围见[视觉问答说明](docs/WORKFLOW_VLM_MIGRATION.md)。

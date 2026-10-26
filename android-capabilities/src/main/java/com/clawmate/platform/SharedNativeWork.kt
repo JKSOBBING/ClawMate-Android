@@ -7,6 +7,7 @@ import com.clawmate.app.task.json.WorkflowEditValidator
 import com.clawmate.app.task.json.WorkflowJsonParser
 import com.clawmate.app.task.runner.WorkflowRunnerImpl
 import com.clawmate.app.task.runner.WorkflowRunResult
+import com.clawmate.app.task.runner.WorkflowModelTool
 import kotlinx.coroutines.runBlocking
 
 /** Blocking entry points for the bounded background bridge, never the UI thread. */
@@ -16,12 +17,12 @@ object SharedNativeWork {
         uris.map { AndroidChatImagePreparer(context).prepare(it) }
     }
 
-    fun runWorkflow(raw: String): WorkflowRunResult = runBlocking {
+    fun runWorkflow(raw: String, modelTool: WorkflowModelTool? = null): WorkflowRunResult = runBlocking {
         require(WorkflowEditValidator.error(raw) == null) { WorkflowEditValidator.error(raw) ?: "工作流无效" }
         val parsed = WorkflowJsonParser.parse(raw) as? WorkflowJsonParser.Result.Ok
             ?: error("无法解析工作流")
         // The shared ArkTS host owns its files and commits actual summaries.
         // No second native data writer, GUI backend, or implicit cloud call.
-        WorkflowRunnerImpl().run(parsed.definition)
+        WorkflowRunnerImpl(modelTool = modelTool).run(parsed.definition)
     }
 }
