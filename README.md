@@ -5,6 +5,9 @@
 
 ## 当前版本
 
+分支与评审入口见[分支和PR导航](docs/BRANCHES_AND_PRS.md)。当前完整共享版在
+`codex/meeting-sdk-integration`；`main`和旧`codex/android-migration`尚未包含最新共享功能。
+
 共享版为 `com.clawmate.shared`，名称“ClawMate 共享前端”，版本 `0.3-integrated`。
 包含引导、五入口、首页建议/陪伴、会话与流式聊天、图片聊天、query_events、长期记忆管理、
 图库/汇总、工作流编辑与有界运行、设置和系统 OCR/ASR/TTS。
