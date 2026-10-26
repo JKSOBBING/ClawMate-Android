@@ -47,6 +47,7 @@ class SharedActivity : StageActivity() {
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (platform.meetingActivityResult(requestCode, resultCode, data)) return
         if (requestCode == 7201) {
             revokeUriPermission(Uri.parse("content://$packageName.capture/$captureId.jpg"),
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
@@ -85,6 +86,6 @@ class SharedActivity : StageActivity() {
         updateSystemBars()
     }
 
-    override fun onStop() { platform.ttsStop(); platform.asrCancel(); super.onStop() }
+    override fun onStop() { platform.ttsStop(); platform.asrCancel(); platform.meetingDetach(); platform.meetingStopPlayback(); super.onStop() }
     override fun onDestroy() { platform.close(); super.onDestroy() }
 }

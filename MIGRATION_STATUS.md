@@ -61,3 +61,24 @@
 GUI规划、HDC/Python/微信采集、通知、MiMO、MNN/HiAI、照片参考分身、自动摘要和正式包/旧数据迁移仍有待办；动态主题下UIAutomator节点刷新边界保留。
 
 历史全文保留在Git提交 `e89f6e7` 及其之前的版本；例如 `git show e89f6e7:docs/archive/MIGRATION_STATUS.en.md`。后续迁移日志只更新本文，其他文档维护设计、构建方法或待办。
+
+## SH-09：本机会议 SDK 集成（2026-10-26）
+
+分支 `codex/meeting-sdk-integration`。从 `on-device-meeting-notes` 源码引入 Android Library；
+共享“汇总”新增会议入口。ArkTS 页面接入会议/音频/任务/版本、离线转写与本地纪要、模型组状态、
+前台录音命令、正文编辑、回听和系统文件导入导出。Kotlin 只负责平台接口；会议后端独占会议数据，
+ArkTS 在用户主动保存后独占写入 ClawMate 的记录/索引/收据。确定 export_id 文件名保证重复导入幂等，
+来源版本/hash 和原交接包保留。源码依赖及复测方法见 [会议集成说明](docs/MEETING_INTEGRATION.md)。
+
+验证记录：主机原33项及新增副本导入5项通过；Compose1243 + 共用库104项 JVM 回归通过；
+`build.ps1` 实际完成 ArkTS/HAP、运行库导出及共享 APK 构建。
+APK 校验确认同一包中 ArkUI-X/Python/ONNX、当前后端/网页、Kotlin桥接与服务，以及 SDK 原生库哈希一致。
+公开中文音频已在 OPPO PKB110 / Android16 共享包完成真实转写。
+会议专项设备测试1项通过：实际渲染页面保存副本、来源收据、重复导入去重与 Activity 销毁后 SDK
+仍可使用。修复刷新后旧标题/模型/任务行复用和 SDK 复用过期 HTTP 连接；写请求不自动重试。
+当前 SDK15项 JVM 测试在宿主 Kotlin1.9.24 工具链通过。
+共享原生能力6项设备回归通过，包括中文OCR、JPEG处理、TTS回调、有界任务和取消。
+本次共享调试 APK SHA256：`c3a43127fc5d27dc9457767bda4b94faa4047190c6c47dce1e697dd21dbdbd4e`。
+
+本阶段只使用公开模型权重和测试音频，未复制原会议私有数据库；不改变 Compose 正式包。
+长时间锁屏录音、来电/音频焦点、多厂商及16KB设备、正式签名与包体仍需专项验收。

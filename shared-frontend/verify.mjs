@@ -23,10 +23,10 @@ check('all upstream inputs match their pinned Git blobs', () => {
     }
   }
 });
-check('all ten declared routes exist and were included in staging', () => {
+check('all eleven declared routes exist and were included in staging', () => {
   const routes = JSON.parse(read(path.join(project, 'entry/src/main/resources/base/profile/main_pages.json'))).src;
   const manifest = JSON.parse(read(path.join(project, 'staged-sources.json')));
-  assert.equal(routes.length, 10);
+  assert.equal(routes.length, 11);
   for (const route of routes) {
     assert.ok(fs.existsSync(path.join(project, 'entry/src/main/ets', route + '.ets')), route);
     assert.ok(manifest.files.some(file => file.path === route + '.ets'), route);

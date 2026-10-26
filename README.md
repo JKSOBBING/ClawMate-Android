@@ -27,10 +27,11 @@ Windows 工具链和只读源输入的准备步骤见 [共享前端说明](share
 SDK、运行库和生成工程留在忽略目录，本机路径只作参数：
 
 ```powershell
-./shared-frontend/build.ps1 -JavaHome '<JDK 17>' -AndroidSdk '<Android SDK>' -Offline
+./shared-frontend/build.ps1 -JavaHome '<JDK 17>' -AndroidSdk '<Android SDK>' -MeetingSdkRoot '<on-device-meeting-notes>' -Offline
 node shared-frontend/verify.mjs
 node shared-frontend/verify-native.mjs
 node shared-frontend/verify-integration.mjs
+node shared-frontend/verify-meeting.mjs
 node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/reference
 ./gradlew.bat :android-capabilities:testDebugUnitTest :app:testDebugUnitTest
 ```
@@ -38,6 +39,9 @@ node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/
 脚本按输入哈希验证、ArkTS 编译、运行库导出、Android 打包执行，失败即停止。
 共享 APK：`shared-app/build/outputs/apk/debug/shared-app-debug.apk`。
 当前调试包为 arm64、最低 API26；发布签名、包体裁剪与发布等级尚未验收。
+
+共享版新增“汇总 → 本机会议 · 录音与纪要”，包含离线转写、会议管理和主动保存到本机记录。
+源码依赖、模型准备及数据归属见[会议集成说明](docs/MEETING_INTEGRATION.md)。
 
 ```powershell
 adb install -r shared-app/build/outputs/apk/debug/shared-app-debug.apk

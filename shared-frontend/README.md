@@ -52,7 +52,7 @@ SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一�
 从仓库根目录运行，路径只作为本机参数，不写入应用配置：
 
 ```powershell
-./shared-frontend/build.ps1 -JavaHome '<JDK 17>' -AndroidSdk '<Android SDK>' -Offline
+./shared-frontend/build.ps1 -JavaHome '<JDK 17>' -AndroidSdk '<Android SDK>' -MeetingSdkRoot '<on-device-meeting-notes>' -Offline
 ```
 
 流程：验证源文件哈希 → 生成共享 ArkTS 工程 → Hvigor assembleHap → 导出匹配 SDK 运行库

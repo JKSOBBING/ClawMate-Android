@@ -6,7 +6,7 @@ plugins {
 def runtimeDir = file('../.arkui-x-validation/application/runtime')
 android {
     namespace 'com.clawmate.shared'
-    compileSdk 34
+    compileSdk 36
     defaultConfig {
         applicationId 'com.clawmate.shared'
         minSdk 26
@@ -23,9 +23,11 @@ android {
 }
 dependencies {
     implementation project(':android-capabilities')
+    implementation project(':meeting-sdk')
     implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar'])
     androidTestImplementation libs.androidx.junit
     androidTestImplementation 'androidx.test:runner:1.6.1'
+    androidTestImplementation libs.mlkit.text.recognition.chinese
 }
 tasks.named('preBuild').configure {
     doFirst {

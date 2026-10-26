@@ -34,6 +34,38 @@ class PlatformBridge(private val activity: StageActivity) :
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
     private val workflowJobs = NativeOperations<WorkflowRunResult>(1)
     private var asr: AndroidSpeechRecognizerAsrAdapter? = null
+    private val meeting = MeetingBridge(activity as SharedActivity)
+
+    fun meetingInitialize(): Boolean = onUi { meeting.initialize() }
+    fun meetingAttach(): Boolean = onUi { meeting.attach() }
+    fun meetingDetach(): Boolean = onUi { meeting.detach() }
+    fun meetingPoll(since: String): String = meeting.snapshot(since)
+    fun meetingRequest(operation: String, args: String): String = meeting.request(operation, args)
+    fun meetingJob(id: String): String = meeting.poll(id)
+    fun meetingCancel(id: String): Boolean = meeting.cancel(id)
+    fun meetingRecord(id: String): Boolean = onUi {
+        if (activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            activity.requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 7302)
+            error("请允许麦克风权限后再次点击开始录音")
+        }
+        asrCancel(); ttsStop(); meeting.stopPlayback()
+        meeting.record(id)
+    }
+    fun meetingCapture(action: String): Boolean = onUi {
+        when(action) {
+            "stop" -> local.meetingnotes.sdk.MeetingSdk.stopRecording(activity)
+            "pause" -> local.meetingnotes.sdk.MeetingSdk.pauseRecording(activity)
+            "resume" -> local.meetingnotes.sdk.MeetingSdk.resumeRecording(activity)
+            else -> error("不支持的录音操作")
+        }; true
+    }
+    fun meetingChooseAudio(id: String, profile: String): String = onUi { meeting.chooseAudio(id, profile) }
+    fun meetingChooseHandoff(): String = onUi { meeting.chooseHandoff() }
+    fun meetingExport(id: String, format: String, revision: String): String = onUi { meeting.export(id, format, revision) }
+    fun meetingPlay(id: String, audioId: String, start: String, end: String): Boolean = onUi { meeting.play(id, audioId, start, end) }
+    fun meetingStopPlayback(): Boolean = onUi { meeting.stopPlayback() }
+    fun meetingValidateHandoff(raw: String): String = meeting.validateHandoff(raw)
+    fun meetingActivityResult(code: Int, result: Int, data: Intent?): Boolean = meeting.activityResult(code, result, data)
     private var asrState = "idle"
     private var asrText = ""
     private var asrError = ""
@@ -87,6 +119,8 @@ class PlatformBridge(private val activity: StageActivity) :
     }
 
     fun asrStart(): Boolean = onUi {
+        check(!meeting.capturing()) { "会议正在录音，请先结束会议录音" }
+        meeting.stopPlayback()
         if (activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             activity.requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 7202)
             asrState = "error"; asrError = "请允许麦克风权限后重新按下语音按钮"; asrVersion++
@@ -193,6 +227,7 @@ class PlatformBridge(private val activity: StageActivity) :
     }
 
     override fun close() {
+        meeting.close()
         ocrJobs.close()
         imageJobs.close(); workflowJobs.close(); asrCancel()
         onUi { tts?.release(); tts = null; voice = Voice() }

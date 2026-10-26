@@ -598,11 +598,15 @@ struct Index {
   @Builder private MainTabContents() {
         TabContent() { this.Home() }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(0))
         TabContent() {
-          CollectionPage({ collectionModule: $collectionScene, viewModels: this.collectionViews, refreshing: this.refreshing,
+          Column() {
+          Button('本机会议 · 录音与纪要').width('90%').margin({ top: 14, bottom: 8 })
+            .onClick((): void => { this.stopAsr(); this.stopVoice(); router.pushUrl({ url: 'pages/meeting/MeetingPage' }); })
+          Column() { CollectionPage({ collectionModule: $collectionScene, viewModels: this.collectionViews, refreshing: this.refreshing,
             onRefresh: (): void => { this.refreshCollection(); },
             onOpenDataCollectionSettings: (): void => { this.settingsSection = 1; this.tab = MainTabIndex.Mine; },
             onRunWechatAutoSummary: async (): Promise<void> => { throw new Error('安卓微信自动采集尚未接入，未读取聊天数据'); }
-          })
+          }) }.layoutWeight(1).width('100%')
+          }.height('100%')
         }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(1))
         TabContent() { this.Chat() }.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP]).tabBar(NavigationStyle.tabBarStyle(2))
         TabContent() {

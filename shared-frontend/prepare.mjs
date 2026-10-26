@@ -230,7 +230,7 @@ overlay('pages/task/TaskPage.ets', taskPage);
 writeJson('entry/src/main/resources/base/profile/main_pages.json', { src: [
   'pages/Index', 'pages/gallery/GalleryPage', 'pages/collection/CollectionGroupDetailPage',
   'pages/task/WorkflowFileViewer', 'pages/settings/DesktopCompanionPage', 'pages/settings/SelfHdcTestPage',
-  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage' ] });
+  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage', 'pages/meeting/MeetingPage' ] });
 for (const name of ['onboarding_agent', 'onboarding_avatar', 'onboarding_data_home']) {
   fs.copyFileSync(path.join(repo, 'app/src/main/res/drawable-nodpi', name + '.png'),
     path.join(project, 'entry/src/main/resources/base/media', name + '.png'));

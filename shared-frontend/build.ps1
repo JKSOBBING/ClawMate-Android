@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$JavaHome,
     [Parameter(Mandatory=$true)][string]$AndroidSdk,
+    [Parameter(Mandatory=$true)][string]$MeetingSdkRoot,
     [switch]$Offline
 )
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,10 @@ $projectRoot = Join-Path $scratchRoot 'application/project'
 $env:JAVA_HOME = (Resolve-Path -LiteralPath $JavaHome).Path
 $env:ANDROID_HOME = (Resolve-Path -LiteralPath $AndroidSdk).Path
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:MEETING_SDK_ROOT = (Resolve-Path -LiteralPath $MeetingSdkRoot).Path
+# Local SDK paths are build parameters, never application source or committed state.
+[System.IO.File]::WriteAllText((Join-Path $repoRoot 'local.properties'),
+    'sdk.dir=' + $env:ANDROID_HOME.Replace([char]92,[char]47) + "`n")
 $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 $env:ARKUIX_SDK_HOME = Join-Path $scratchRoot 'sdk'
 $env:OpenHarmony_HOME = Join-Path $scratchRoot 'openharmony-sdk'
