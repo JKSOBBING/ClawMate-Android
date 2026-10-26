@@ -2,6 +2,7 @@ package com.clawmate.shared
 
 import android.os.Bundle
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.view.View
 import android.view.WindowManager
 import android.content.res.Configuration
@@ -20,6 +21,9 @@ class SharedActivity : StageActivity() {
     internal fun updateSystemBars() {
         val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val color = if (dark) Color.rgb(17, 21, 29) else Color.WHITE
+        if ((window.decorView.background as? ColorDrawable)?.color != color) {
+            window.decorView.setBackgroundColor(color)
+        }
         val translucent = WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
         if (window.attributes.flags and translucent != 0) window.clearFlags(translucent)
         if (window.attributes.flags and WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS == 0) {

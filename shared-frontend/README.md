@@ -85,6 +85,11 @@ Gradle 检查共用能力和 Compose 基线。主机检查不代替 ArkTS 编译
 SH-03 的页面、架构和真机检查见 `verification-integration.json`。
 完整日志、截图和 XML 见忽略目录 `.arkui-x-validation/application/`。
 
+SH-04 已补齐最终真机检查：3 项原生测试通过，识别临时文字图中的中文，验证原生取消/路径限制，
+并收到系统 TTS 真实开始和停止回调。另从原聊天按钮实际验证朗读、重播和暂停；测试消息已清理。
+修复 Android/ArkUI 重复键盘避让，复测键盘开关、首页弹层返回和日夜间画面；系统主题已恢复。
+完整图库云分析、私人照片与真实模型服务仍未验收。动态主题切换时的无障碍检查边界见页面对齐文档。
+
 两版职责与数据归属见 `../docs/SHARED_ARCHITECTURE.md`，页面对齐边界见 `../docs/FRONTEND_PARITY.md`。
 
 ## 继续跟随上游

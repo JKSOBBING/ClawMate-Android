@@ -198,6 +198,12 @@ for (const name of ['InputMethod', 'PlatformUi', 'Pasteboard']) {
   const file = path.join(project, 'entry/src/main/ets/platform', name + '.ets');
   fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replaceAll('ClawMateProbe', 'ClawMatePlatform'));
 }
+// Android adjustResize already shortens the window. Keep the keyboard tracker
+// for scroll-follow, but do not apply a second sheet offset or bottom padding.
+const comfortFile = path.join(project, 'entry/src/main/ets/pages/home/HomeComfortSection.ets');
+fs.writeFileSync(comfortFile, fs.readFileSync(comfortFile, 'utf8')
+  .replace('bottom: this.keyboardHeightVp', 'bottom: 0')
+  .replace('.translate({ y: -this.keyboardHeightVp })', '.translate({ y: 0 })'));
 for (const route of ['pages/settings/DesktopCompanionPage', 'pages/settings/SelfHdcTestPage', 'pages/LogView', 'pages/OpTest', 'pages/ProfileTest']) {
   const file = path.join(project, 'entry/src/main/ets', route + '.ets');
   const source = fs.readFileSync(file, 'utf8');

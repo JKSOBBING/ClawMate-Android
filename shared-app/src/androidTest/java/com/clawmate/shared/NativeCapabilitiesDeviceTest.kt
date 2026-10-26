@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.Log
+import android.os.Bundle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,6 +18,9 @@ import java.io.File
 /** Real local engine/bridge checks, using only generated text images and synthetic speech. */
 @RunWith(AndroidJUnit4::class)
 class NativeCapabilitiesDeviceTest {
+    private fun evidence(name: String, value: String) {
+        InstrumentationRegistry.getInstrumentation().sendStatus(2, Bundle().apply { putString(name, value) })
+    }
     private fun withBridge(test: (PlatformBridge) -> Unit) {
         ActivityScenario.launch(SharedActivity::class.java).use { scenario ->
             lateinit var bridge: PlatformBridge
@@ -59,6 +63,7 @@ class NativeCapabilitiesDeviceTest {
             assertTrue(result.toString(), result.getString("text").contains("2026"))
             assertTrue(result.toString(), result.getString("text").contains("共享前端"))
             Log.i("ClawMateNativeTest", "OCR_REAL_TEXT=" + result.getString("text"))
+            evidence("ocrRealText", result.getString("text"))
             assertEquals("missing", JSONObject(bridge.ocrPoll(id)).getString("status"))
         } finally { file.delete() }
     }
@@ -85,6 +90,7 @@ class NativeCapabilitiesDeviceTest {
             assertEquals(snapshot.toString(), "error", snapshot.getString("voiceStatus"))
             assertTrue(snapshot.getString("voiceError").isNotBlank())
             Log.i("ClawMateNativeTest", "TTS_CONTROLLED_UNAVAILABLE=" + snapshot.getString("ttsEngineState"))
+            evidence("ttsOutcome", "CONTROLLED_UNAVAILABLE: " + snapshot.getString("ttsEngineState"))
         } else {
             assertTrue(bridge.ttsSpeak("migration-speech-fixture", "这是共享前端本地语音测试，用于检查系统朗读回调与取消。"))
             val startedDeadline = System.nanoTime() + 8_000_000_000L
@@ -99,6 +105,7 @@ class NativeCapabilitiesDeviceTest {
             assertTrue(bridge.ttsStop())
             assertEquals("paused", JSONObject(bridge.runtimeSnapshot()).getString("voiceStatus"))
             Log.i("ClawMateNativeTest", "TTS_REAL_START_AND_STOP=true")
+            evidence("ttsOutcome", "REAL_START_AND_STOP")
         }
         assertEquals(1, snapshot.getInt("v"))
         assertTrue(snapshot.has("dark")); assertTrue(snapshot.has("keyboardHeight"))

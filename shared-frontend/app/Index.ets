@@ -1,5 +1,5 @@
 import { common } from '@kit.AbilityKit';
-import { promptAction, router } from '@kit.ArkUI';
+import { promptAction, router, KeyboardAvoidMode } from '@kit.ArkUI';
 import { FirstLaunchOnboarding } from '../pages/onboarding/FirstLaunchOnboarding';
 import { FIRST_LAUNCH_ONBOARDING_VERSION, FIRST_LAUNCH_ONBOARDING_STORAGE_KEY } from '../pages/onboarding/OnboardingTypes';
 import { HomePage } from '../pages/home/HomePage';
@@ -96,6 +96,9 @@ struct Index {
 
   private context(): common.UIAbilityContext { return getContext(this) as common.UIAbilityContext; }
   aboutToAppear(): void {
+    // Android adjustResize already gives ArkUI the usable window. A second
+    // ArkUI offset leaves a keyboard-sized empty gap below the composer.
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.NONE);
     this.initialize().catch((error: Error): void => { this.startupError = error.message; });
   }
   onPageShow(): void { this.startRuntime(); }

@@ -25,6 +25,7 @@ dependencies {
     implementation project(':android-capabilities')
     implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar'])
     androidTestImplementation libs.androidx.junit
+    androidTestImplementation 'androidx.test:runner:1.6.1'
 }
 tasks.named('preBuild').configure {
     doFirst {
