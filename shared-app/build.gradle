@@ -23,7 +23,7 @@ android {
 }
 dependencies {
     implementation project(':android-capabilities')
-    implementation project(':meeting-sdk')
+    if (findProject(':meeting-sdk') != null) implementation project(':meeting-sdk')
     implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar'])
     androidTestImplementation libs.androidx.junit
     androidTestImplementation 'androidx.test:runner:1.6.1'
@@ -31,8 +31,15 @@ dependencies {
 }
 tasks.named('preBuild').configure {
     doFirst {
+        if (findProject(':meeting-sdk') == null) {
+            throw new GradleException('Shared host requires -PmeetingSdkRoot=<on-device-meeting-notes checkout> or MEETING_SDK_ROOT; see docs/MEETING_INTEGRATION.md')
+        }
         if (!new File(runtimeDir, 'src/main/assets/arkui-x/entry/ets/modules.abc').isFile()) {
             throw new GradleException('Compile and package shared-frontend first; see shared-frontend/README.md')
+        }
+        project.exec {
+            workingDir rootProject.projectDir
+            commandLine 'node', 'shared-frontend/build-state.mjs', 'verify'
         }
     }
 }

@@ -25,6 +25,10 @@ output-metadata.json
 # Kotlin
 .kotlin/
 
+# Local Python verification caches
+__pycache__/
+*.py[cod]
+
 # Local endpoint/credential config (see app/src/main/res/raw/config.example.properties).
 **/res/raw/local_config.properties
 

@@ -82,3 +82,33 @@ APK 校验确认同一包中 ArkUI-X/Python/ONNX、当前后端/网页、Kotlin�
 
 本阶段只使用公开模型权重和测试音频，未复制原会议私有数据库；不改变 Compose 正式包。
 长时间锁屏录音、来电/音频焦点、多厂商及16KB设备、正式签名与包体仍需专项验收。
+
+## SH-10：共享前端维护门禁与发布边界（2026-10-26）
+
+继续沿用共享ArkTS与Kotlin适配；本轮开发集中在构建可靠性，没有新增业务入口。
+两层prepare的源码替换改为命中校验，单次替换遇到歧义即失败；重建overlay时清理旧生成文件。
+新增准备输入/输出和编译运行库SHA256绑定，Android preBuild拒绝陈旧源码或运行库。
+根Gradle允许Compose基线在未配置会议SDK时独立构建；共享宿主缺依赖时明确报错。
+新增包体/ELF审计，包含Chaquopy嵌套Python扩展；原鸿蒙源码、正式包和私有数据未改动。
+
+实测：原38项主机契约、9项维护检查、4项ELF审计器测试通过；两次真实prepare摘要一致，
+注入的旧引导页overlay被清除。缺SDK和陈旧运行库的两次Gradle负向检查均按预期失败。
+`build.ps1`实际完成ArkTS/HAP、运行库导出及共享APK构建；无会议SDK的Compose APK独立构建成功。
+强制重跑JVM：Compose1243 + 共用库104 + 会议SDK15 = **1362项通过**，无失败/错误/跳过。
+最终APK在OPPO PKB110 / Android16安装成功，共享原生6项与真实会议页面专项1项通过，
+包括中文OCR/TTS、图片/工作流取消、公开中文音频转写、副本保存/去重及Activity销毁后SDK可用。
+本次公开样例副本依测试设计保留供检查，源会议移入可恢复回收站；未启动麦克风。
+
+当前全插件ARM64调试APK为**298.15 MiB**，SHA256：
+`45d45ce522299c47a9289dbfdf08a64fd49c0c8601183573deffc8a874efdd61`。
+ZIP对齐检查通过；325个ELF中324个满足静态16 KB对齐，会议SDK的
+`libandroid-complex-math.so`为4 KB，发布门禁`--require-16kb`实际返回1。
+107个按名称及SHA256确认的ArkUI-X原生库未发现此项失败；不能把会议依赖问题归因于ArkUI-X。
+手机页大小4096，未做真实16 KB运行验证。
+
+三次进程冷启动系统TotalTime为763/746/740 ms，文件缓存未清理；不代表首屏可交互时间。
+最后一次启动约3秒后单次PSS为345229 KiB（337.14 MiB），仅作调试基线，不代表release稳态性能。
+当前结论：路线适合继续开发，长期维护与正式替换仍须真实升级演练、16 KB依赖修复、包体/内存优化、
+TalkBack、多厂商、真实服务及旧数据迁移验收。详见[维护评估](docs/SHARED_FRONTEND_MAINTENANCE.md)与
+[精确证据](shared-frontend/verification-maintenance.json)。Android CLI skill在当前Windows环境未安装，
+设备检查实际使用现有Android SDK的adb；本轮未依赖远程主机。
