@@ -4,7 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
 
 const source = fs.readFileSync(new URL('./adapters/platform/NativeCapabilities.ets', import.meta.url), 'utf8');
-const js = stripTypeScriptTypes(source.replace(/^import .*;\n/gm, '')).replace(/^export /gm, '');
+const js = stripTypeScriptTypes(source.replace(/^import .*;\r?\n/gm, '')).replace(/^export /gm, '');
 let handler;
 const Native = runInNewContext(js + '\nNativeCapabilities;', {
   Bridge: { createBridge: () => ({ callMethod: (...args) => handler(...args) }) },

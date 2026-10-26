@@ -8,6 +8,10 @@ export interface AndroidRuntimeSnapshot {
   voiceStatus: string;
   voiceMessageId: string;
   voiceError: string;
+  asrState: string;
+  asrText: string;
+  asrError: string;
+  asrVersion: number;
 }
 interface OcrSnapshot { v: number; status: string; text: string; error: string; }
 

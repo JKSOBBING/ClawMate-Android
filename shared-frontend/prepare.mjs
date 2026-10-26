@@ -84,6 +84,8 @@ let debug = read('utils/DebugSettings.ets').replace("import native from 'libentr
 overlay('utils/DebugSettings.ets', debug);
 let settings = read('pages/settings/SettingsCenterPage.ets');
 overlay('pages/settings/SettingsCenterPage.ets', settings
+  .replace('      this.SectionTitle(SettingsSectionId.DataCollection)',
+    "      this.SectionTitle(SettingsSectionId.DataCollection)\n      Button('聊天长期记忆与本机索引').onClick(() => { router.pushUrl({ url: 'pages/settings/MemorySyncPage' }); })")
   .replace('开启后显示并记录聊天和手机 HDC 日志', '开启后记录本次前端诊断；原生推理与自动控制日志尚未接入')
   .replace("subtitle: '聊天上下文压缩阈值和保留轮数'", "subtitle: '安卓按阈值提示新建会话，自动摘要尚未接入'")
   .replace('  @Builder ContextCompressionGroup() {',
@@ -155,6 +157,10 @@ overlay('pages/gallery/GalleryPage.ets', gallery);
 for (const route of ['pages/collection/CollectionGroupDetailPage', 'pages/task/WorkflowFileViewer']) {
   let page = read(route + '.ets');
   page = page.replace(/struct (\w+) \{/, 'struct $1 {\n  onBackPress(): boolean { router.back(); return true; }');
+  if (route === 'pages/task/WorkflowFileViewer') {
+    page = page.replace('  private containsAiGeneratedContent(): boolean {',
+      '  private containsAiGeneratedContent(): boolean {\n    if (/"source_kind"\\s*:\\s*"android_workflow"/.test(this.fileText)) { return false; }');
+  }
   overlay(route + '.ets', page);
 }
 overlay('utils/gallery/GalleryImageStore.ets', read('utils/gallery/GalleryImageStore.ets')
@@ -163,8 +169,49 @@ overlay('utils/gallery/GalleryImageStore.ets', read('utils/gallery/GalleryImageS
 overlay('components/TaskDeviceControlPanel.ets', read('components/TaskDeviceControlPanel.ets')
   .replace("      Text('任务控制方式').fontSize(15).fontWeight(FontWeight.Bold).width('100%')",
     "      Text('任务控制方式').fontSize(15).fontWeight(FontWeight.Bold).width('100%')\n" +
-    "      Text('安卓自动执行尚未接入；开关仅保存任务选择，不会自动执行').fontSize(12).fontColor('#65718B').width('100%')"));
+    "      Text('安卓支持有界等待、条件、循环与 echo/summary；GUI 与模型工具需要另行配置。开关只保存选择，不启用周期调度').fontSize(12).fontColor('#65718B').width('100%')"));
+// Data-pipeline requests must use the saved model and reject cancelled results
+// before validators/checkpoints or later stages can commit them.
+overlay('datamanager/DataManagerTypes.ets', read('datamanager/DataManagerTypes.ets')
+  .replace('export interface DataManagerModelConfig {', 'export interface DataManagerModelConfig {\n  model?: string;\n  ensureActive?: () => void;'));
+overlay('datamanager/DataManagerFacade.ets', read('datamanager/DataManagerFacade.ets')
+  .replace('constructor(filesDir: string) {', 'constructor(filesDir: string, modelClient: DataPipelineModelClient = new DataPipelineModelClient()) {')
+  .replace('this.modelClient = new DataPipelineModelClient();', 'this.modelClient = modelClient;'));
+overlay('datamanager/DataPipelineModelClient.ets', read('datamanager/DataPipelineModelClient.ets')
+  .replace('        let content = await this.cloudClient.chatCompletionText({', '        config.ensureActive?.();\n        let content = await this.cloudClient.chatCompletionText({')
+  .replace('          baseUrl: config.baseUrl,', '          baseUrl: config.baseUrl,\n          model: config.model,\n          logResponseContent: kind !== \'chat.memory\',\n          readTimeout: 60000,')
+  .replace('        dataManagerInfo(`Model request response:', '        config.ensureActive?.();\n        dataManagerInfo(`Model request response:'));
 let taskPage = read('pages/task/TaskPage.ets');
+taskPage = taskPage.replace('  private fileViewerContainsAiGeneratedContent(): boolean {',
+  '  private fileViewerContainsAiGeneratedContent(): boolean {\n    if (/"source_kind"\\s*:\\s*"android_workflow"/.test(this.fileViewerText)) { return false; }');
+// Deterministic Android workflows do not need cloud login or phone HDC setup.
+// The shared native runner reports GUI/model steps as blocked/not configured.
+taskPage = taskPage.replaceAll('AiLoginGuard.ensure(this.getUIContext())', 'true')
+  .replaceAll('!await PrivacyConsentDialog.show(this.getUIContext())', 'false')
+  .replaceAll("!await SelfHdcSetupGuard.ensure(this.getUIContext(), this.filesDir, 'workflow-start')", 'false')
+  .replaceAll("!await SelfHdcSetupGuard.ensure(this.getUIContext(), this.filesDir, 'workflow-batch-start')", 'false');
+taskPage = taskPage.replace('      await this.runSelectedWorkflow(currentTask);',
+  '      this.batchCancellation = new WorkflowCancellation();\n      await this.runSelectedWorkflow(currentTask, this.batchCancellation);')
+  .replace('      await this.runSelectedWorkflow(currentTask, this.batchCancellation);\n    } finally {',
+    "      await this.runSelectedWorkflow(currentTask, this.batchCancellation);\n    } catch (error) {\n      showToastSafely((error as Error).message, 2500);\n    } finally {")
+  .replace("      this.runningTaskId = '';\n      this.tasks = WorkflowStorage.loadTasks(this.filesDir);",
+    "      this.runningTaskId = ''; this.batchCancellation = null;\n      this.tasks = WorkflowStorage.loadTasks(this.filesDir);")
+  .replace('  private batchRunButtonText(): string {',
+    "  private batchRunButtonText(): string {\n    if (!this.batchRunning && this.runningTaskId.length > 0) { return '停止当前任务'; }")
+  .replace('  private batchRunButtonEnabled(): boolean {',
+    '  private batchRunButtonEnabled(): boolean {\n    if (!this.batchRunning && this.runningTaskId.length > 0) { return true; }')
+  .replace('  private stopEnabledTasks(): void {',
+    '  private stopEnabledTasks(): void {\n    if (!this.batchRunning && this.runningTaskId.length > 0) { this.batchCancellation?.cancel(); return; }')
+  .replace('if (this.batchRunning) { this.stopEnabledTasks(); return; }',
+    'if (this.batchRunning || this.runningTaskId.length > 0) { this.stopEnabledTasks(); return; }')
+  .replace('  aboutToDisappear(): void {',
+    '  aboutToDisappear(): void {\n    this.batchCancellation?.cancel();');
+taskPage = taskPage.replace("Button(this.runningTaskId === task.id ? '执行中' : '运行')",
+  "Button(this.runningTaskId === task.id ? '停止' : '运行')")
+  .replace("this.runningTaskId === task.id ? '#A9B7E9' : '#276EF1'", "this.runningTaskId === task.id ? '#B42318' : '#276EF1'")
+  .replace('            .enabled(!this.isTaskExecutionBusy())\n            .onClick(() => { this.runTask(task); })',
+    '            .enabled(this.runningTaskId === task.id || !this.isTaskExecutionBusy())\n' +
+    '            .onClick(() => { if (this.runningTaskId === task.id) { this.batchCancellation?.cancel(); } else { this.runTask(task); } })');
 taskPage = taskPage.replace('  private pageScroller: Scroller = new Scroller();',
   "  @StorageProp('androidWorkflowBackRequested') @Watch('handleAndroidBack') private androidBackRequest: number = 0;\n" +
   '  private pageScroller: Scroller = new Scroller();\n' +
@@ -183,7 +230,7 @@ overlay('pages/task/TaskPage.ets', taskPage);
 writeJson('entry/src/main/resources/base/profile/main_pages.json', { src: [
   'pages/Index', 'pages/gallery/GalleryPage', 'pages/collection/CollectionGroupDetailPage',
   'pages/task/WorkflowFileViewer', 'pages/settings/DesktopCompanionPage', 'pages/settings/SelfHdcTestPage',
-  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest' ] });
+  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage' ] });
 for (const name of ['onboarding_agent', 'onboarding_avatar', 'onboarding_data_home']) {
   fs.copyFileSync(path.join(repo, 'app/src/main/res/drawable-nodpi', name + '.png'),
     path.join(project, 'entry/src/main/resources/base/media', name + '.png'));
@@ -210,3 +257,32 @@ for (const route of ['pages/settings/DesktopCompanionPage', 'pages/settings/Self
   fs.writeFileSync(file, source.replace(/struct (\w+) \{/, 'struct $1 {\n  onBackPress(): boolean { router.back(); return true; }'));
 }
 console.log(JSON.stringify({ product: 'com.clawmate.shared', project, sourceCommit: app.sourceCommit }));
+
+// Some API-20 Android transports do not settle the request Promise on destroy.
+// Non-streaming memory/home requests need the same explicit cancellation as SSE.
+const cloudFile = path.join(project, 'entry/src/main/ets/utils/CloudModelClient.ets');
+let cloud = fs.readFileSync(cloudFile, 'utf8');
+cloud = cloud.replace('  async chatCompletion(options: CloudChatCompletionOptions)', `  private requestCancellable(request: http.HttpRequest, url: string, options: http.HttpRequestOptions,
+    timeout: number): Promise<http.HttpResponse> {
+    return new Promise<http.HttpResponse>((resolve, reject) => {
+      let settled = false;
+      let timer = -1;
+      let fail = (message: string): void => {
+        if (settled) { return; }
+        settled = true; clearTimeout(timer); reject(new Error(message));
+        PrivacyConsent.destroyHttp(request);
+      };
+      timer = setTimeout((): void => { fail('模型请求超时'); }, timeout);
+      this.streamCancellers.set(request, (): void => { fail('用户取消请求'); });
+      PrivacyConsent.onHttpCancel(request, (): void => { fail('隐私授权已撤回'); });
+      request.request(url, options).then((response: http.HttpResponse): void => {
+        if (settled) { return; }
+        settled = true; clearTimeout(timer); resolve(response);
+      }).catch((error: Error): void => { fail(error.message); });
+    });
+  }
+
+  async chatCompletion(options: CloudChatCompletionOptions)`)
+  .replace('let response = await httpReq.request(url, requestOptions);',
+    'let response = await this.requestCancellable(httpReq, url, requestOptions, Math.min(120000, options.readTimeout || 60000) + 10000);');
+fs.writeFileSync(cloudFile, cloud);

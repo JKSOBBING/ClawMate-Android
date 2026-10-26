@@ -450,3 +450,13 @@
 - 实际执行 :android-capabilities:testDebugUnitTest :app:testDebugUnitTest :shared-app:assembleDebug --offline --no-daemon --console=plain，reconciliation-native-build.log 为 BUILD SUCCESSFUL（8m17s）。Compose 1243 项、共用库104项，合计1347项，0失败/错误/跳过；77项测试随实现迁移，没有删除原有覆盖。
 - 失败保留：独立库最初选择未缓存的 AndroidX/Kotlin/Okio 传递版本，已与现有宿主版本对齐；解析测试依赖 app 的默认工作流目录，保留在 app 测试集后通过。新增 ArkTS 接线首轮因 throw 类型和语音状态枚举失败，修正后编译通过；不代表新入口已完成真机验收。
 - 原 app 包名、私有数据库、配置与旧用户数据均未迁移或清理。共享界面接线和最终真机验证将在下一阶段记录。前一阶段提交：0678fdf。
+
+## 2026-10-26 SH-06：共享 APK 补齐两次聊天的功能入口
+
+- 共享聊天新增仅查询本机事实的 query_events 工具往返；参数、日期、实体、输出长度和最多3次查询均受控。拒绝未注册模型工具，取消后不再读取索引或发起后续轮次；图片消息不进入工具执行。
+- 原附件界面接系统选图/拍照、逐次目标/范围确认、共用去元数据 JPEG、当前回合多模态 SSE 和会话私有图片；历史不重新上传图片，删除会话清理自己的资源。原 ASR/TTS/OCR 引擎共用，权限和不可用明确呈现；未进行真人录音或私人照片上传。
+- 我的→数据采集增加显式聊天记忆管理页；沿用原 ChatMemorySync/数据管线，补传保存的模型名，确认近7天数据范围，展示进度与取消，保留检查点恢复。本机索引重建不发云请求；没有整理结果时给出先同步的提示。
+- 原任务按钮接同一 Kotlin 有界执行器，单任务/批量取消、成功 summary 日志、状态与运行文件均接通。真机实际运行合成工作流为 success，30秒等待任务点击停止后为 cancelled。执行结果改用原文件查看器识别的 run_summary.json，并标记本地来源，避免把确定性输出标为 AI生成。
+- reconciliation-native-build.log：两版完整单元回归1347项通过。reconciliation-host.log：6+7+8+12=33项通过。reconciliation-native-device.log：共享原生6项通过（11.127s），包括实际中文OCR、TTS真实开始/停止、33013字节JPEG、实际summary、GUI阻断和取消；reconciliation-legacy-device.log：旧版34项设备回归通过（30.514s）。
+- reconciliation-device-build.log：两版测试包及独立dev包构建成功（2m23s）；最终 reconciliation-provenance-build.log：ArkTS/HAP 与 Android APK 构建成功，包版本0.3-integrated。主包和测试包均实际更新安装Success；旧正式包未安装覆盖，未创建PR。
+- 失败与修正保留：ArkTS新增日志元数据需显式接口类型；主机脚本需兼容Windows CRLF；配置页原“执行中”按钮没有停止入口，已改为可操作“停止”；运行文件名最初不被查看器识别，已修正并验证列表1条及原文。真实云端/ASR质量、相机实拍、多厂商、MNN及旧数据导入仍未验收。前一阶段提交：7cb292a。

@@ -23,10 +23,10 @@ check('all upstream inputs match their pinned Git blobs', () => {
     }
   }
 });
-check('all nine declared routes exist and were included in staging', () => {
+check('all ten declared routes exist and were included in staging', () => {
   const routes = JSON.parse(read(path.join(project, 'entry/src/main/resources/base/profile/main_pages.json'))).src;
   const manifest = JSON.parse(read(path.join(project, 'staged-sources.json')));
-  assert.equal(routes.length, 9);
+  assert.equal(routes.length, 10);
   for (const route of routes) {
     assert.ok(fs.existsSync(path.join(project, 'entry/src/main/ets', route + '.ets')), route);
     assert.ok(manifest.files.some(file => file.path === route + '.ets'), route);
@@ -48,7 +48,7 @@ const platformStore = {
   flushSync: () => { flushes++; if (failFlush) throw new Error('disk unavailable'); }
 };
 const source = read(path.join(here, 'adapters/platform/SettingsStore.ets'))
-  .replace(/^import .*;\n/gm, '').replace('export class SettingsStore', 'class SettingsStore');
+  .replace(/^import .*;\r?\n/gm, '').replace('export class SettingsStore', 'class SettingsStore');
 const SettingsStore = runInNewContext(stripTypeScriptTypes(source) + '\nSettingsStore;', {
   ...keys, preferences: { getPreferencesSync: () => platformStore },
   AppStorage: { get: key => memory.get(key), setOrCreate: (key, value) => memory.set(key, value) },

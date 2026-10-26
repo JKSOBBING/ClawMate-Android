@@ -6,10 +6,54 @@ import android.graphics.drawable.ColorDrawable
 import android.view.View
 import android.view.WindowManager
 import android.content.res.Configuration
+import android.content.Intent
+import android.app.Activity
+import android.net.Uri
+import android.provider.MediaStore
+import org.json.JSONObject
+import java.io.File
+import java.util.UUID
 import ohos.stage.ability.adapter.StageActivity
 
 class SharedActivity : StageActivity() {
     private lateinit var platform: PlatformBridge
+    private var captureId = ""
+    private var captureStatus = "missing"
+    private var captureFile: File? = null
+
+    internal fun startCapture(): String {
+        check(captureStatus != "running") { "相机已打开" }
+        val root = File(cacheDir, "chat-camera").also { it.mkdirs() }
+        captureId = UUID.randomUUID().toString()
+        captureFile = File(root, "$captureId.jpg").also { it.createNewFile() }
+        val uri = Uri.parse("content://$packageName.capture/$captureId.jpg")
+        captureStatus = "running"
+        try {
+            startActivityForResult(Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(MediaStore.EXTRA_OUTPUT, uri)
+                clipData = android.content.ClipData.newRawUri("camera", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }, 7201)
+        } catch (failure: Exception) {
+            captureFile?.delete(); captureFile = null; captureStatus = "failed"
+            throw IllegalStateException("无法启动系统相机，请使用相册选图", failure)
+        }
+        return captureId
+    }
+    internal fun pollCapture(id: String): String {
+        val status = if (id == captureId) captureStatus else "missing"
+        return JSONObject().put("v", 1).put("status", status)
+            .put("uri", if (status == "done") Uri.fromFile(captureFile).toString() else "").toString()
+    }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7201) {
+            revokeUriPermission(Uri.parse("content://$packageName.capture/$captureId.jpg"),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            captureStatus = if (resultCode == Activity.RESULT_OK && (captureFile?.length() ?: 0) > 0) "done" else "cancelled"
+            if (captureStatus != "done") { captureFile?.delete(); captureFile = null }
+        }
+    }
 
     override fun onCreate(state: Bundle?) {
         platform = PlatformBridge(this)
@@ -41,6 +85,6 @@ class SharedActivity : StageActivity() {
         updateSystemBars()
     }
 
-    override fun onStop() { platform.ttsStop(); super.onStop() }
+    override fun onStop() { platform.ttsStop(); platform.asrCancel(); super.onStop() }
     override fun onDestroy() { platform.close(); super.onDestroy() }
 }
