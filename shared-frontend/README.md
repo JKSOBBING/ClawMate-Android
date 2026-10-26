@@ -10,7 +10,7 @@
 `adapters/` 只提供平台接口或明确的能力限制；`prepare.mjs` 保存少量可审查的源码适配。
 没有修改鸿蒙源项目，也没有用截图或 Compose 重新描绘这些页面。
 
-SH-03 生成工程包含 130 个 ArkTS 文件：81 个与锁定上游逐字一致、32 个经适配、17 个为新平台代码。
+SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一致、35 个经适配、22 个为新平台代码。
 这是本次编译输入的统计，不是整个鸿蒙产品的复用率。
 
 - `upstream-lock.json` 与 `../experiments/arkui-x/ui-upstream-lock.json` 锁定全部输入，准备时逐文件检查 Git blob。
@@ -28,16 +28,17 @@ SH-03 生成工程包含 130 个 ArkTS 文件：81 个与锁定上游逐字一�
 | 启动、四页引导 | FirstLaunchOnboarding / OnboardingTypes | 原始页面；完成版本实际持久化，更新与重启不重复引导 |
 | 主导航、主题 | MainTabConfig / FloatingMainTabs / AppTheme / FrostedPage | 原五入口及导航样式，悬浮胶囊尺寸取锁定源码；原颜色资源跟随系统主题。Android 基础模糊近似 HDS，系统栏由宿主管理 |
 | 首页、提醒、推荐、关怀 | HomePage / HomeTaskSuggestion / HomeEmotionalSupport | 原页面；真实数据管理器；建议/关怀接原提示词与响应解析，结果缓存到本机；真实模型未验收 |
-| 聊天、会话、消息 | ChatPage / ChatMessageList / ChatSessionDrawer / ChatSessionStorage | 流式客户端、深度思考参数、文件保存、新建/重命名/置顶/删除；原 UTF-8/取消修正沿用；没有接入自动工具执行 |
+| 聊天、会话、消息 | ChatPage / ChatMessageList / ChatSessionDrawer / ChatSessionStorage | 流式回复、思考参数、文件保存、会话管理；只读 query_events 工具往返已接通，最多3次查询；不执行任意模型工具 |
+| 图片聊天 | ChatPage / ChatImages / 共用 AndroidChatImagePreparer | 相册/拍照、逐次确认、最多4张去元数据 JPEG、当前回合多模态 SSE、私有历史图片；真实视觉模型与相机实拍未验收 |
 | 上下文预算 | ChatContextBudget | 使用原阈值计算；达到预算会阻止继续发送并提示新建会话，保留历史。自动摘要尚未接入，设置页明确说明保留轮数暂未生效 |
 | 汇总、事件详情 | CollectionPage / CollectionGroupDetailPage | 读取真实索引，支持原详情与分页；同步调用原数据管线，空数据不伪造同步时间 |
 | 图库、筛选、检索、问答 | GalleryPage / GalleryStorage / GallerySearchService / GalleryAnalyzer | 原页面与存储/云协议；系统选图可打开和取消。OCR 经 URI 桥接到共用本地引擎，失败明确返回；未上传私人照片或做真实模型分析；HDC 批量读图受限 |
-| 数据管理 | DataManagerFacade / DataManagerStorage / IndexService / ConsolidationService | 完整原始数据管理代码，使用 Android 上的 ArkUI-X 文件与加密接口；未导入旧应用私有数据 |
-| 任务与工作流 | TaskPage / WorkflowStorage / WorkflowFileViewer | 图编辑、JSON、场景、联系人上下文、保存、复制、删除、文件预览/清理沿用原代码；测试实际保存与复制后删除了测试记录。执行器尚未接入，开关只保存任务选择 |
+| 数据管理 | DataManagerFacade / ChatMemorySync / IndexService / MemorySyncPage | 显式近7天范围确认、保存的模型名、进度/取消、检查点去重；本地索引重建不发云请求。共享文件独立，未导入旧应用私有数据 |
+| 任务与工作流 | TaskPage / WorkflowStorage / AndroidWorkflow / 共用 WorkflowRunnerImpl | 原图/JSON与文件管理；已接有界等待/条件/循环/echo/summary、单任务/批量停止、真实结果/日志；GUI和模型工具仍受限，开关不注册后台调度 |
 | 设置与服务 | SettingsCenterPage / SettingsCenterControls | 原分组和表单；私有偏好持久化，写失败保留可重试状态；空服务显示“未配置”；用户主动测试模型时才请求配置的服务 |
 | 账号与隐私 | PrivacyConsent / PrivacyConsentDialog | 安卓授权指使用自配云服务，不代表华为账号登录；声明按实际行为改写并单独版本化；拒绝/撤回会阻断请求，小艺 A2A 明确不可用 |
 | 数字分身 | HomePage / AvatarService / SeedreamAvatarProvider | 原生成/历史/参数快照界面及文生图服务连接；真实生成待验收。照片参考上传、人物前景分割未验收/未接入，不伪造成功 |
-| 语音、本地模型 | 原朗读控件 / 共用 Android TTS | 原消息朗读/暂停/重播连接本机 TTS，使用实际初始化和播放回调；没有伪造音频缓存。ASR、聊天拍照/图片附件、MNN/HiAI/OM 尚未接入 |
+| 语音、本地模型 | 原语音控件 / 共用 Android ASR、TTS | TTS真实回调、暂停/文本重播；ASR连接系统服务并按需申请麦克风权限，没有伪造转录。真人识别质量未验收；MNN/HiAI/OM未接入 |
 | HDC/GUI、Python、通知 | 平台接口与能力说明页 | 未执行跨应用操作或后台任务；时间可以保存，但提醒始终不显示已注册 |
 | 桌面端、诊断、日志 | Android 平台页 / 原工作流查看页 | 用户自行填写 HTTPS 桌面下载地址；原生诊断受限；运行日志只展示实际内存日志 |
 
@@ -68,12 +69,13 @@ SH-01 独立工程的历史文件名为 `ClawMateShared-debug.apk`，不要用�
 ```powershell
 node shared-frontend/verify.mjs
 node shared-frontend/verify-native.mjs
+node shared-frontend/verify-integration.mjs
 node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/reference
 ./gradlew.bat :android-capabilities:testDebugUnitTest :app:testDebugUnitTest
 ```
 
-第一条检查输入锁、九个路由、设置读写/重启语义、失败后的保存重试和上下文预算边界；
-第二条检查跨运行时协议、取消及源导航样式；第三条重跑七个原始模块的八项主机契约。
+第一条检查输入锁、十个路由、设置读写/重启语义、失败后的保存重试和上下文预算边界；
+第二条检查跨运行时协议、取消及源导航样式；第三条检查记忆/工具/图片/工作流整合及非流式取消；第四条重跑七个原始模块的八项主机契约。
 Gradle 检查共用能力和 Compose 基线。主机检查不代替 ArkTS 编译或 Android 真机检查。
 
 设备检查包括：四页引导与完成状态、五个主入口、图库路由及授权拦截、系统选图打开/取消、
@@ -82,7 +84,7 @@ Gradle 检查共用能力和 Compose 基线。主机检查不代替 ArkTS 编译
 只操作独立共享包；测试任务、会话和 `.invalid` 测试下载地址已清理，授权恢复关闭。
 
 有实际日志后才记录构建/运行成功。SH-01 的历史结果见 `verification-results.json`；
-SH-03 的页面、架构和真机检查见 `verification-integration.json`。
+SH-03/04 的页面、架构和真机检查见 `verification-integration.json`；最新 SH-06 整合见 `verification-reconciliation.json`。
 完整日志、截图和 XML 见忽略目录 `.arkui-x-validation/application/`。
 
 SH-04 已补齐最终真机检查：3 项原生测试通过，识别临时文字图中的中文，验证原生取消/路径限制，
@@ -100,3 +102,7 @@ Android 厂商差异只应进入平台接口；其他系统应实现自己的接
 
 这轮完成共享前端的应用组装和主要本地交互；真实云服务/图片服务、自动摘要、原生集成与旧数据迁移
 仍有明确边界。当前只有一台 Android 手机的证据，不宣称小米等多品牌或 iOS 已验收。
+
+SH-06 的两次聊天功能对照见 `../docs/INTEGRATION_AUDIT.md`。本轮补齐共享 APK 的功能缺口，
+不是仅将旧 Compose 代码留在仓库。1347项 JVM、33项主机检查、共享原生6项与旧版34项设备回归通过；
+另实际检查了共享任务成功/停止、记忆入口与运行文件原文。上述测试的不同宿主和受控服务边界分别记录。

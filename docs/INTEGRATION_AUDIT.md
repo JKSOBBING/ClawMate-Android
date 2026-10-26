@@ -42,6 +42,8 @@ Room/DataStore 或服务配置。公开兼容包名保留，不表示依赖 `:ap
 - OPPO PKB110 / Android 16：共享原生6项通过，实际中文 OCR、TTS、33,013字节 JPEG
   重编码、工作流 summary、GUI 受限及取消均有设备输出；Compose 34项设备回归通过。
   两组设备结果分别归属各自宿主，不能互相替代。
+- 界面复查中少量坐标点击误触默认任务，均返回 blocked，未执行外部 GUI；
+  依据验证前截图/XML恢复默认任务的未运行状态，并删除本轮合成任务及测试运行文件。
 - 最新构建、UI复查、产物和证据哈希见 `shared-frontend/verification-reconciliation.json`。
   原始日志、截图、XML 与测试夹具保存在忽略目录，未把模型凭据或用户数据提交到 Git。
 

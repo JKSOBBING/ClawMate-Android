@@ -1,45 +1,35 @@
-# 鸿蒙 → Android 迁移待办清单
+# 共享版后续待办
 
-**状态：2026-10-25 已按用户要求收尾并停止迁移。** 下列未完成项仅保留记录，当前不继续执行；后续恢复由用户另行提出。最新前端覆盖与差异见 [UI_PARITY.md](UI_PARITY.md)，本轮最终验证见 [中文更新日志](MIGRATION_STATUS.md) UI-12。
+更新：2026-10-26。迁移已按用户要求恢复；当前目标是共享 ArkTS 前端。
+旧 Compose 清单保存在 [历史待办](docs/archive/MIGRATION_BACKLOG.compose.md)，
+已完成项的实际调用链及证据见 [整合审计](docs/INTEGRATION_AUDIT.md)。
 
-鸿蒙参考仓库：`doulujiyao12/mobiinfra-oh`，分支 `clawmate_dev`，提交
-`cd69b68bf16b9ed352be5073939eb24d042de583`，源码只读。
-Android 基线：`7f76afb`；迁移分支：`codex/android-migration`。
-Android 仓库已包含大量现有实现；下表记录代码对比发现的差异及后续范围，并不表示所有功能都从零开始。
-详细证据、提交及实际验证结果见[中文更新日志](MIGRATION_STATUS.md)。
+## 已进入共享版，仍须真实服务验收
 
-| 编号 | 功能差异 / 下一步 | 鸿蒙参考代码 | 当前状态 |
-|---|---|---|---|
-| F01 | 可执行的首页任务建议 | `pages/home/HomePage.ets`、`HomeTaskSuggestion.ets` | 已完成生成、证据/详情、可编辑复制及受支持工作流导航；自由 GUI/Qwen 执行仍待 P01/P06 适配 |
-| F02 | 情绪陪伴入口与提示词 | `pages/home/HomePage.ets`、`HomeEmotionalSupport.ets`、`HomeComfortChatStore.ets` | 已完成主动闲聊、有证据的话题及本应用聊天适配；单元测试/构建及 4 项设备测试通过；真实模型质量和采集来源扩展未验证 |
-| F03 | 聊天 → 每日日志的长期记忆同步 | `datamanager/ChatMemorySync.ets`、`ChatMemoryExtraction.ets` | 已实现每次确认及独立本地索引刷新；单元测试/构建及 4 项功能设备测试通过；真实服务及已配置账号验证待办 |
-| F04 | `query_events` 个人记忆智能体工具 | `datamanager/DataManagerQueryEventsTool.ets` | 已实现；单元测试/构建及 2 项真机查询测试通过 |
-| F05 | 图片附件发送到支持视觉的云模型 | `pages/chat/ChatAttachmentPolicy.ets`、`pages/Index.ets` | 已实现确认后的当前回合多模态 SSE、私有图片历史/缩略图和无损数据库迁移；单元测试/构建及 4 项设备检查通过；每次最多发送 4 张图片，真实服务仍待验证 |
-| F06 | Markdown、代码、安全链接与完整消息复制 | `components/MarkdownView.ets`、`pages/chat/ChatMessageList.ets` | 已实现；单元测试/构建及 4 项原生渲染/整条剪贴板设备测试通过 |
-| F07 | 图库云端视觉分析 | `utils/gallery/GalleryAnalyzer.ets` | 已完成单图显式上传确认、真实 HTTP、预览及事务保存；单元测试/构建及 3 项设备测试通过；批量编排和真实模型验证待办 |
-| F08 | 图库问答 | `pages/gallery/GalleryPage.ets`、`utils/gallery/GallerySearchService.ets` | 已实现确认后的有界候选文字问答、照片引用校验及原生详情导航；单元测试/构建及 2 项设备测试通过；真实云端回答质量未验证 |
-| F09 | 图库 → 每日日志 → 索引的统一刷新 | `utils/gallery/GalleryMemorySync.ets`、`datamanager/DataManagerFacade.ets` | 已补齐全部 12 个记忆汇总类别及旧类别映射；图库/全局统一刷新编排待办 |
-| F10 | 工作流配置查看、JSON 编辑、创建/删除及图编辑 | `pages/task/TaskPage.ets`、`WorkflowFileViewer.ets` | 查看器见 `b930746`，JSON 编辑已完成；创建/删除及图编辑界面待办 |
-| F11 | 工作流 `vlm_qa` 云工具 | `utils/WorkflowRunner.ets` | 待办 |
-| F12 | 数字分身图生图与版本选择 | `datamanager/avatar/AvatarService.ets` | 待办；已有文生图 |
-| F13 | 真实 MiMO 流式语音客户端 | `utils/voice/MimoVoiceClient.ets` | 待办；已有系统 ASR/TTS |
-| F14 | 采集提醒通知 | `utils/CollectionReminderPolicy.ets`、`CollectionReminderService.ets` | 待办；与整合任务的周期调度不同 |
-| F15 | 图库扫描暂停/恢复状态持久化 | `pages/gallery/GalleryPage.ets` | 待办；已有运行/取消 |
-| F16 | 版本化隐私同意及撤销 | `utils/PrivacyConsent.ets`、`pages/Index.ets` | 待办 |
+| 编号 | 范围 | 剩余验收 |
+| --- | --- | --- |
+| F01/F02 | 首页任务建议、关怀话题/陪伴 | 实际模型质量、源证据及取消的完整服务验收；自由 GUI/Qwen 执行另列 |
+| F03/F04 | 聊天长期记忆、query_events | 实际服务提取→索引→工具回答；当前检查点、协议及取消有受控测试 |
+| F05/F06 | 图片聊天、Markdown/复制 | 真实视觉模型、相机实拍和共享版更多格式/无障碍验收 |
+| F07/F08 | 图库分析、问答及引用 | 私人图库完整授权流程、真实服务结果及质量 |
+| F09 | 原图库/聊天/日志统一管线和12类汇总 | 多源并发/失败恢复及真实服务端到端验收 |
+| F10 | 工作流图/JSON、保存/复制/删除、运行结果 | 更复杂真实用户配置；共享有界本机执行已接通，GUI/VLM仍受限 |
+| F16 | 版本化隐私同意与撤回 | 更多设备生命周期/服务并发场景；不再列为未实现 |
 
-平台专项后续工作：实现明确的 Android 适配器，或显示可操作的不可用状态，不能模拟成功。
+## 尚未接入或未完成
 
-| 编号 | 范围 | 当前 Android 能力边界 |
-|---|---|---|
-| P01 | 模型驱动的 GUI/截图循环 | 无障碍执行目前只允许应用白名单内的语义操作 |
-| P02 | PC 配套服务/路由 | 需要配置和适配配套服务 |
-| P03 | 微信富采集结果持久化 | 桥接目前只映射状态/消息 |
-| P04 | 浮动控制与可视状态 | 已有状态悬浮层；暂停/恢复/停止控件待办 |
-| P05 | 分身分割与聊天中的自定义分身 | 聊天目前使用默认图像资源 |
-| P06 | 小艺 A2A、华为账号、ShareKit | 需决定鸿蒙服务在 Android 上的实现方式 |
+| 编号 | 后续工作 |
+| --- | --- |
+| F11 | 工作流 vlm_qa 的显式配置、协议与实际模型工具执行 |
+| F12/P05 | 分身照片参考生成、前景分割、聊天自定义分身及真实服务验收 |
+| F13 | MiMO 流式语音；系统 ASR 真人识别质量与厂商兼容 |
+| F14 | Android 采集提醒注册、撤销、权限和实际后台调度；当前只保存时间 |
+| F15 | 图库扫描暂停/恢复与进程重启状态验收，不能以运行/取消替代 |
+| P01/P04 | 受控 GUI 截图/规划循环、允许范围与实际可视控制；不开放任意命令 |
+| P02/P03 | PC HDC/Python 服务、路由、健康检查及微信富采集结果持久化 |
+| P06 | 华为账号、小艺 A2A、ShareKit 的 Android 替代或明确受限方案 |
+| 其他 | 自动上下文摘要；多厂商 Android/iOS；TalkBack/主题节点更新；鸿蒙同状态视觉/动画对比 |
+| 发布 | 原正式包生产切换、版本化旧数据导入/校验/回退、发布签名、依赖裁剪与性能/大小 |
 
-原生 C++/MNN 实际推理按项目要求继续暂缓，能力状态必须如实显示。
-不能将截图中的中转地址、凭据或密钥写入版本控制。真实云端检查需要配置凭据；本地 HTTP 协议测试与真实服务验证分开记录。
-
-每完成一个小功能，记录实际构建/测试、手机验证、状态说明并单独提交。
-保留手机原应用及其数据，使用独立开发包验证。只在用户最终审阅确认后创建 PR。
+原生 C++/MNN/HiAI 推理继续暂缓。生成产物、本地服务地址、密钥、签名和私有数据不提交。
+真实服务验收与本地协议夹具分开记录；能力缺失时提供可操作说明，不模拟成功。
