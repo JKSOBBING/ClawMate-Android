@@ -30,7 +30,7 @@ SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一�
 | 首页、提醒、推荐、关怀 | HomePage / HomeTaskSuggestion / HomeEmotionalSupport | 原页面；真实数据管理器；建议/关怀接原提示词与响应解析，结果缓存到本机；真实模型未验收 |
 | 聊天、会话、消息 | ChatPage / ChatMessageList / ChatSessionDrawer / ChatSessionStorage | 流式回复、思考参数、文件保存、会话管理；只读 query_events 工具往返已接通，最多3次查询；不执行任意模型工具 |
 | 图片聊天 | ChatPage / ChatImages / 共用 AndroidChatImagePreparer | 相册/拍照、逐次确认、最多4张去元数据 JPEG、当前回合多模态 SSE、私有历史图片；真实视觉模型与相机实拍未验收 |
-| 上下文预算 | ChatContextBudget | 使用原阈值计算；达到预算会阻止继续发送并提示新建会话，保留历史。自动摘要尚未接入，设置页明确说明保留轮数暂未生效 |
+| 上下文预算与自动摘要 | ChatContextBudget / 原 Index 压缩编排 / ChatContext | 阈值与保留轮数生效；摘要、增量覆盖、会话重载复用及本地抽取回退已接入。完整原文保留；取消/撤回阻断迟到结果，仍超预算时明确报错；真实模型摘要质量待验收 |
 | 汇总、事件详情 | CollectionPage / CollectionGroupDetailPage | 读取真实索引，支持原详情与分页；同步调用原数据管线，空数据不伪造同步时间 |
 | 图库、筛选、检索、问答 | GalleryPage / GalleryStorage / GallerySearchService / GalleryAnalyzer | 原页面与存储/云协议；系统选图可打开和取消。OCR 经 URI 桥接到共用本地引擎，失败明确返回；未上传私人照片或做真实模型分析；HDC 批量读图受限 |
 | 数据管理 | DataManagerFacade / ChatMemorySync / IndexService / MemorySyncPage | 显式近7天范围确认、保存的模型名、进度/取消、检查点去重；本地索引重建不发云请求。共享文件独立，未导入旧应用私有数据 |
@@ -98,7 +98,7 @@ Gradle 检查共用能力和 Compose 基线。主机检查不代替 ArkTS 编译
 然后执行 prepare、主机检查、构建和真机回归。不要通过关闭编译检查或直接改参考输入解决漂移。
 Android 厂商差异只应进入平台接口；其他系统应实现自己的接口并单独构建/验收。
 
-共享版已包含应用组装和主要本地交互；真实云服务/图片服务、自动摘要、原生集成与旧数据迁移
+共享版已包含应用组装和主要本地交互；真实云服务/图片服务、摘要质量、原生集成与旧数据迁移
 仍有明确边界。当前只有一台 Android 手机的证据，不宣称小米等多品牌或 iOS 已验收。
 
 功能覆盖和实际验收范围统一见 [迁移日志](../MIGRATION_STATUS.md)，避免在多份说明中重复维护测试数量和阶段状态。

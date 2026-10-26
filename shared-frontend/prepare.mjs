@@ -1,5 +1,6 @@
 import { replaceChecked, applyPatches } from './source-patches.mjs';
 import { syncOverlays, recordPrepared } from './build-state.mjs';
+import { buildChatContextSource } from './context-source.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +54,7 @@ const navigationConstants = ['TAB_BAR_HEIGHT', 'TAB_BAR_BOTTOM_MARGIN', 'TAB_BAR
   return 'export ' + match[0];
 });
 const sourceIndex = read('pages/Index.ets');
+overlay('platform/UpstreamChatContext.ets', buildChatContextSource(sourceIndex));
 const navigationMethods = ['tabIconResource', 'tabBarStyle'].map(name => {
   const match = sourceIndex.match(new RegExp(`  private ${name}\\([^]*?\\n  \\}`));
   if (!match) throw new Error('Upstream navigation method changed: ' + name);
@@ -89,8 +91,7 @@ let settings = read('pages/settings/SettingsCenterPage.ets');
 overlay('pages/settings/SettingsCenterPage.ets', applyPatches(settings, [
   ['      this.SectionTitle(SettingsSectionId.DataCollection)', "      this.SectionTitle(SettingsSectionId.DataCollection)\n      Button('聊天长期记忆与本机索引').onClick(() => { router.pushUrl({ url: 'pages/settings/MemorySyncPage' }); })"],
   ['开启后显示并记录聊天和手机 HDC 日志', '开启后记录本次前端诊断；原生推理与自动控制日志尚未接入'],
-  ["subtitle: '聊天上下文压缩阈值和保留轮数'", "subtitle: '安卓按阈值提示新建会话，自动摘要尚未接入'"],
-  ['  @Builder ContextCompressionGroup() {', "  @Builder ContextCompressionGroup() {\n    Text('安卓尚未启用自动摘要；达到阈值时会提示新建会话。保留轮数仅保存配置，暂未生效。').fontSize(12).fontColor('#65718B').width('100%')"]
+  ['  @Builder ContextCompressionGroup() {', "  @Builder ContextCompressionGroup() {\n    Text('达到估算阈值时自动摘要较早历史，并按保留轮数续接。摘要使用当前配置的模型；失败时明确标记本地抽取。完整历史保留在本机，可随时停止。压缩后仍超预算会提示减少附件或新建会话。').fontSize(12).fontColor('#65718B').width('100%')"]
 ]));
 // Public defaults contain no environment service endpoints, credentials or tokens.
 const endpointNames = new Set([...settings.matchAll(/DEFAULT_ENDPOINT_CONFIG\.(\w+)/g)].map(match => match[1]));

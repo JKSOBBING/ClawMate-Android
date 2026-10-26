@@ -61,3 +61,9 @@
 共享工作流不给原生执行器文件目录，原生只返回结果；由 ArkTS 写入 `run_summary.json`
 和成功 summary 日志。旧版的可选原生文件写入器继续只服务旧宿主，跨包不双写。
 共享相机内容提供器只临时授权自己的相机缓存文件，不公开应用文件树。
+
+聊天上下文继续复用原`ChatContextBudget`和锁定`Index`中的十个压缩编排方法，生成到
+`platform/UpstreamChatContext.ets`；`ChatContext`只提供已保存模型配置、可取消传输和提交门控。
+原会话结构的四个`contextSummary*`字段保存摘要与覆盖点，完整消息不被截断或双写。
+当前问题及图片不进入历史摘要，图片只在准备完成后附加到最后一条请求；本地抽取与模型摘要分开标注。
+详细范围见[上下文移植](CHAT_CONTEXT_MIGRATION.md)。
