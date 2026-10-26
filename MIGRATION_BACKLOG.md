@@ -1,8 +1,7 @@
 # 共享版后续待办
 
 更新：2026-10-26。迁移已按用户要求恢复；当前目标是共享 ArkTS 前端。
-旧 Compose 清单保存在 [历史待办](docs/archive/MIGRATION_BACKLOG.compose.md)，
-已完成项的实际调用链及证据见 [整合审计](docs/INTEGRATION_AUDIT.md)。
+已完成项、关键阶段与验证统一见 [迁移日志](MIGRATION_STATUS.md)；本文只维护后续工作。
 
 ## 已进入共享版，仍须真实服务验收
 

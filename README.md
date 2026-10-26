@@ -45,7 +45,7 @@ adb shell am start -n com.clawmate.shared/.SharedActivity
 ```
 
 Compose 基线仍可运行 `./gradlew.bat :app:assembleDebug`；不要用日常测试覆盖原包及其用户数据。
-Linux 原构建环境和历史验证命令保存在迁移历史归档。
+历史验证与阶段索引统一见 [迁移日志](MIGRATION_STATUS.md)，构建约定见 `AGENTS.md`。
 
 ## 配置和能力边界
 
@@ -62,7 +62,6 @@ HDC/Python、微信采集、通知、MiMO、MNN/HiAI、照片参考分身及自�
 ## 开发与验证记录
 
 - [当前状态与实际检查](MIGRATION_STATUS.md)
-- [两次聊天的功能整合审计](docs/INTEGRATION_AUDIT.md)
 - [共享架构与数据归属](docs/SHARED_ARCHITECTURE.md)
 - [共享页面对齐边界](docs/FRONTEND_PARITY.md)
 - [待办](MIGRATION_BACKLOG.md)

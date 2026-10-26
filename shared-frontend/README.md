@@ -11,7 +11,7 @@
 没有修改鸿蒙源项目，也没有用截图或 Compose 重新描绘这些页面。
 
 SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一致、35 个经适配、22 个为新平台代码。
-这是本次编译输入的统计，不是整个鸿蒙产品的复用率。
+这是该编译输入的统计，不是整个鸿蒙产品的复用率。
 
 - `upstream-lock.json` 与 `../experiments/arkui-x/ui-upstream-lock.json` 锁定全部输入，准备时逐文件检查 Git blob。
 - 编译输入在 `.arkui-x-validation/reference/`；生成工程在 `.arkui-x-validation/application/project/`。
@@ -59,7 +59,7 @@ SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一�
 → Gradle Android assembleDebug。任一步失败立即停止，不使用上一次 APK 冒充新构建。
 
 统一构建的产物：`shared-app/build/outputs/apk/debug/shared-app-debug.apk`。
-SH-01 独立工程的历史文件名为 `ClawMateShared-debug.apk`，不要用旧产物代替本轮构建。
+SH-01 独立工程的历史文件名为 `ClawMateShared-debug.apk`，构建时应使用根工程的最新产物。
 调试包使用全量 SDK 插件定位兼容性，尚未进行发布签名、依赖裁剪、大小/性能或发布 SDK 等级验收。
 
 ## 检查与实际证据
@@ -83,14 +83,8 @@ Gradle 检查共用能力和 Compose 基线。主机检查不代替 ArkTS 编译
 未保存编辑的返回确认、文件数量实时刷新、会话新建/置顶/重命名/重启恢复/删除。
 只操作独立共享包；测试任务、会话和 `.invalid` 测试下载地址已清理，授权恢复关闭。
 
-有实际日志后才记录构建/运行成功。SH-01 的历史结果见 `verification-results.json`；
-SH-03/04 的页面、架构和真机检查见 `verification-integration.json`；最新 SH-06 整合见 `verification-reconciliation.json`。
-完整日志、截图和 XML 见忽略目录 `.arkui-x-validation/application/`。
-
-SH-04 已补齐最终真机检查：3 项原生测试通过，识别临时文字图中的中文，验证原生取消/路径限制，
-并收到系统 TTS 真实开始和停止回调。另从原聊天按钮实际验证朗读、重播和暂停；测试消息已清理。
-修复 Android/ArkUI 重复键盘避让，复测键盘开关、首页弹层返回和日夜间画面；系统主题已恢复。
-完整图库云分析、私人照片与真实模型服务仍未验收。动态主题切换时的无障碍检查边界见页面对齐文档。
+迁移进度、验证结果和修正统一见 [迁移日志](../MIGRATION_STATUS.md)。
+精确证据保留在本目录的 `verification-*.json`；原始日志、截图和XML在忽略目录。
 
 两版职责与数据归属见 `../docs/SHARED_ARCHITECTURE.md`，页面对齐边界见 `../docs/FRONTEND_PARITY.md`。
 
@@ -100,9 +94,7 @@ SH-04 已补齐最终真机检查：3 项原生测试通过，识别临时文字
 然后执行 prepare、主机检查、构建和真机回归。不要通过关闭编译检查或直接改参考输入解决漂移。
 Android 厂商差异只应进入平台接口；其他系统应实现自己的接口并单独构建/验收。
 
-这轮完成共享前端的应用组装和主要本地交互；真实云服务/图片服务、自动摘要、原生集成与旧数据迁移
+共享版已包含应用组装和主要本地交互；真实云服务/图片服务、自动摘要、原生集成与旧数据迁移
 仍有明确边界。当前只有一台 Android 手机的证据，不宣称小米等多品牌或 iOS 已验收。
 
-SH-06 的两次聊天功能对照见 `../docs/INTEGRATION_AUDIT.md`。本轮补齐共享 APK 的功能缺口，
-不是仅将旧 Compose 代码留在仓库。1347项 JVM、33项主机检查、共享原生6项与旧版34项设备回归通过；
-另实际检查了共享任务成功/停止、记忆入口与运行文件原文。上述测试的不同宿主和受控服务边界分别记录。
+功能覆盖和实际验收范围统一见 [迁移日志](../MIGRATION_STATUS.md)，避免在多份说明中重复维护测试数量和阶段状态。
