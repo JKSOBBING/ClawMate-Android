@@ -3,6 +3,7 @@ import { WorkflowTask } from '../utils/WorkflowTypes';
 import { WorkflowStorage } from '../utils/WorkflowStorage';
 import { WorkflowCancellation } from '../utils/WorkflowCancellation';
 import { DataManagerFacade } from '../datamanager/DataManagerFacade';
+import { CollectionReminderService } from '../utils/CollectionReminderService';
 
 interface ExecutionResult { status: string; message: string; resultSummary: string; steps: Object[]; }
 interface ExecutionPoll { v: number; status: string; result: string; }
@@ -47,6 +48,7 @@ export class AndroidWorkflow {
             let envelope: SummaryMetadata = { workflow_metadata: { name: task.title, task_scene_id: task.sceneId, source_kind: 'android_workflow' }, latest_entry_index: count + 1 };
             let metadata = JSON.stringify(envelope);
             facade.storage.writeTextAtomic(path, '<!-- DAILY_LOG_METADATA\n' + metadata + '\n-->\n' + body + '\n' + String(count + 1) + '. ' + result.resultSummary.slice(0, 2000) + '\n\n');
+            CollectionReminderService.recordSuccessfulCollection().catch(() => {});
           }
           WorkflowStorage.updateTaskRun(filesDir, task.id, result.status, result.message +
             (result.resultSummary.length > 0 ? '\n' + result.resultSummary : ''));

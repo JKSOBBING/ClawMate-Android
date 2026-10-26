@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
     <application android:name=".SharedApplication" android:allowBackup="false"
         android:label="ClawMate 共享前端" android:supportsRtl="true"
@@ -9,6 +11,14 @@
         android:theme="@android:style/Theme.Light.NoTitleBar">
         <provider android:name=".CaptureProvider" android:authorities="${applicationId}.capture"
             android:exported="false" android:grantUriPermissions="true" />
+        <receiver android:name="com.clawmate.platform.reminder.CollectionReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <activity android:name=".SharedActivity" android:exported="true"
             android:windowSoftInputMode="adjustResize|stateHidden"
             android:configChanges="orientation|keyboard|layoutDirection|screenSize|screenLayout|uiMode|smallestScreenSize|density">

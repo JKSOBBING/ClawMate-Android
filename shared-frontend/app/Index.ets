@@ -34,6 +34,7 @@ import Bridge from '@arkui-x.bridge';
 import { ChatImages } from '../platform/ChatImages';
 import { SharedAgent } from '../platform/SharedAgent';
 import { ChatContext } from '../platform/ChatContext';
+import { CollectionReminderService } from '../utils/CollectionReminderService';
 import { MemoryQuery } from '../platform/MemoryQuery';
 import { AndroidWorkflow } from '../platform/AndroidWorkflow';
 import { WorkflowTask } from '../utils/WorkflowTypes';
@@ -110,6 +111,8 @@ struct Index {
   private runtimeGeneration: number = 0;
   private voiceGeneration: number = 0;
   private voicePending: boolean = false;
+  private reminderNavigation: string = '';
+  private reminderRouting: boolean = false;
 
   private context(): common.UIAbilityContext { return getContext(this) as common.UIAbilityContext; }
   aboutToAppear(): void {
@@ -118,9 +121,9 @@ struct Index {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.NONE);
     this.initialize().catch((error: Error): void => { this.startupError = error.message; });
   }
-  onPageShow(): void { this.startRuntime(); if (this.ready) { this.reloadData(); } }
-  onPageHide(): void { this.cancelChat(); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.saveSettings(); this.persistChat(); }
-  aboutToDisappear(): void { this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
+  onPageShow(): void { CollectionReminderService.setWindowReady(true); this.startRuntime(); if (this.ready) { this.reloadData(); CollectionReminderService.refresh().catch(() => {}); } }
+  onPageHide(): void { CollectionReminderService.setWindowReady(false); this.cancelChat(); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.saveSettings(); this.persistChat(); }
+  aboutToDisappear(): void { CollectionReminderService.setWindowReady(false); Bridge.createBridge('ClawMatePlatform').unRegisterMethod('collectionReminderArrived').catch(() => {}); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
   onBackPress(): boolean {
     this.saveSettings(); this.persistChat();
     if (Number(router.getLength()) > 1) { router.back(); return true; }
@@ -139,6 +142,10 @@ struct Index {
   private async initialize(): Promise<void> {
     let context = this.context();
     SettingsStore.initialize(context);
+    CollectionReminderService.initialize(context);
+    await Bridge.createBridge('ClawMatePlatform').registerMethod({ name: 'collectionReminderArrived', method: (): boolean => {
+      this.openReminder().catch(() => { showToastSafely('请返回主页面查看采集提醒'); }); return true;
+    } });
     AppTheme.syncSystemMode(context);
     await PrivacyConsent.initialize(context);
     this.onboarding = AppStorage.get<string>(FIRST_LAUNCH_ONBOARDING_STORAGE_KEY) !== FIRST_LAUNCH_ONBOARDING_VERSION;
@@ -150,6 +157,7 @@ struct Index {
     this.reloadSessions();
     if (this.sessions.length > 0) { await this.selectSession(this.sessions[0].id); }
     this.ready = true;
+    CollectionReminderService.setWindowReady(true);
     this.startRuntime();
   }
 
@@ -157,6 +165,21 @@ struct Index {
     if (this.runtimeTimer >= 0) { return; }
     this.runtimeTimer = setInterval((): void => { this.pollRuntime(); }, 200);
     this.pollRuntime();
+  }
+  private async openReminder(): Promise<void> {
+    if (!this.ready || this.onboarding || this.reminderRouting) { return; }
+    this.reminderRouting = true;
+    try {
+      let request = await Bridge.createBridge('ClawMatePlatform').callMethod('reminderRequest') as string;
+      if (request.length === 0 || request === this.reminderNavigation) { return; }
+      if (Number(router.getLength()) > 1) {
+        let answer = await promptAction.showDialog({ title: '打开采集任务？', message: '将离开当前页面，请先保存尚未完成的编辑。提醒不会自行执行任务。',
+          buttons: [{ text: '留在当前页', color: '#65718B' }, { text: '打开任务页', color: '#276EF1' }] });
+        if (answer.index !== 1) { await Bridge.createBridge('ClawMatePlatform').callMethod('reminderClear', request); return; }
+        await router.back({ url: 'pages/Index' });
+      }
+      this.reminderNavigation = request; this.tab = MainTabIndex.Task;
+    } finally { this.reminderRouting = false; }
   }
   private stopRuntime(): void {
     this.runtimeGeneration += 1;
@@ -170,6 +193,8 @@ struct Index {
       let snapshot = await NativeCapabilities.runtime();
       if (generation !== this.runtimeGeneration || this.runtimeTimer < 0) { return; }
       this.keyboardHeight = snapshot.keyboardHeight;
+      CollectionReminderService.acceptRuntime(snapshot.reminderVersion, snapshot.reminderRequest, snapshot.reminderReady && this.ready && !this.onboarding);
+      if (snapshot.reminderRequest.length > 0) { this.openReminder().catch(() => {}); }
       AppStorage.setOrCreate(APP_DARK_MODE_KEY, snapshot.dark);
       if (!this.voicePending && !this.asrActive) { this.applyVoiceSnapshot(snapshot); }
       this.applyAsrSnapshot(snapshot);

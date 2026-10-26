@@ -14,12 +14,44 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import ohos.stage.ability.adapter.StageActivity
+import android.app.KeyguardManager
+import com.clawmate.platform.reminder.CollectionReminderEngine
 
 class SharedActivity : StageActivity() {
     private lateinit var platform: PlatformBridge
     private var captureId = ""
     private var captureStatus = "missing"
     private var captureFile: File? = null
+    private var resumedForReminder = false
+    private var pendingReminder = ""
+
+    internal fun reminderWindowReady(): Boolean = resumedForReminder && !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    internal fun reminderRequest(): String {
+        if (pendingReminder.isEmpty()) return ""
+        pendingReminder = runCatching {
+            val value = JSONObject(pendingReminder)
+            CollectionReminderEngine(this).pending(value.getString("planToken"), value.getLong("dueAt"))
+        }.getOrDefault("")
+        return pendingReminder
+    }
+    internal fun clearReminderRequest() {
+        pendingReminder = ""
+        intent?.removeExtra(CollectionReminderEngine.TOKEN); intent?.removeExtra(CollectionReminderEngine.DUE)
+    }
+    private fun acceptReminder(value: Intent?) {
+        if (value?.action != CollectionReminderEngine.ACTION) return
+        pendingReminder = runCatching { CollectionReminderEngine(this).pending(value.getStringExtra(CollectionReminderEngine.TOKEN).orEmpty(),
+            value.getLongExtra(CollectionReminderEngine.DUE, 0)) }.getOrDefault("")
+    }
+    override fun onNewIntent(value: Intent) {
+        super.onNewIntent(value); setIntent(value); acceptReminder(value)
+        if (reminderRequest().isNotEmpty() && reminderWindowReady()) platform.callMethod("collectionReminderArrived")
+    }
+    override fun onResume() {
+        super.onResume(); resumedForReminder = true
+        if (reminderRequest().isNotEmpty()) platform.callMethod("collectionReminderArrived")
+    }
+    override fun onPause() { resumedForReminder = false; super.onPause() }
 
     internal fun startCapture(): String {
         check(captureStatus != "running") { "相机已打开" }
@@ -60,6 +92,7 @@ class SharedActivity : StageActivity() {
         platform = PlatformBridge(this)
         setInstanceName("com.clawmate.shared:entry:EntryAbility:")
         super.onCreate(state)
+        acceptReminder(intent)
         updateSystemBars()
     }
 

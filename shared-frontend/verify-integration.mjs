@@ -98,13 +98,14 @@ await check('historical image files contain only the decoded byte range and rema
 });
 
 await check('workflow results persist actual summary metadata; cancellation never commits a late summary', async () => {
-  const files = new Map(), statuses = []; let cancelled = false, nativeCalls = 0;
+  const files = new Map(), statuses = []; let cancelled = false, nativeCalls = 0, collectionMarks = 0;
   const signal = { isCancelled: () => cancelled, setHandler() {}, throwIfCancelled() { if (cancelled) throw new Error('用户取消'); } };
   const storage = { ensureDir() {}, readText: path => files.get(path) ?? '',
     writeTextAtomic: (path, value) => files.set(path, value), writeJsonAtomic: (path, value) => files.set(path, JSON.stringify(value)) };
   const { AndroidWorkflow } = module('shared-frontend/adapters/platform/AndroidWorkflow.ets', 'AndroidWorkflow', {
     WorkflowStorage: { updateTaskRun: (_, id, status) => statuses.push(status), readTaskWorkflowJson: () => '{"steps":[]}', runsDir: () => '/fixture/runs' },
     DataManagerFacade: class { storage = storage; paths = { dailyLogRoot: '/fixture/daily-log' }; ensureReady() {} },
+    CollectionReminderService: { recordSuccessfulCollection: async () => { collectionMarks++; assert.ok([...files.keys()].some(path => path.endsWith('.md'))); } },
     Bridge: { createBridge: () => ({ async callMethod(method) {
       nativeCalls++;
       if (method === 'workflowStart') return 'run-one';
@@ -117,9 +118,11 @@ await check('workflow results persist actual summary metadata; cancellation neve
   assert.equal(JSON.parse([...files.entries()].find(([path]) => path.endsWith('/run_summary.json'))[1]).source_kind, 'android_workflow');
   const log = [...files.entries()].find(([path]) => path.endsWith('.md'))[1];
   assert.ok(log.includes('1. 真实输入的输出')); assert.ok(log.includes('"task_scene_id":12'));
+  assert.equal(collectionMarks, 1);
   cancelled = true; const count = files.size;
   await assert.rejects(AndroidWorkflow.run('/fixture', { id: 'task-two' }, signal), /取消/);
   assert.equal(files.size, count); assert.equal(nativeCalls, 2); assert.equal(statuses.at(-1), 'cancelled');
+  assert.equal(collectionMarks, 1);
 });
 
 // Execute the actual generated data-pipeline method with a controlled model

@@ -1,13 +1,13 @@
 # ClawMate Android 迁移状态与日志
 
-更新：2026-10-26。迁移进度、阶段与验证统一记录于此；架构见[共享架构](docs/SHARED_ARCHITECTURE.md)，页面规范见[前端对齐](docs/FRONTEND_PARITY.md)，后续工作见[待办](MIGRATION_BACKLOG.md)。
+更新：2026-10-27。迁移进度、阶段与验证统一记录于此；架构见[共享架构](docs/SHARED_ARCHITECTURE.md)，页面规范见[前端对齐](docs/FRONTEND_PARITY.md)，后续工作见[待办](MIGRATION_BACKLOG.md)。
 
 ## 当前版本
 
 - 主前端：ArkTS/ArkUI + ArkUI-X；Android 宿主 `shared-app`，包名 `com.clawmate.shared`，版本 `0.3-integrated`。
 - 根 Gradle 同时管理共享宿主、Compose 基线 `app` 与共用 Kotlin 库 `android-capabilities`；原正式包和私有数据保留，共享版不双写或自动导入旧数据。
-- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前141个 ArkTS 编译输入中78个不变、35个适配、28个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
-- 交付分支：`codex/android-migration`。功能整合提交 `53816d8`，未切换正式包名或合并 main。
+- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前141个 ArkTS 编译输入中77个不变、36个适配、28个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
+- 当前交付分支：`codex/meeting-sdk-integration`；此前共享整合分支为`codex/android-migration`。未切换正式包名或合并 main。
 
 ## 功能覆盖
 
@@ -23,6 +23,7 @@
 | 图库、汇总、集合 F07–F09 | 原分析/检索/问答/照片引用、12类记忆、详情和分页；本地OCR共用，完整私人图库与真实视觉服务待验收 |
 | 数据管理、长期记忆 F03 | `MemorySyncPage`→`DataManagerFacade`/`ChatMemorySync`→日志/索引；近7天范围确认、保存的模型名、进度/取消、检查点去重及无网络索引重建 |
 | 工作流 F10 | 原图/JSON、上下文、新建/保存/复制/删除和文件查看；`AndroidWorkflow`调用共用执行器，支持等待/条件/有限循环/echo/summary、单任务/批量停止，限60秒/200步；真实结果写入run_summary.json，成功summary进入日志 |
+| 采集提醒 F14 | 原面板/策略与任务页；Kotlin独占每日闹钟、权限/渠道、通知及防重收据，点击通知后前台解锁确认再执行有界任务；近似时间，省电送达仍待验收 |
 | 语音、数字分身 | 原控件接共用系统ASR/TTS，按需申请权限；原分身生成/历史/版本和文生图协议；真人识别、实拍和实际生成效果待验收，照片参考生成仍受限 |
 | 云模型与授权 | Android兼容HTTP/SSE、超时/取消/授权撤回；端点、模型和凭据本地配置，图片与聊天记忆另作范围确认 |
 | 本地模型、C++/MNN | 保留配置和明确能力边界；MNN/HiAI/OM推理及模型下载未接入 |
@@ -58,7 +59,7 @@
 ## 剩余边界与追溯
 
 真实云服务/视觉/分身、真人ASR、相机实拍、多厂商Android/iOS、TalkBack及鸿蒙同状态像素/动画仍未验收。
-GUI规划、HDC/Python/微信采集、通知、MiMO、MNN/HiAI、照片参考分身、真实摘要质量和正式包/旧数据迁移仍有待办；动态主题下UIAutomator节点刷新边界保留。
+GUI规划、HDC/Python/微信采集、提醒实际后台送达、MiMO、MNN/HiAI、照片参考分身、真实摘要质量和正式包/旧数据迁移仍有待办；动态主题下UIAutomator节点刷新边界保留。
 
 历史全文保留在Git提交 `e89f6e7` 及其之前的版本；例如 `git show e89f6e7:docs/archive/MIGRATION_STATUS.en.md`。后续迁移日志只更新本文，其他文档维护设计、构建方法或待办。
 
@@ -138,3 +139,32 @@ TalkBack、多厂商、真实服务及旧数据迁移验收。详见[维护评�
 APK负载与ZIP对齐检查通过；已知会议依赖`libandroid-complex-math.so`的16 KB ELF门禁仍失败，
 不属于本阶段已修复范围。真实云摘要质量、实际模型token窗口、极端磁盘/进程中断与文件/索引事务、
 多厂商及无障碍仍待专项验收；不以受控模型端口或本地抽取冒充真实云推理。
+
+## SH-12：Android每日采集提醒（2026-10-27）
+
+已将此前`fdb017a`、`58bacf0`推送到GitHub的`codex/meeting-sdk-integration`分支，
+随后继续移植F14。原提醒面板、策略和任务页通过ArkTS适配调用共用Kotlin提醒引擎；
+实现系统通知权限、渠道、每日近似闹钟、改时/撤销、时区/时钟/开机恢复入口和明确错误。
+通知直接打开Activity，前台解锁后显示执行确认；先持久化当日领取收据再启动已开启的有界任务。
+取消不启动任务，过期/旧计划/重复请求被拒绝；只有保存真实非空summary才更新最近采集时间。
+Android独占提醒状态，ArkTS只缓存快照；Compose基线不增加提醒权限、不变更其数据。
+当前编译输入141个：77不变、36适配、28新平台文件。详见[移植设计](docs/COLLECTION_REMINDERS.md)。
+
+验证：**81项主机检查通过**，其中新增提醒14项；两次prepare一致、编译来源校验通过。
+实际构建ArkTS/HAP、匹配运行库、共享APK及测试APK并安装；强制JVM回归
+Compose1243 + 共用能力108 + 会议SDK15 = **1366项通过**，零失败/错误/跳过。
+OPPO PKB110 / Android16：提醒3项、原生/会议7项、聊天上下文1项，**11项设备检查通过**。
+提醒专项实际检查拒绝权限无注册、AlarmManager注册/改时/撤销、旧计划拒绝与受控时区恢复；
+受控触发真实接收器后，经真实通知栏点击进入ArkTS任务确认，取消不执行，领取收据持久化防重。
+测试前关闭的通知权限已通过系统设置恢复关闭（系统保留USER_SET标记），提醒偏好恢复、临时闹钟/通知清理。
+
+早期尝试修复了ArkTS类继承类型、Kotlin集合类型推断、权限对话框自动化和OCR定位问题。
+自然调度尝试等待约645秒并到达确认界面，但因OCR“已/己”定位失败；最终通过记录使用受控触发，
+**不宣称自然调度或准点后台投递已验收**。真实重启、Doze、多厂商和锁屏仍需专项测试。
+完整命令、失败与证据见[验证报告](shared-frontend/verification-reminders.json)。
+
+本次APK SHA256：`d067f562f44febdc37c43690f8e7a2aa3f59f0b56a965fefb1efd896d341fe8d`。
+APK负载和ZIP16 KB对齐通过；325个ELF中会议依赖`libandroid-complex-math.so`仍只有4 KB对齐，
+`--require-16kb`实际返回1，107个ArkUI-X库无此静态失败。发布阻塞仍未解除。
+本轮进一步验证了原界面/策略与Kotlin系统状态分离的可维护路径；长期维护结论仍需真实上游/SDK升级演练、
+包体优化、无障碍、真实服务和正式数据迁移，不以此次功能通过替代这些验收。

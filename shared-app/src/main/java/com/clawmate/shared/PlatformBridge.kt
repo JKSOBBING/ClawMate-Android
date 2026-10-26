@@ -23,6 +23,7 @@ import com.clawmate.app.gallery.ocr.LocalOcrRecognizer
 import com.clawmate.platform.LocalImageAccess
 import com.clawmate.platform.NativeOperations
 import com.clawmate.platform.SharedNativeWork
+import com.clawmate.platform.reminder.CollectionReminderEngine
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.Closeable
@@ -35,6 +36,42 @@ class PlatformBridge(private val activity: StageActivity) :
     private val workflowJobs = NativeOperations<WorkflowRunResult>(1)
     private var asr: AndroidSpeechRecognizerAsrAdapter? = null
     private val meeting = MeetingBridge(activity as SharedActivity)
+    private val reminders = CollectionReminderEngine(activity)
+
+    fun reminderInitialize(hour: String, minute: String): String = onUi {
+        reminders.initialize(SharedActivity::class.java.name, hour.toInt(), minute.toInt())
+    }
+    fun reminderRefresh(): String = onUi { reminders.refresh() }
+    fun reminderState(): String = onUi { reminders.snapshot() }
+    fun reminderSetEnabled(enabled: Boolean): String = onUi {
+        if (enabled && Build.VERSION.SDK_INT >= 33 && activity.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            runCatching { reminders.setEnabled(true) } // Persist a controlled disabled/error state before the prompt.
+            activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7303)
+            return@onUi reminders.snapshot()
+        }
+        val result = reminders.setEnabled(enabled)
+        (activity as SharedActivity).clearReminderRequest()
+        result
+    }
+    fun reminderSetTime(hour: String, minute: String): String = onUi {
+        val result = reminders.setTime(hour.toInt(), minute.toInt())
+        (activity as SharedActivity).clearReminderRequest()
+        result
+    }
+    fun reminderRecordCollection(): String = onUi { reminders.recordCollection() }
+    fun reminderClaim(request: String): Boolean = onUi {
+        val host = activity as SharedActivity
+        if (!host.reminderWindowReady() || host.reminderRequest() != request || request.isEmpty()) return@onUi false
+        val claimed = reminders.claim(request)
+        if (claimed) host.clearReminderRequest()
+        claimed
+    }
+    fun reminderClear(request: String): Boolean = onUi {
+        val host = activity as SharedActivity
+        if (host.reminderRequest() == request) host.clearReminderRequest()
+        true
+    }
+    fun reminderRequest(): String = onUi { (activity as SharedActivity).reminderRequest() }
 
     fun meetingInitialize(): Boolean = onUi { meeting.initialize() }
     fun meetingAttach(): Boolean = onUi { meeting.attach() }
@@ -223,6 +260,8 @@ class PlatformBridge(private val activity: StageActivity) :
             .put("voiceMessageId", voice.messageId)
             .put("voiceError", if (failure) "本机未提供可用的中文朗读引擎，请在系统设置中安装或启用" else voice.error)
             .put("asrState", asrState).put("asrText", asrText).put("asrError", asrError).put("asrVersion", asrVersion)
+            .put("reminderVersion", reminders.version()).put("reminderRequest", (activity as SharedActivity).reminderRequest())
+            .put("reminderReady", (activity as SharedActivity).reminderWindowReady())
             .toString()
     }
 

@@ -12,6 +12,9 @@ export interface AndroidRuntimeSnapshot {
   asrText: string;
   asrError: string;
   asrVersion: number;
+  reminderVersion: number;
+  reminderRequest: string;
+  reminderReady: boolean;
 }
 interface OcrSnapshot { v: number; status: string; text: string; error: string; }
 

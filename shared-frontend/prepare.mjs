@@ -54,6 +54,8 @@ const navigationConstants = ['TAB_BAR_HEIGHT', 'TAB_BAR_BOTTOM_MARGIN', 'TAB_BAR
   return 'export ' + match[0];
 });
 const sourceIndex = read('pages/Index.ets');
+overlay('components/CollectionReminderPanel.ets', replaceChecked(read('components/CollectionReminderPanel.ets'),
+  '      Row({ space: 8 }) {', "      Text('Android 会在设定时间附近提醒，可能因省电策略延迟。提醒本身不采集数据，点击通知后需确认任务。').fontSize(12).fontColor(AppTheme.text('#6F7584')).width('100%')\n      Row({ space: 8 }) {"));
 overlay('platform/UpstreamChatContext.ets', buildChatContextSource(sourceIndex));
 const navigationMethods = ['tabIconResource', 'tabBarStyle'].map(name => {
   const match = sourceIndex.match(new RegExp(`  private ${name}\\([^]*?\\n  \\}`));
@@ -184,6 +186,12 @@ overlay('datamanager/DataPipelineModelClient.ets', applyPatches(read('datamanage
   ['        dataManagerInfo(`Model request response:', '        config.ensureActive?.();\n        dataManagerInfo(`Model request response:']
 ]));
 let taskPage = read('pages/task/TaskPage.ets');
+taskPage = applyPatches(taskPage, [
+  ['      this.lastAutomaticReminderRequest = request;', "      let choice = await promptAction.showDialog({ title: '执行已开启的任务？', message: '将依次执行已开启的 Android 有界任务；GUI 与未配置模型工具仍会阻断。可停止执行。', buttons: [{ text: '取消', color: '#65718B' }, { text: '执行任务', color: '#276EF1' }] });\n      if (choice.index !== 1) { CollectionReminderService.clearRequest(request); return; }\n      if (!this.active || !this.reminderWindowReady || this.reminderRequest !== request) { return; }\n      this.lastAutomaticReminderRequest = request;"],
+  ['!CollectionReminderService.claim(reminderRequest)', '!await CollectionReminderService.claim(reminderRequest)'],
+  ["      AppStorage.setOrCreate('collectionReminderActiveBatch', true);", "      if (!this.active || (automatic && !this.reminderWindowReady)) { return; }\n      AppStorage.setOrCreate('collectionReminderActiveBatch', true);"],
+  [/    if \(!cancellation.isCancelled\(\) && savedTask !== undefined && savedTask.lastStatus === 'success'\) \{[^]*?\n    \}/, '    // AndroidWorkflow records collection only after saving a real summary artifact.']
+]);
 taskPage = replaceChecked(taskPage, '  private fileViewerContainsAiGeneratedContent(): boolean {',
   '  private fileViewerContainsAiGeneratedContent(): boolean {\n    if (/"source_kind"\\s*:\\s*"android_workflow"/.test(this.fileViewerText)) { return false; }');
 // Deterministic Android workflows do not need cloud login or phone HDC setup.

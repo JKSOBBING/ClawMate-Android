@@ -10,7 +10,7 @@
 `adapters/` 只提供平台接口或明确的能力限制；`prepare.mjs` 保存少量可审查的源码适配。
 没有修改鸿蒙源项目，也没有用截图或 Compose 重新描绘这些页面。
 
-SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一致、35 个经适配、22 个为新平台代码。
+SH-12 生成工程包含 141 个 ArkTS 文件：77 个与锁定上游逐字一致、36 个经适配、28 个为新平台代码。
 这是该编译输入的统计，不是整个鸿蒙产品的复用率。
 
 - `upstream-lock.json` 与 `../experiments/arkui-x/ui-upstream-lock.json` 锁定全部输入，准备时逐文件检查 Git blob。
@@ -34,12 +34,13 @@ SH-06 生成工程包含 135 个 ArkTS 文件：78 个与锁定上游逐字一�
 | 汇总、事件详情 | CollectionPage / CollectionGroupDetailPage | 读取真实索引，支持原详情与分页；同步调用原数据管线，空数据不伪造同步时间 |
 | 图库、筛选、检索、问答 | GalleryPage / GalleryStorage / GallerySearchService / GalleryAnalyzer | 原页面与存储/云协议；系统选图可打开和取消。OCR 经 URI 桥接到共用本地引擎，失败明确返回；未上传私人照片或做真实模型分析；HDC 批量读图受限 |
 | 数据管理 | DataManagerFacade / ChatMemorySync / IndexService / MemorySyncPage | 显式近7天范围确认、保存的模型名、进度/取消、检查点去重；本地索引重建不发云请求。共享文件独立，未导入旧应用私有数据 |
-| 任务与工作流 | TaskPage / WorkflowStorage / AndroidWorkflow / 共用 WorkflowRunnerImpl | 原图/JSON与文件管理；已接有界等待/条件/循环/echo/summary、单任务/批量停止、真实结果/日志；GUI和模型工具仍受限，开关不注册后台调度 |
+| 任务与工作流 | TaskPage / WorkflowStorage / AndroidWorkflow / 共用 WorkflowRunnerImpl | 原图/JSON与文件管理；已接有界等待/条件/循环/echo/summary、单任务/批量停止、真实结果/日志；GUI和模型工具仍受限。任务开关控制批量候选，不自行后台执行 |
+| 每日采集提醒 | CollectionReminderPanel / 原策略 / Kotlin CollectionReminderEngine | 实际通知权限、每日近似闹钟、改时/撤销及通知跳转；前台解锁后再次确认才执行任务。原时间迁移一次；真实非空摘要保存后更新采集时间；省电送达和多厂商待验收 |
 | 设置与服务 | SettingsCenterPage / SettingsCenterControls | 原分组和表单；私有偏好持久化，写失败保留可重试状态；空服务显示“未配置”；用户主动测试模型时才请求配置的服务 |
 | 账号与隐私 | PrivacyConsent / PrivacyConsentDialog | 安卓授权指使用自配云服务，不代表华为账号登录；声明按实际行为改写并单独版本化；拒绝/撤回会阻断请求，小艺 A2A 明确不可用 |
 | 数字分身 | HomePage / AvatarService / SeedreamAvatarProvider | 原生成/历史/参数快照界面及文生图服务连接；真实生成待验收。照片参考上传、人物前景分割未验收/未接入，不伪造成功 |
 | 语音、本地模型 | 原语音控件 / 共用 Android ASR、TTS | TTS真实回调、暂停/文本重播；ASR连接系统服务并按需申请麦克风权限，没有伪造转录。真人识别质量未验收；MNN/HiAI/OM未接入 |
-| HDC/GUI、Python、通知 | 平台接口与能力说明页 | 未执行跨应用操作或后台任务；时间可以保存，但提醒始终不显示已注册 |
+| HDC/GUI、Python | 平台接口与能力说明页 | 跨应用操作、外部Python服务和微信自动采集仍受限；提醒不自动启动这些能力 |
 | 桌面端、诊断、日志 | Android 平台页 / 原工作流查看页 | 用户自行填写 HTTPS 桌面下载地址；原生诊断受限；运行日志只展示实际内存日志 |
 
 ## 构建
@@ -70,6 +71,7 @@ SH-01 独立工程的历史文件名为 `ClawMateShared-debug.apk`，构建时�
 node shared-frontend/verify.mjs
 node shared-frontend/verify-native.mjs
 node shared-frontend/verify-integration.mjs
+node shared-frontend/verify-reminders.mjs
 node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/reference
 ./gradlew.bat :android-capabilities:testDebugUnitTest :app:testDebugUnitTest
 ```
