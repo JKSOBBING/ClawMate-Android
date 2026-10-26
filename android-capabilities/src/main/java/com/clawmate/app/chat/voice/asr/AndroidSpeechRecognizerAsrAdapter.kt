@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import androidx.core.content.ContextCompat
 import com.clawmate.app.chat.voice.VoiceTranscriptLogic
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -87,7 +86,7 @@ class AndroidSpeechRecognizerAsrAdapter(
     val isListening: Boolean get() = live.get()
 
     fun hasRecordPermission(): Boolean =
-        ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+        context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
     fun isRecognizerAvailable(): Boolean =

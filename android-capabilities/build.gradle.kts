@@ -15,7 +15,20 @@ android {
 }
 
 dependencies {
+    // Match versions already selected by the Compose host; keep both hosts on
+    // one dependency graph when these engines are consumed independently.
+    implementation("androidx.annotation:annotation:1.8.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.20")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.20")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-common:1.9.24")
+    api(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.exifinterface)
+    implementation(libs.okhttp)
+    implementation("com.squareup.okio:okio:3.8.0")
     implementation(libs.mlkit.text.recognition.chinese)
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 }

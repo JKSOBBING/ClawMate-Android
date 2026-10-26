@@ -442,3 +442,11 @@
 - 首页分身弹层的返回键已实际关闭弹层；日夜间首页、设置、系统栏和悬浮底栏截图已人工检查。修复透明手势区域在深色下透出白色窗口底色的问题。原系统主题为 no，测试结束恢复 no，手机返回亮色首页；最终冷启动单次记录 819ms，不作性能基准。当前进程 AndroidRuntime 错误日志为空，不覆盖之前已修复的测试运行器失败。
 - shared-device-final-build.log 中 ArkTS 构建成功 16.967s、Android 构建成功 43s；shared-device-final-test-build.log 测试包构建成功 27s。共享主机 6+7 项契约复跑通过，原始 8 项契约继续通过；前轮 1320+27 项单元回归仍有效，本轮未修改其业务实现。证据和最终产物哈希更新在 shared-frontend/verification-integration.json。
 - 已知边界：API 20 动态切换主题后 UIAutomator 有时只返回宿主节点，画面和点击正常，冷启动恢复完整节点；未作 TalkBack 验收。真实云端图库/关怀/分身、ASR/附件、自动任务与 MNN，以及其他厂商/鸿蒙同状态像素材质验收仍未完成。前一阶段提交：1d42f90。
+
+## 2026-10-26 SH-05：两次聊天功能审计与共用执行能力抽取
+
+- 对照上一聊天的基线 7f76afb→cc23078 和当前共享阶段记录，确认图片聊天、query_events、显式聊天记忆管理和有界工作流运行存在共享入口缺口。用户明确要求全部进入同一共享 APK 后再推送；本阶段尚未推送。
+- 将原版图片准备/私有图片存储、ASR/转录规则、工作流模型/JSON 校验/执行器、受限 HDC 协议及其纯日志模型抽入 android-capabilities。公开包名保留，两版使用同一实现；没有引入 Compose、Room、DataStore 或任一应用依赖。共享端结果仍由 ArkTS 写入。
+- 实际执行 :android-capabilities:testDebugUnitTest :app:testDebugUnitTest :shared-app:assembleDebug --offline --no-daemon --console=plain，reconciliation-native-build.log 为 BUILD SUCCESSFUL（8m17s）。Compose 1243 项、共用库104项，合计1347项，0失败/错误/跳过；77项测试随实现迁移，没有删除原有覆盖。
+- 失败保留：独立库最初选择未缓存的 AndroidX/Kotlin/Okio 传递版本，已与现有宿主版本对齐；解析测试依赖 app 的默认工作流目录，保留在 app 测试集后通过。新增 ArkTS 接线首轮因 throw 类型和语音状态枚举失败，修正后编译通过；不代表新入口已完成真机验收。
+- 原 app 包名、私有数据库、配置与旧用户数据均未迁移或清理。共享界面接线和最终真机验证将在下一阶段记录。前一阶段提交：0678fdf。
