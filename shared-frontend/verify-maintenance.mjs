@@ -47,15 +47,15 @@ try {
   });
   // A minimal independent project exercises freshness, without modifying the
   // pinned reference or borrowing the developer's live compiled runtime.
-  for (const file of ['shared-frontend/Input.ets', 'experiments/arkui-x/prepare-project.mjs',
+  for (const file of ['shared-frontend/Input.ets', 'scripts/build-shared.sh', 'experiments/arkui-x/prepare-project.mjs',
     'experiments/arkui-x/package-android.py', 'experiments/arkui-x/toolchain-lock.json',
     'app/src/main/res/drawable-nodpi/onboarding_agent.png', 'app/src/main/res/drawable-nodpi/onboarding_avatar.png',
     'app/src/main/res/drawable-nodpi/onboarding_data_home.png']) put(file, 'fixture');
-  for (const file of ['shared-frontend/upstream-lock.json', 'experiments/arkui-x/ui-upstream-lock.json']) put(file, '{"files":[]}');
-  for (const base of ['project', 'application/project']) {
+  for (const file of ['shared-frontend/upstream-lock.json', 'experiments/arkui-x/ui-upstream-lock.json', 'shared-frontend/resource-lock.json']) put(file, '{"files":[]}');
+  for (const base of ['shared-frontend/template', '.arkui-x-validation/application/project']) {
     for (const file of ['AppScope/app.json5', 'hvigor/config.json5', 'entry/src/main/resources/strings.json',
       'entry/src/main/ets/entryability/EntryAbility.ets', 'hvigorfile.ts', 'oh-package.json5', 'entry/oh-package.json5',
-      'entry/hvigorfile.ts', 'entry/src/main/module.json5']) put('.arkui-x-validation/' + base + '/' + file, '{}');
+      'entry/hvigorfile.ts', 'entry/src/main/module.json5']) put(base + '/' + file, '{}');
   }
   for (const file of ['build-profile.json5', 'entry/build-profile.json5', '.arkui-x/arkui-x-config.json5', 'staged-sources.json']) {
     put('.arkui-x-validation/application/project/' + file, '{}');
@@ -68,7 +68,8 @@ try {
   });
   check('editing source, generated code or resources invalidates preparation', () => {
     for (const file of ['shared-frontend/Input.ets', '.arkui-x-validation/application/project/entry/src/main/module.json5',
-      '.arkui-x-validation/project/entry/src/main/resources/strings.json']) {
+      'shared-frontend/template/entry/src/main/resources/strings.json', '.arkui-x-validation/application/project/hvigor/config.json5',
+      'scripts/build-shared.sh']) {
       const full = path.join(fixture, file), before = fs.readFileSync(full);
       put(file, 'changed'); assert.throws(() => verifyPrepared(fixture), /stale/); fs.writeFileSync(full, before);
     }
@@ -93,12 +94,18 @@ if (process.argv.includes('--prepare-twice')) {
   check('two real preparations are identical despite a stale overlay from an older adaptation', () => {
     const first = prepare();
     const stale = path.join(repo, '.arkui-x-validation/application/overlays/pages/onboarding/FirstLaunchOnboarding.ets');
+    const staleSource = path.join(repo, '.arkui-x-validation/application/project/entry/src/main/ets/platform/Abandoned.ets');
+    const staleWrapper = path.join(repo, '.arkui-x-validation/application/project/hvigor/orphan-wrapper.js');
     assert.ok(!fs.existsSync(stale), 'Do not overwrite a live overlay');
     fs.mkdirSync(path.dirname(stale), { recursive: true });
     fs.writeFileSync(stale, '// stale adaptation must never enter the compilation input');
+    assert.ok(!fs.existsSync(staleSource) && !fs.existsSync(staleWrapper));
+    fs.writeFileSync(staleSource, '// untracked old generated source');
+    fs.writeFileSync(staleWrapper, '// wrapper from an older template');
     const second = prepare();
     assert.equal(second.digest, first.digest);
     assert.ok(!fs.existsSync(stale));
+    assert.ok(!fs.existsSync(staleSource) && !fs.existsSync(staleWrapper));
   });
 }
 console.log(JSON.stringify({ passed, scope: 'Source adaptation, preparation determinism and stale runtime prevention' }));

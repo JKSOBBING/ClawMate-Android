@@ -70,8 +70,30 @@ class WorkflowModelDeviceTest {
         val recognizer=TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
         try {
             val result=Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap,0)),15,TimeUnit.SECONDS)
-            val line=result.textBlocks.flatMap { it.lines }.firstOrNull { it.text.replace(Regex("\\s+"),"")==text } ?: return false
-            val bounds=line.boundingBox ?: return false; val time=SystemClock.uptimeMillis()
+            val lines=result.textBlocks.flatMap { it.lines }
+            val normalize: (String)->String = { it.replace(Regex("\\s+"),"") }
+            // Recorded PKB110 OCR confusion for the blue 送 glyph. This is a
+            // fixture-driver alias only; actual failed-run receipts stay required.
+            val labels=if(text=="发送图片")setOf(text,"发迭图片")else setOf(text)
+            var bounds=lines.firstOrNull { normalize(it.text) in labels }?.boundingBox
+            // ML Kit can merge the two dialog buttons into one line. Use exact
+            // consecutive elements, and prefer the bottom button over its title.
+            if(bounds==null && text in listOf("取消","发送图片")) {
+                val candidates=mutableListOf<Rect>()
+                for(line in lines) for(start in line.elements.indices) {
+                    var label=""; val box=Rect()
+                    for(end in start until line.elements.size) {
+                        val element=line.elements[end];val part=element.boundingBox ?: break
+                        label+=normalize(element.text);box.union(part)
+                        if(label in labels){candidates.add(Rect(box));break}
+                        if(label.length>=text.length)break
+                    }
+                }
+                bounds=candidates.maxByOrNull { it.centerY() }
+            }
+            bounds ?: return false
+            evidence("workflowRenderedClick",text+" "+bounds.toShortString())
+            val time=SystemClock.uptimeMillis()
             val down=MotionEvent.obtain(time,time,MotionEvent.ACTION_DOWN,bounds.centerX().toFloat(),bounds.centerY().toFloat(),0)
             val up=MotionEvent.obtain(time,time+80,MotionEvent.ACTION_UP,bounds.centerX().toFloat(),bounds.centerY().toFloat(),0)
             down.source=InputDevice.SOURCE_TOUCHSCREEN;up.source=InputDevice.SOURCE_TOUCHSCREEN
@@ -90,7 +112,15 @@ class WorkflowModelDeviceTest {
             }
             Thread.sleep(300)
         }
-        instrumentation.uiAutomation.takeScreenshot()?.let{bitmap->File(context.cacheDir,"migration-workflow-model-failure.png").outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()}
+        instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+            File(context.cacheDir,"migration-workflow-model-failure.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
+            val recognizer=TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+            try {
+                val result=Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap,0)),15,TimeUnit.SECONDS)
+                // This screenshot contains this test's synthetic fixture only.
+                evidence("workflowMissingControlOCR",result.textBlocks.flatMap{it.lines}.filter{(it.boundingBox?.centerY() ?: 0)>bitmap.height/2}.takeLast(12).joinToString(" | "){it.text.take(80)+" "+it.boundingBox?.toShortString()})
+            } finally { recognizer.close();bitmap.recycle() }
+        }
         error("Rendered workflow control missing: $text")
     }
     private fun awaitFailure(index: File, id: String, previous: String = ""): JSONObject {

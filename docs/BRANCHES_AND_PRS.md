@@ -7,18 +7,17 @@
 | 分支 | 用途 |
 | --- | --- |
 | `main` | 跟随 [上游 main](https://github.com/yydhYYDH/ClawMate-Android/tree/main)，本轮核对为 `13708b4`；不直接堆入待评审功能 |
-| `codex/shared-frontend` | 唯一共享前端开发入口，包含 SH-01～14：宿主、共用能力、图片/记忆/工作流、会议、提醒、视觉问答及图库恢复 |
+| `codex/shared-frontend` | 唯一共享前端开发入口；继续完成技术路线验证与移植，阶段与结果见迁移日志 |
 
-后续相关移植直接在共享开发分支累积小提交，统一更新同一个上游整合 PR；只有独立且可能破坏稳定性的试验才另开临时分支。
+后续相关移植直接在共享开发分支累积小提交并推送 fork；只有独立且可能破坏稳定性的试验才另开临时分支。
+用户决定先完成技术路线闭环，再与 fellow 讨论是否递交 PR；在收到新指示前不新建、重开或自动合并上游 PR。
 
 ## 评审入口
 
-唯一评审入口：[上游 #5：整合 ArkUI-X Android 移植与图库恢复](https://github.com/yydhYYDH/ClawMate-Android/pull/5)。直接以 `yydhYYDH/ClawMate-Android:main` 为基底，使用 fork 的 `codex/shared-frontend` 为内容分支。
-原 fork Draft #3～7 已关闭，由该整合 PR 替代，只供历史查询。上游 Compose [#4](https://github.com/yydhYYDH/ClawMate-Android/pull/4) 已合并。
+此前的[上游 #5](https://github.com/yydhYYDH/ClawMate-Android/pull/5) 已按用户最新决定关闭，保留历史记录。原 fork Draft #3～7 也已关闭，不作为当前评审请求。上游 Compose [#4](https://github.com/yydhYYDH/ClawMate-Android/pull/4) 已合并。
 
-共享分支已合入上游 `13708b4`，保留上游新增的三份工具链脚本；应用源码与 SH-14 提交 `0108ca9` 相同。
-不改变正式应用包名或迁移用户数据。无冲突（MERGEABLE）与 GitHub Auto-merge 是不同状态：后者还需要上游开启功能，并满足写权限、审核和必需检查。
-GitHub 本轮返回 `mergeable=true`、`mergeable_state=clean`，没有合并冲突。当前账号只能管理 fork，没有上游写权限；合并及启用 Auto-merge 的请求均被 GitHub 以权限不足拒绝（`EnablePullRequestAutoMerge`），Auto-merge 未启用，需上游维护者操作。不得通过削弱检查或伪造成功状态绕过这些条件。
+共享分支已合入上游 `13708b4`，后续改动继续在该分支维护。不改变正式应用包名或迁移用户数据。
+此前 PR 的无冲突检查与 Auto-merge 权限拒绝只属于历史验证；当前不申请合并。
 
 ## 历史追溯
 

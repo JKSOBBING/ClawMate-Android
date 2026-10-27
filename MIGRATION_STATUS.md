@@ -6,8 +6,8 @@
 
 - 主前端：ArkTS/ArkUI + ArkUI-X；Android 宿主 `shared-app`，包名 `com.clawmate.shared`，版本 `0.3-integrated`。
 - 根 Gradle 同时管理共享宿主、Compose 基线 `app` 与共用 Kotlin 库 `android-capabilities`；原正式包和私有数据保留，共享版不双写或自动导入旧数据。
-- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前144个 ArkTS 编译输入中76个不变、37个适配、31个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
-- 统一开发分支：`codex/shared-frontend`，包含 SH-01～14 并已合入上游 `13708b4`；fork `main` 跟随上游。原分层 Draft PR 和功能分支由统一上游 PR 替代，见[分支导航](docs/BRANCHES_AND_PRS.md)。未切换正式包名或将共享版合入 main。
+- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前页面/业务准备清单144个ArkTS文件中76个不变、37个适配、31个新增平台文件（含从原Index提取的上下文编排），另有作者启动Ability；不是全产品复用率。
+- 统一开发分支：`codex/shared-frontend`，已合入上游 `13708b4`；fork `main` 跟随上游。用户决定先完成技术路线闭环，再与 fellow 讨论是否递交 PR；此前上游 #5 已关闭，后续仅推送 fork，不新建/重开/自动合并 PR。见[分支导航](docs/BRANCHES_AND_PRS.md)。未切换正式包名或将共享版合入 main。
 
 ## 功能覆盖
 
@@ -259,3 +259,27 @@ APK负载和ZIP16 KB对齐通过；原会议依赖`libandroid-complex-math.so`�
 仓库整理结果：整合提交 `d387b4d` 已推送；唯一评审入口为[上游 #5](https://github.com/yydhYYDH/ClawMate-Android/pull/5)。fork Draft #3～7 均已关闭；两个远端归档标签及其提交已核对后，通过带每条分支旧SHA保护的原子push移除13条旧远端分支，删除12条本地旧分支，本地/远端均只保留main与codex/shared-frontend。未重写历史或强制覆盖分支。
 
 GitHub确认PR为 `mergeable=true`、`mergeable_state=clean`；尝试 `gh pr merge --auto --squash` 及明确的 `enablePullRequestAutoMerge` 请求，均被上游权限拒绝，后者返回“JKSOBBING does not have the correct permissions to execute EnablePullRequestAutoMerge”。因此无冲突已实现，Auto-merge未开启，需上游维护者处理。当前账号的上游权限为只读，未修改仓库审核或检查要求。
+
+## SH-15：作者模板、固定资源与干净源码重建（2026-10-27）
+
+本阶段按用户最新决定关闭上游共享整合PR #5，继续在fork的codex/shared-frontend开发，等待路线闭环后再讨论是否申请PR。未通知fellow、重开PR或尝试自动合并。
+
+新增作者模板与bootstrap入口，移除对旧实验生成空模板的依赖。两份源锁共120个ArkTS文件，新增59个固定资源输入，逐项校验Git blob；其中补齐旧模板遗漏的11份原版默认工作流，并使用锁定的原版应用图标。引导只复制179个白名单输入，不带源端默认服务/账号配置、签名、模型、数据库或其他状态；目标存在不同参考文件时保留并报错。
+
+Windows构建参数可指定外部SDK/构建工具/Node；本地绝对路径只写忽略配置。每次构建验证OpenHarmony 6.0.0.47 Release / API20、ArkUI-X 6.0.0.103 Release / API20、Hvigor/OHOS 6.22.7、ArkUI-X插件4.22.7与Node20.19.5。修正文档中上游工具链说明与实际锁定版本的偏差。Linux入口使用相同bootstrap/prepare/导出/seal流程，取消记录摘要后的临时配置/资源改写。
+
+摘要覆盖作者模板、资源锁、固定资源、Linux构建入口及生成构建配置。prepare在忽略目录内清理旧生成资源、ArkTS和Hvigor目录，防止旧wrapper或未列入清单的源文件留下；主机检查注入旧overlay、孤立ArkTS及wrapper后核对再次prepare摘要不变。主平台代码与Compose产品保持现有功能边界。构建和精确验收命令见[引导说明](docs/SHARED_BOOTSTRAP.md)。
+
+实测结果：
+- 主机144项通过（原122项、新增14项输入/工具链引导及8项运行库导出检查）；两次prepare清除旧overlay、孤立ArkTS和wrapper后摘要一致。
+- 新源码目录没有携带旧生成工程/参考输入/运行库/APK/Gradle项目状态；首次HAP成功用时1m42s，Android构建5m27s，90个任务全部执行。最终版本在原目录及隔离目录均完成HAP、SDK导出、seal及Android构建；最终Gradle分别32s（8执行/82缓存）和2m51s（18执行/72缓存）。
+- 两处准备摘要相同：`3a901a2ad1b032c81dec2492033613c7ae86b20d7c1ba33f171eb2dabc6ebf92`，运行库文件清单同为398项；APK内11份默认工作流逐字节匹配锁定Git blob，旧图标不存在。APK不宣称位级相同。
+- 测试APK最终构建成功，33s、98项任务中9项执行/89项缓存；OPPO PKB110 / Android16按独立进程完成9项检查（原生/会议7、聊天1、任务1），修正驱动后连续两轮通过。设置/索引由夹具finally还原，两份临时备份目录已确认不存在，失败截图已保存本地证据后从手机缓存清理，最终停止目标进程以丢弃内存中的夹具设置。会议公开样本沿用原回归保留策略。
+- 共用库123项JVM测试任务为UP-TO-DATE；Compose1243项、会议SDK15项未在本轮重新执行。不将其计作本轮新跑测试。
+- ZIP 16KB对齐检查通过；静态ELF门禁仍返回1：325个二进制中`libandroid-complex-math.so`仅4KB对齐，ArkUI-X的107个原生库未发现该问题。没有真实16KB设备运行结论。
+
+当前APK SHA256：`38a9816a39e3f0f119055c09db719a78d10fcfe52cbe0e6d5e3da07b9961568a`。命令、24份原始证据哈希、最终产物及边界见[SH-15验证报告](shared-frontend/verification-bootstrap.json)。
+
+校正记录：一次复制尚未完成就启动副本构建，被摘要门禁拒绝；等待复制完成后重建。真实API20 SDK没有可选的component/lib目录，修正过严布局假设后导出成功；必需引擎/API目录仍严格检查。新旧目录比对发现旧wrapper与旧图标残留，分别通过生成目录清理与临时导出树替换解决。首次将9项设备测试合批运行失败2项；隔离后聊天通过，任务仍因可见按钮的OCR整行匹配失败。截图/OCR记录定位蓝色“发送图片”被识别为“发迭图片”，仅在测试驱动添加该精确别名和同一行元素匹配，保留两次真实失败回执/无成功摘要断言，最终9项通过；没有修改产品逻辑或放宽模型/隐私确认。测试脚本同时判断JUnit文本，不能用ADB退出0冒充通过。
+
+本轮仅验证预装工具和已有Gradle/pip/wheel缓存条件下的干净源码重建。Linux只做语法检查；真实上游/SDK升级、16KB依赖修复、真实模型、更多厂商/后台及TalkBack仍未闭环。OCR夹具适配不算产品无障碍修复；全流程离线、发布签名和生产数据切换未验收，继续不递交PR。

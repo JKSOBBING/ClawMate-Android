@@ -138,7 +138,7 @@ roots are machine-specific and intentionally not recorded.
 | CMake | `3.22.1` |
 | Gradle | 8.9 (wrapper) |
 | ArkUI-X SDK | `6.0.0.103` (API 20) |
-| OpenHarmony SDK | `6.0.0.48` (API 20, Release) |
+| OpenHarmony SDK | `6.0.0.47` (API 20, Release; source of truth: experiments/arkui-x/toolchain-lock.json) |
 | hvigor | `6.22.7` + arkui-x plugin `4.22.7` |
 
 ## Verification

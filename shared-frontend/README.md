@@ -10,8 +10,8 @@
 `adapters/` 只提供平台接口或明确的能力限制；`prepare.mjs` 保存少量可审查的源码适配。
 没有修改鸿蒙源项目，也没有用截图或 Compose 重新描绘这些页面。
 
-SH-14 生成工程包含 144 个 ArkTS 文件：76 个与锁定上游逐字一致、37 个经适配、31 个为新平台代码。
-这是该编译输入的统计，不是整个鸿蒙产品的复用率。
+SH-15 页面/业务准备清单包含144个ArkTS文件：76个与锁定上游逐字一致、37个经适配、31个为新平台代码；另有作者模板中的启动Ability。
+这是准备清单的统计，不是整个鸿蒙产品的复用率。
 
 - `upstream-lock.json` 与 `../experiments/arkui-x/ui-upstream-lock.json` 锁定全部输入，准备时逐文件检查 Git blob。
 - 编译输入在 `.arkui-x-validation/reference/`；生成工程在 `.arkui-x-validation/application/project/`。
@@ -47,10 +47,10 @@ SH-14 生成工程包含 144 个 ArkTS 文件：76 个与锁定上游逐字一�
 
 ## 构建
 
-复用前一验证阶段已准备的 API 20 工具链及官方空模板。
-详细 SDK 下载锁见 `../experiments/arkui-x/toolchain-lock.json`，初次环境准备见该目录 README。
-当前 prepare 需要忽略目录中的 `.arkui-x-validation/project` 空模板/资源，以及锁定的只读源文件；
-它不是一个从网络自动安装 SDK、下载私有源仓库的安装器。
+使用锁定 API20 工具链和本目录 `template/` 的作者模板；不再依赖旧实验生成工程。
+初次输入导入、四个工具路径参数和干净源码重建方法见[环境引导](../docs/SHARED_BOOTSTRAP.md)。
+`bootstrap.mjs` 只复制清单内120个源文件和59个资源，逐文件验证固定提交的Git blob；
+工具版本不匹配、参考输入漂移或目标已有不同文件会报错。它不下载SDK或复制源端配置/私有数据。
 
 从仓库根目录运行，路径只作为本机参数，不写入应用配置：
 
@@ -76,6 +76,8 @@ node shared-frontend/verify-integration.mjs
 node shared-frontend/verify-reminders.mjs
 node shared-frontend/verify-workflow-vlm.mjs
 node shared-frontend/verify-gallery-scan.mjs
+node shared-frontend/verify-bootstrap.mjs
+python -B shared-frontend/verify-runtime-export.py
 node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/reference
 ./gradlew.bat :android-capabilities:testDebugUnitTest :app:testDebugUnitTest
 ```

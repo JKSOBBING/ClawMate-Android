@@ -2,6 +2,7 @@ import { replaceChecked, applyPatches } from './source-patches.mjs';
 import { syncOverlays, recordPrepared } from './build-state.mjs';
 import { buildChatContextSource } from './context-source.mjs';
 import { buildAndroidGallerySource } from './gallery-source.mjs';
+import { verifySources, toolchainPaths, checkedPath } from './bootstrap.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,22 +11,41 @@ import { spawnSync } from 'node:child_process';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..');
 const scratch = path.join(repo, '.arkui-x-validation');
-const template = path.join(scratch, 'project');
-const project = path.join(scratch, 'application/project');
+const template = path.join(here, 'template');
+const project = checkedPath(repo, '.arkui-x-validation/application/project');
+const sourceInputs = verifySources(repo, path.join(scratch, 'reference'));
+const tools = toolchainPaths(repo);
 fs.mkdirSync(project, { recursive: true });
-fs.writeFileSync(path.join(project, 'local.properties'),
-  'sdk.dir=' + path.join(scratch, 'openharmony-sdk').split(path.sep).join('/') + '\n' +
-  'arkui-x.sdk.dir=' + path.join(scratch, 'sdk').split(path.sep).join('/') + '\n');
+fs.writeFileSync(checkedPath(repo, '.arkui-x-validation/application/project/local.properties'),
+  'sdk.dir=' + tools.openHarmonySdk.split(path.sep).join('/') + '\n' +
+  'arkui-x.sdk.dir=' + tools.arkuiXSdk.split(path.sep).join('/') + '\n');
+// Only reset these owned generated directories, after checking every old path
+// for links. No source/template/SDK or private application data is removed.
+for (const relative of ['AppScope', 'hvigor', 'entry/src/main/resources', 'entry/src/main/ets']) {
+  const target = checkedPath(repo, '.arkui-x-validation/application/project/' + relative);
+  const validate = directory => {
+    for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (item.isSymbolicLink()) throw new Error('Generated resources must not contain links');
+      if (item.isDirectory()) validate(path.join(directory, item.name));
+    }
+  };
+  if (fs.existsSync(target)) { validate(target); fs.rmSync(target, { recursive: true }); }
+}
 // Only copy known template configuration and resources, never application data,
 // local.properties, signing files, node_modules contents or build outputs.
-for (const item of ['AppScope', 'hvigor', 'entry/src/main/resources', 'entry/src/main/ets/entryability']) {
+for (const item of ['AppScope', 'hvigor', 'entry/src/main/ets/entryability']) {
   fs.cpSync(path.join(template, item), path.join(project, item), { recursive: true });
 }
+for (const input of sourceInputs.files.filter(file => !file.path.includes('/ets/'))) {
+  const target = checkedPath(repo, '.arkui-x-validation/application/project/' + (input.target || input.path));
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, input.bytes);
+}
 for (const item of ['hvigorfile.ts', 'oh-package.json5', 'entry/oh-package.json5', 'entry/hvigorfile.ts', 'entry/src/main/module.json5']) {
-  fs.copyFileSync(path.join(template, item), path.join(project, item));
+  fs.copyFileSync(path.join(template, item), checkedPath(repo, '.arkui-x-validation/application/project/' + item));
 }
 const writeJson = (name, value) => {
-  const file = path.join(project, name);
+  const file = checkedPath(repo, '.arkui-x-validation/application/project/' + name);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(value, null, 2));
 };
@@ -38,7 +58,10 @@ const app = JSON.parse(fs.readFileSync(path.join(project, 'AppScope/app.json5'),
 app.app.bundleName = 'com.clawmate.shared';
 writeJson('AppScope/app.json5', app);
 const modules = path.join(project, 'node_modules');
-if (!fs.existsSync(modules)) fs.symlinkSync(path.join(scratch, 'build-tools/node_modules'), modules, 'junction');
+if (fs.lstatSync(modules, { throwIfNoEntry: false })?.isSymbolicLink()) {
+  if (fs.realpathSync(modules) !== fs.realpathSync(path.join(tools.buildTools, 'node_modules'))) fs.unlinkSync(modules);
+} else if (fs.existsSync(modules)) { throw new Error('Generated node_modules must be a toolchain link'); }
+if (!fs.existsSync(modules)) fs.symlinkSync(path.join(tools.buildTools, 'node_modules'), modules, 'junction');
 const generatedOverlay = path.join(scratch, 'application/overlays');
 syncOverlays(path.join(here, 'adapters'), generatedOverlay, scratch);
 const reference = path.join(scratch, 'reference/entry/src/main/ets');

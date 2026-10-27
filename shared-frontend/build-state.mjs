@@ -26,18 +26,13 @@ function roots(repo) {
 function inputs(repo) {
   const files = filesUnder(path.join(repo, 'shared-frontend')).filter(file => /\.(ets|mjs|ps1)$/.test(file));
   for (const name of ['shared-frontend/upstream-lock.json', 'experiments/arkui-x/ui-upstream-lock.json',
-    'experiments/arkui-x/toolchain-lock.json', 'experiments/arkui-x/prepare-project.mjs', 'experiments/arkui-x/package-android.py']) {
+    'experiments/arkui-x/toolchain-lock.json', 'experiments/arkui-x/prepare-project.mjs', 'experiments/arkui-x/package-android.py', 'shared-frontend/resource-lock.json', 'scripts/build-shared.sh']) {
     files.push(path.join(repo, name));
   }
-  for (const name of ['shared-frontend/upstream-lock.json', 'experiments/arkui-x/ui-upstream-lock.json']) {
+  for (const name of ['shared-frontend/upstream-lock.json', 'experiments/arkui-x/ui-upstream-lock.json', 'shared-frontend/resource-lock.json']) {
     for (const file of readJson(path.join(repo, name)).files) files.push(path.join(repo, '.arkui-x-validation/reference', file.path));
   }
-  for (const name of ['AppScope', 'hvigor', 'entry/src/main/resources', 'entry/src/main/ets/entryability']) {
-    files.push(...filesUnder(path.join(repo, '.arkui-x-validation/project', name)));
-  }
-  for (const name of ['hvigorfile.ts', 'oh-package.json5', 'entry/oh-package.json5', 'entry/hvigorfile.ts', 'entry/src/main/module.json5']) {
-    files.push(path.join(repo, '.arkui-x-validation/project', name));
-  }
+  files.push(...filesUnder(path.join(repo, 'shared-frontend/template')));
   for (const name of ['onboarding_agent', 'onboarding_avatar', 'onboarding_data_home']) {
     files.push(path.join(repo, 'app/src/main/res/drawable-nodpi', name + '.png'));
   }
@@ -45,8 +40,9 @@ function inputs(repo) {
 }
 function outputs(repo) {
   const { project } = roots(repo);
-  return snapshots(repo, [...filesUnder(path.join(project, 'entry/src/main')), ...filesUnder(path.join(project, 'AppScope')),
-    ...['build-profile.json5', 'entry/build-profile.json5', '.arkui-x/arkui-x-config.json5', 'staged-sources.json'].map(name => path.join(project, name))]);
+  return snapshots(repo, [...filesUnder(path.join(project, 'entry/src/main')), ...filesUnder(path.join(project, 'AppScope')), ...filesUnder(path.join(project, 'hvigor')),
+    ...['build-profile.json5', 'entry/build-profile.json5', '.arkui-x/arkui-x-config.json5', 'staged-sources.json',
+      'hvigorfile.ts', 'oh-package.json5', 'entry/hvigorfile.ts', 'entry/oh-package.json5'].map(name => path.join(project, name))]);
 }
 export function syncOverlays(source, target, allowedRoot) {
   const resolved = path.resolve(target);
