@@ -66,10 +66,11 @@ class WorkflowModelDeviceTest {
         evidence("modelCancel","Actual pending wait cancellation rejects late replies; image preparation refuses paths outside private roots")
     }
     private fun click(text: String): Boolean {
+        if (DeviceTestTimeouts.multiplier > 1 && text == "任务") return DeviceTestTimeouts.clickNavigation(text)
         val bitmap=instrumentation.uiAutomation.takeScreenshot() ?: return false
         val recognizer=TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
         try {
-            val result=Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap,0)),15,TimeUnit.SECONDS)
+            val result=Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap,0)),DeviceTestTimeouts.seconds(15),TimeUnit.SECONDS)
             val lines=result.textBlocks.flatMap { it.lines }
             val normalize: (String)->String = { it.replace(Regex("\\s+"),"") }
             // Recorded PKB110 OCR confusion for the blue 送 glyph. This is a
@@ -102,7 +103,7 @@ class WorkflowModelDeviceTest {
         } finally {recognizer.close();bitmap.recycle()}
     }
     private fun waitClick(text: String) {
-        val deadline=SystemClock.elapsedRealtime()+30000
+        val deadline=SystemClock.elapsedRealtime()+DeviceTestTimeouts.seconds(30)*1000
         var attempts=0
         while(SystemClock.elapsedRealtime()<deadline){
             if(click(text))return
@@ -116,7 +117,7 @@ class WorkflowModelDeviceTest {
             File(context.cacheDir,"migration-workflow-model-failure.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
             val recognizer=TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
             try {
-                val result=Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap,0)),15,TimeUnit.SECONDS)
+                val result=Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap,0)),DeviceTestTimeouts.seconds(15),TimeUnit.SECONDS)
                 // This screenshot contains this test's synthetic fixture only.
                 evidence("workflowMissingControlOCR",result.textBlocks.flatMap{it.lines}.filter{(it.boundingBox?.centerY() ?: 0)>bitmap.height/2}.takeLast(12).joinToString(" | "){it.text.take(80)+" "+it.boundingBox?.toShortString()})
             } finally { recognizer.close();bitmap.recycle() }

@@ -57,14 +57,17 @@ removed from `/data/local/tmp` afterward; it does not touch application data.
 The evidence records the actual kernel page size and installed library SHA256.
 Existing shared UI/meeting regression remains `scripts/test-shared-device.ps1`.
 
-## Runtime acceptance remains separate
+## Runtime follow-up
 
-The connected OPPO PKB110 reports `PAGE_SIZE=4096`. This Windows host is Intel
-x86-64, reports firmware virtualization unavailable, and has no installed
-emulator, system images or AVD. It supplies no native ARM64 16 KB execution
-evidence. A translated x86 process would not certify these ARM64 libraries.
+SH-16 used an OPPO PKB110 with `PAGE_SIZE=4096`. Its Windows firmware query and
+absence of an Android SDK AVD did not exhaust WSL's full-system emulation
+capabilities. SH-17 subsequently booted an actual ARM64 16 KB Android kernel
+inside QEMU TCG, with both compatibility controls disabled. The installed
+library passed all 22 numerical checks, and the unchanged APK produced a real
+public-audio transcript. This is an ARM64 guest, not ARM libraries translated
+inside an x86 Android process. See [runtime setup and boundaries](ANDROID_16KB_RUNTIME.md).
 
-Before claiming runtime 16 KB support, use a supported ARM64 16 KB environment,
+For each runtime acceptance run, use a supported ARM64 16 KB environment,
 record `adb shell getconf PAGE_SIZE` returning **16384**, and run startup,
 numerical smoke, real public-audio meeting transcription and core UI regression
 with page-size compatibility mode disabled. Static gates and a 4 KB phone

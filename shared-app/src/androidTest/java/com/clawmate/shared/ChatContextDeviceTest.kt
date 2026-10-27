@@ -37,11 +37,12 @@ class ChatContextDeviceTest {
     }
     private fun tap(bounds: Rect) { shell("input tap ${bounds.centerX()} ${bounds.centerY()}"); Thread.sleep(250) }
     private fun click(text: String): Boolean {
+        if (DeviceTestTimeouts.multiplier > 1 && text == "聊天") return DeviceTestTimeouts.clickNavigation(text)
         // ArkUI-X may retain stale virtual children after conditional updates.
         val bitmap = instrumentation.uiAutomation.takeScreenshot() ?: return false
         val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
         try {
-            val result = Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0)), 15, TimeUnit.SECONDS)
+            val result = Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0)), DeviceTestTimeouts.seconds(15), TimeUnit.SECONDS)
             fun normalized(value: String) = value.replace(Regex("\\s+"), "")
             val line = result.textBlocks.flatMap { it.lines }.firstOrNull {
                 normalized(it.text) == normalized(text) || (text == "发送" && normalized(it.text).endsWith(text)) ||
@@ -52,7 +53,12 @@ class ChatContextDeviceTest {
         } finally { recognizer.close(); bitmap.recycle() }
     }
     private fun waitClick(text: String) {
-        repeat(30) { if (click(text)) return; Thread.sleep(300) }
+        if (DeviceTestTimeouts.multiplier == 1) {
+            repeat(30) { if (click(text)) return; Thread.sleep(300) }
+        } else {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(DeviceTestTimeouts.seconds(30))
+            do { if (click(text)) return; Thread.sleep(300) } while (System.nanoTime() < deadline)
+        }
         error("Rendered control not found: $text")
     }
     private fun send(text: String) {
