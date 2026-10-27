@@ -72,5 +72,17 @@
     6,
     7
   ],
-  "policy": "Only delete retired refs after verified remote archive tags, replacement PR and closure of superseded Draft PRs. No force-push; original commits remain reachable via tags or active branch history."
+  "policy": "Only delete retired refs after verified remote archive tags, replacement PR and closure of superseded Draft PRs. No force-push; original commits remain reachable via tags or active branch history.",
+  "replacementPullRequest": "https://github.com/yydhYYDH/ClawMate-Android/pull/5",
+  "consolidationCommit": "d387b4d9ea45d7c1ab6818e86ccb9e1caecbd3d7",
+  "result": {
+    "retiredRemoteBranchesDeleted": 13,
+    "retiredLocalBranchesDeleted": 12,
+    "supersededDraftsClosed": 5,
+    "remoteArchivesVerified": true,
+    "mergeable": true,
+    "mergeableState": "clean",
+    "autoMergeEnabled": false,
+    "autoMergeRejection": "JKSOBBING does not have the correct permissions to execute EnablePullRequestAutoMerge"
+  }
 }

@@ -255,3 +255,7 @@ APK负载和ZIP16 KB对齐通过；原会议依赖`libandroid-complex-math.so`�
 运行 `:app:testDebugUnitTest :android-capabilities:testDebugUnitTest :meeting-sdk:testDebugUnitTest :app:assembleDebug :shared-app:assembleDebug --offline --no-daemon --console=plain`：BUILD SUCCESSFUL，4m30s，152项任务中21项执行、131项为UP-TO-DATE。Compose 1243项测试本轮实际重跑通过；共用库123项、会议SDK15项沿用Gradle已验证缓存，未声称本轮重新执行。Compose APK重新打包，共享APK任务为UP-TO-DATE；本轮未重新编译ArkTS或重跑真机。三份新接入脚本逐一执行 `bash -n` 通过，Linux完整构建仍待该环境验证。原始日志在忽略目录 `consolidation-host.log`、`consolidation-gradle.log`。
 
 此前 SH-14 的15项真机验证属于历史证据，不计作本轮重新运行。会议原生库的 16KB 对齐问题及真实云服务、多厂商/后台验收边界仍然保留，源码评审不等于生产发布批准。
+
+仓库整理结果：整合提交 `d387b4d` 已推送；唯一评审入口为[上游 #5](https://github.com/yydhYYDH/ClawMate-Android/pull/5)。fork Draft #3～7 均已关闭；两个远端归档标签及其提交已核对后，通过带每条分支旧SHA保护的原子push移除13条旧远端分支，删除12条本地旧分支，本地/远端均只保留main与codex/shared-frontend。未重写历史或强制覆盖分支。
+
+GitHub确认PR为 `mergeable=true`、`mergeable_state=clean`；尝试 `gh pr merge --auto --squash` 及明确的 `enablePullRequestAutoMerge` 请求，均被上游权限拒绝，后者返回“JKSOBBING does not have the correct permissions to execute EnablePullRequestAutoMerge”。因此无冲突已实现，Auto-merge未开启，需上游维护者处理。当前账号的上游权限为只读，未修改仓库审核或检查要求。
