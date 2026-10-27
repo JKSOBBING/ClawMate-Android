@@ -61,4 +61,11 @@ try {
     if ($Offline) { $gradleArguments += '--offline' }
     & ./gradlew.bat @gradleArguments
     if ($LASTEXITCODE -ne 0) { throw 'Android build failed' }
+    $apk = Join-Path $repoRoot 'shared-app/build/outputs/apk/debug/shared-app-debug.apk'
+    python -B shared-frontend/verify-meeting-native.py --sdk-root $env:MEETING_SDK_ROOT --ndk (Join-Path $env:ANDROID_HOME 'ndk/25.2.9519653') --apk $apk
+    if ($LASTEXITCODE -ne 0) { throw 'Meeting native source/ABI/package validation failed' }
+    python -B shared-frontend/audit-apk.py $apk --runtime-root (Join-Path $scratchRoot 'application/runtime') --output (Join-Path $scratchRoot 'application/apk-native-audit.json') --require-16kb
+    if ($LASTEXITCODE -ne 0) { throw 'APK native 16 KB alignment gate failed' }
+    & (Join-Path $env:ANDROID_HOME 'build-tools/36.0.0/zipalign.exe') -c -P 16 4 $apk
+    if ($LASTEXITCODE -ne 0) { throw 'APK ZIP 16 KB alignment gate failed' }
 } finally { Pop-Location }

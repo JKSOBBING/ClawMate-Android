@@ -18,7 +18,7 @@ android {
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = '17' }
-    sourceSets.main { assets.srcDirs = [new File(runtimeDir, 'src/main/assets')]; jniLibs.srcDirs = [new File(runtimeDir, 'libs')] }
+    sourceSets.main { assets.srcDirs = [file('src/main/assets'), new File(runtimeDir, 'src/main/assets')]; jniLibs.srcDirs = [new File(runtimeDir, 'libs')] }
     packagingOptions { jniLibs { useLegacyPackaging true } }
 }
 dependencies {

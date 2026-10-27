@@ -7,3 +7,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.ksp) apply false
 }
+
+// Rebuild the meeting dependency's legacy complex-math prebuilt from pinned
+// sources. The SDK checkout itself remains unchanged.
+findProject(":meeting-sdk")?.let { meetingProject ->
+    meetingProject.apply(from = rootProject.file("gradle/meeting-native.gradle"))
+}

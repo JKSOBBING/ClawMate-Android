@@ -30,6 +30,11 @@ Android SDK 需要 platform 34/36、build-tools 34/36。共享宿主 compileSdk3
 不变；当前为 ARM64 调试包。Gradle 8.9、AGP8.5.2、Kotlin1.9.24 与 Chaquopy17.1 已共同构建验证，
 AGP 对 compileSdk36 的警告不等于正式发布兼容性认证。JDK/SDK 路径只作为本机参数。
 
+SH-16 在宿主构建中从固定源码重建会议复数数学库，替换原4KB对齐预编译输入；
+会议仓库源码保持不变。构建结束强制检查原生ABI、全APK ELF及ZIP 16KB对齐，
+ZIP检查使用build-tools36.0.0。依赖构建输出位于宿主忽略目录，完整方法和运行验收边界见
+[会议原生库16KB检查](MEETING_NATIVE_16KB.md)。
+
 APK：`shared-app/build/outputs/apk/debug/shared-app-debug.apk`。可以用会议仓库的构建 Python
 执行 `android/verify_host_apk.py <此APK>`，检查当前 Python/网页源码、单份 Python 负载、
 ARM64 原生库哈希、ArkTS 页面及 Kotlin 服务。

@@ -41,4 +41,10 @@ if [ "$skip_gradle" -eq 0 ]; then
     gradle_args=(:shared-app:assembleDebug --no-daemon --console=plain)
     [ "$offline" -eq 0 ] || gradle_args+=(--offline)
     GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}" ./gradlew "${gradle_args[@]}"
+    apk="$repo/shared-app/build/outputs/apk/debug/shared-app-debug.apk"
+    python3 -B shared-frontend/verify-meeting-native.py --sdk-root "${MEETING_SDK_ROOT:?Set MEETING_SDK_ROOT to the meeting checkout}" \
+        --ndk "$ANDROID_HOME/ndk/25.2.9519653" --apk "$apk"
+    python3 -B shared-frontend/audit-apk.py "$apk" --runtime-root "$runtime" \
+        --output "$repo/.arkui-x-validation/application/apk-native-audit.json" --require-16kb
+    "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$apk"
 fi
