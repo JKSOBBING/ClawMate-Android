@@ -4,10 +4,22 @@ import Bridge from '@arkui-x.bridge';
 import { ChatSessionStorage } from '../utils/ChatSessionStorage';
 import { CloudContentPart } from '../utils/CloudModelClient';
 
-interface ImagePreparation { v: number; status: string; images: string[]; error: string; }
+interface ImagePreparation { v: number; status: string; images: string[]; error: string; fingerprints?: string[]; }
+export interface ImageSnapshot { images: string[]; fingerprints: string[]; }
 export interface ChatImageBatch { paths: string[]; parts: CloudContentPart[]; }
 export class ChatImages {
   static async prepare(uris: string[], cancelled: () => boolean): Promise<string[]> {
+    return (await ChatImages.prepareResult(uris, cancelled)).images;
+  }
+  static async snapshot(uris: string[], cancelled: () => boolean): Promise<ImageSnapshot> {
+    let result = await ChatImages.prepareResult(uris, cancelled);
+    let hashes = result.fingerprints;
+    if (!hashes || hashes.length !== result.images.length || hashes.some((hash: string): boolean => !/^[0-9a-f]{64}$/.test(hash))) {
+      throw new Error('图片快照缺少内容校验，请更新共享宿主后重试');
+    }
+    return { images: result.images, fingerprints: hashes };
+  }
+  private static async prepareResult(uris: string[], cancelled: () => boolean): Promise<ImagePreparation> {
     if (uris.length < 1 || uris.length > 4) { throw new Error('每次最多发送4张图片'); }
     let bridge = Bridge.createBridge('ClawMatePlatform');
     let id = await bridge.callMethod('imagePrepareStart', JSON.stringify(uris)) as string;
@@ -21,7 +33,7 @@ export class ChatImages {
         if (cancelled()) { throw new Error('图片准备已取消'); }
         if (result.status === 'done') {
           if (!Array.isArray(result.images) || result.images.length !== uris.length) { throw new Error('图片准备结果不完整'); }
-          done = true; return result.images;
+          done = true; return result;
         }
         if (result.status !== 'running') { throw new Error(result.error || '图片解码失败，请重新选择较小图片'); }
         await new Promise<void>((resolve): void => { setTimeout(resolve, 120); });

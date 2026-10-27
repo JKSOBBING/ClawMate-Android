@@ -5,6 +5,37 @@ import org.junit.Test
 import java.io.File
 
 class LocalImageAccessTest {
+    @Test fun boundedDigestMatchesKnownBytesAndDetectsChangedSnapshot() {
+        val directory = java.nio.file.Files.createTempDirectory("clawmate-digest-").toFile()
+        try {
+            val file = File(directory, "snapshot.jpg").apply { writeText("abc") }
+            val expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            assertEquals(expected, LocalImageAccess.digest(file.toURI().toString(), listOf(directory)))
+            assertEquals(expected, LocalImageAccess.sha256("abc".toByteArray()))
+            file.writeText("changed")
+            assertNotEquals(expected, LocalImageAccess.digest(file.toURI().toString(), listOf(directory)))
+        } finally { directory.deleteRecursively() }
+    }
+    @Test fun digestRefusesEmptyOversizedAndNonPrivateInputs() {
+        val directory = java.nio.file.Files.createTempDirectory("clawmate-digest-").toFile()
+        try {
+            val file = File(directory, "snapshot.jpg").apply { writeBytes(byteArrayOf()) }
+            assertThrows(IllegalArgumentException::class.java) { LocalImageAccess.digest(file.toURI().toString(), listOf(directory)) }
+            file.writeBytes(ByteArray(10))
+            assertThrows(IllegalArgumentException::class.java) { LocalImageAccess.digest(file.toURI().toString(), listOf(directory), 9) }
+            assertThrows(IllegalArgumentException::class.java) { LocalImageAccess.digest("content://picker/owned", listOf(directory)) }
+            assertThrows(IllegalArgumentException::class.java) { LocalImageAccess.digest(file.toURI().toString(), listOf(File(directory, "child"))) }
+            assertThrows(IllegalArgumentException::class.java) { LocalImageAccess.digest(file.toURI().toString(), listOf(directory), 0) }
+        } finally { directory.deleteRecursively() }
+    }
+    @Test fun interruptedDigestDoesNotContinueReading() {
+        val directory = java.nio.file.Files.createTempDirectory("clawmate-digest-").toFile()
+        try {
+            val file = File(directory, "snapshot.jpg").apply { writeText("fixture") }
+            Thread.currentThread().interrupt()
+            assertThrows(InterruptedException::class.java) { LocalImageAccess.digest(file.toURI().toString(), listOf(directory)) }
+        } finally { Thread.interrupted(); directory.deleteRecursively() }
+    }
     private val root = File(System.getProperty("java.io.tmpdir"), "clawmate-image-policy/files")
     @Test fun privateImageAndGrantedContentCanBeAttempted() {
         assertEquals(File(root, "照片.png").toURI().toString(), LocalImageAccess.validate(File(root, "照片.png").toURI().toString(), listOf(root)))

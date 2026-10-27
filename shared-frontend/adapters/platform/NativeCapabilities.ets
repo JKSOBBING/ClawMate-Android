@@ -15,6 +15,7 @@ export interface AndroidRuntimeSnapshot {
   reminderVersion: number;
   reminderRequest: string;
   reminderReady: boolean;
+  windowReady: boolean;
 }
 interface OcrSnapshot { v: number; status: string; text: string; error: string; }
 

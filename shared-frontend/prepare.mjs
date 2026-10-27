@@ -1,6 +1,7 @@
 import { replaceChecked, applyPatches } from './source-patches.mjs';
 import { syncOverlays, recordPrepared } from './build-state.mjs';
 import { buildChatContextSource } from './context-source.mjs';
+import { buildAndroidGallerySource } from './gallery-source.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,6 +147,7 @@ overlay('utils/gallery/GalleryPhotoPicker.ets', applyPatches(read('utils/gallery
   ['return result.photoUris;', 'return result.photoUris.slice(0, Math.max(1, Math.min(9, maxSelectNumber)));']
 ]));
 let gallery = read('pages/gallery/GalleryPage.ets');
+gallery = buildAndroidGallerySource(gallery);
 gallery = replaceChecked(gallery, 'import { abilityAccessCtrl, common, Permissions }', 'import { common }');
 gallery = replaceChecked(gallery, /  private async ensureMediaLocationPermission\([^]*?\n  \}/,
   '  private async ensureMediaLocationPermission(ctx: common.UIAbilityContext): Promise<boolean> {\n' +
@@ -157,6 +159,13 @@ gallery = replaceChecked(gallery, '  onPageHide(): void {',
   "    if (this.selectedDetailId.length > 0) { this.closeResultDetail(); return true; }\n" +
   '    router.back(); return true;\n  }\n  onPageHide(): void {');
 overlay('pages/gallery/GalleryPage.ets', gallery);
+let galleryStorage = read('utils/gallery/GalleryStorage.ets');
+galleryStorage = replaceChecked(galleryStorage, "import fs from '@ohos.file.fs';", "import fs from '@ohos.file.fs';\nimport { GalleryScanCheckpoint } from '../../platform/GalleryScanCheckpoint';");
+galleryStorage = replaceChecked(galleryStorage, /  static loadScanSession\(filesDir: string\): GalleryScanSession \| null \{[^]*?\n  \}/,
+  '  static loadScanSession(filesDir: string): GalleryScanSession | null {\n    GalleryStorage.ensureWorkspace(filesDir);\n    return GalleryScanCheckpoint.read(GalleryStorage.scanSessionPath(filesDir), filesDir);\n  }');
+galleryStorage = replaceChecked(galleryStorage, '    GalleryStorage.writeText(GalleryStorage.scanSessionPath(filesDir), ArkJSON.stringify(session, null, 2));',
+  '    GalleryScanCheckpoint.write(GalleryStorage.scanSessionPath(filesDir), session, filesDir);');
+overlay('utils/gallery/GalleryStorage.ets', galleryStorage);
 for (const route of ['pages/collection/CollectionGroupDetailPage', 'pages/task/WorkflowFileViewer']) {
   let page = read(route + '.ets');
   page = replaceChecked(page, /struct (\w+) \{/, 'struct $1 {\n  onBackPress(): boolean { router.back(); return true; }');

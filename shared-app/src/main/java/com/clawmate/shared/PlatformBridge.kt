@@ -126,9 +126,13 @@ class PlatformBridge(private val activity: StageActivity) :
         val result = imageJobs.poll(id)
         return JSONObject().put("v", 1).put("status", result.state)
             .put("images", JSONArray(result.value?.map { it.dataUrl } ?: emptyList<String>()))
+            .put("fingerprints", JSONArray(result.value?.map { image ->
+                LocalImageAccess.sha256(java.util.Base64.getDecoder().decode(image.dataUrl.substringAfter(',')))
+            } ?: emptyList<String>()))
             .put("error", if (result.state == "failed") "图片无法读取或超出限制，请重新选择较小图片" else "").toString()
     }
     fun imagePrepareCancel(id: String): Boolean { imageJobs.cancel(id); return true }
+    fun imageDigest(uri: String): String = LocalImageAccess.digest(uri, listOf(activity.filesDir, activity.cacheDir))
     fun workflowStart(raw: String): String {
         require(raw.length <= 256000) { "工作流配置过长" }
         val mailbox = WorkflowModelMailbox()
@@ -287,6 +291,7 @@ class PlatformBridge(private val activity: StageActivity) :
             .put("asrState", asrState).put("asrText", asrText).put("asrError", asrError).put("asrVersion", asrVersion)
             .put("reminderVersion", reminders.version()).put("reminderRequest", (activity as SharedActivity).reminderRequest())
             .put("reminderReady", (activity as SharedActivity).reminderWindowReady())
+            .put("windowReady", activity.reminderWindowReady())
             .toString()
     }
 

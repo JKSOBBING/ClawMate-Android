@@ -10,7 +10,7 @@
 `adapters/` 只提供平台接口或明确的能力限制；`prepare.mjs` 保存少量可审查的源码适配。
 没有修改鸿蒙源项目，也没有用截图或 Compose 重新描绘这些页面。
 
-SH-13 生成工程包含 142 个 ArkTS 文件：77 个与锁定上游逐字一致、36 个经适配、29 个为新平台代码。
+SH-14 生成工程包含 144 个 ArkTS 文件：76 个与锁定上游逐字一致、37 个经适配、31 个为新平台代码。
 这是该编译输入的统计，不是整个鸿蒙产品的复用率。
 
 - `upstream-lock.json` 与 `../experiments/arkui-x/ui-upstream-lock.json` 锁定全部输入，准备时逐文件检查 Git blob。
@@ -33,6 +33,7 @@ SH-13 生成工程包含 142 个 ArkTS 文件：77 个与锁定上游逐字一�
 | 上下文预算与自动摘要 | ChatContextBudget / 原 Index 压缩编排 / ChatContext | 阈值与保留轮数生效；摘要、增量覆盖、会话重载复用及本地抽取回退已接入。完整原文保留；取消/撤回阻断迟到结果，仍超预算时明确报错；真实模型摘要质量待验收 |
 | 汇总、事件详情 | CollectionPage / CollectionGroupDetailPage | 读取真实索引，支持原详情与分页；同步调用原数据管线，空数据不伪造同步时间 |
 | 图库、筛选、检索、问答 | GalleryPage / GalleryStorage / GallerySearchService / GalleryAnalyzer | 原页面与存储/云协议；系统选图可打开和取消。OCR 经 URI 桥接到共用本地引擎，失败明确返回；未上传私人照片或做真实模型分析；HDC 批量读图受限 |
+| 图库批次暂停/恢复 | 原GalleryScanSession / GalleryWorkQueue / GalleryScanCheckpoint | 最多9张显式选图的私有JPEG快照，原子进度、内容校验、暂停派发与继续、遗留运行态恢复为暂停；日期记为导入日，不自动上传，不枚举全相册 |
 | 数据管理 | DataManagerFacade / ChatMemorySync / IndexService / MemorySyncPage | 显式近7天范围确认、保存的模型名、进度/取消、检查点去重；本地索引重建不发云请求。共享文件独立，未导入旧应用私有数据 |
 | 任务与工作流 | TaskPage / WorkflowStorage / AndroidWorkflow / 共用 WorkflowRunnerImpl | 原图/JSON与文件管理；已接有界等待/条件/循环/echo/summary、单任务/批量停止、真实结果/日志；GUI和其他模型工具仍受限。任务开关控制批量候选，不自行后台执行 |
 | 工作流视觉问答 | 原ToolEditor / WorkflowVlm / 共用可选模型接口 | 本机图片导入、保存的Decider视觉模型、逐次发送确认、取消/超时、步骤输出与成功摘要；GUI截图仍阻断，真实模型质量与完整schema验证待验收 |
@@ -74,6 +75,7 @@ node shared-frontend/verify-native.mjs
 node shared-frontend/verify-integration.mjs
 node shared-frontend/verify-reminders.mjs
 node shared-frontend/verify-workflow-vlm.mjs
+node shared-frontend/verify-gallery-scan.mjs
 node experiments/arkui-x/verify-contracts.mjs --source-root .arkui-x-validation/reference
 ./gradlew.bat :android-capabilities:testDebugUnitTest :app:testDebugUnitTest
 ```

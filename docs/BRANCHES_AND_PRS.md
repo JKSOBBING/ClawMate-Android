@@ -7,6 +7,7 @@
 
 - 看当前已经验证的完整共享版：`codex/meeting-sdk-integration`，功能检查点`7d39bc8`。
 - 看新增视觉问答：`codex/workflow-vlm-qa`，已完成SH-13本机图片问答接线与受控验证，尚未递交PR；真实模型质量等边界见迁移日志。
+- 看当前继续开发：`codex/gallery-scan-recovery`，继承视觉问答分支，新增SH-14图库批次暂停/恢复及跨进程验证；尚未递交新PR。
 - 看等待上游评审的Compose基线：[上游#4](https://github.com/yydhYYDH/ClawMate-Android/pull/4)。
 - 看共享版分层改动：按下面4个Draft PR顺序阅读。
 

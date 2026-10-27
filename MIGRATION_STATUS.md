@@ -6,8 +6,8 @@
 
 - 主前端：ArkTS/ArkUI + ArkUI-X；Android 宿主 `shared-app`，包名 `com.clawmate.shared`，版本 `0.3-integrated`。
 - 根 Gradle 同时管理共享宿主、Compose 基线 `app` 与共用 Kotlin 库 `android-capabilities`；原正式包和私有数据保留，共享版不双写或自动导入旧数据。
-- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前142个 ArkTS 编译输入中77个不变、36个适配、29个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
-- 当前交付分支：`codex/meeting-sdk-integration`；此前共享整合分支为`codex/android-migration`。未切换正式包名或合并 main。
+- 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前144个 ArkTS 编译输入中76个不变、37个适配、31个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
+- 已递交评审的整合分支：`codex/meeting-sdk-integration`；新增开发在`codex/gallery-scan-recovery`，继承`codex/workflow-vlm-qa`。此前共享整合分支为`codex/android-migration`。未切换正式包名或合并 main。
 
 ## 功能覆盖
 
@@ -21,6 +21,7 @@
 | 记忆查询 F04 | `SharedAgent`→`MemoryQuery`→原索引；只读query_events，最多3次查询、有界JSON结果，不执行任意模型工具 |
 | 图片聊天 F05 | 原附件面板→系统相册/相机→逐次确认→共用图片准备→多模态SSE；最多4张去元数据JPEG，仅本回合上传，历史图片保存在会话私有目录 |
 | 图库、汇总、集合 F07–F09 | 原分析/检索/问答/照片引用、12类记忆、详情和分页；本地OCR共用，完整私人图库与真实视觉服务待验收 |
+| 图库批次 F15 | 最多9张显式选图的持久JPEG副本，单项回执、原子检查点、暂停/继续和进程恢复；不自动上传，不枚举全图库，原始时间/位置不保留，日期为导入日 |
 | 数据管理、长期记忆 F03 | `MemorySyncPage`→`DataManagerFacade`/`ChatMemorySync`→日志/索引；近7天范围确认、保存的模型名、进度/取消、检查点去重及无网络索引重建 |
 | 工作流 F10 | 原图/JSON、上下文、新建/保存/复制/删除和文件查看；`AndroidWorkflow`调用共用执行器，支持等待/条件/有限循环/echo/summary、单任务/批量停止，限60秒/200步；真实结果写入run_summary.json，成功summary进入日志 |
 | 视觉工具 F11 | 本机图片选择/私有保存、Decider视觉模型、逐次确认、可取消模型邮箱、answer输出与summary日志；GUI截图、完整schema校验及真实模型质量另需验收 |
@@ -209,3 +210,36 @@ SH-09～12已创建fork Draft PR #6，以既有共享功能PR #5分支为基底�
 负载和ZIP16 KB对齐通过；会议依赖`libandroid-complex-math.so`仍只有4 KB ELF对齐，发布门禁返回1。
 完整JSON Schema验证/字段归一化、后台并行摘要、导入图片引用回收和真实视觉模型质量仍待补齐；
 本项不代表默认GUI采集任务或微信自动采集已可执行。范围见[视觉问答说明](docs/WORKFLOW_VLM_MIGRATION.md)。
+
+## SH-14：图库批次暂停与跨进程恢复（2026-10-27）
+
+分支`codex/gallery-scan-recovery`，基底`7d34468`。Android选图进入原GalleryScanSession和分析队列；
+图库先说明最多9张去元数据JPEG副本及导入日期，再保存私有快照、确认模型和上传范围。
+Kotlin提供有界SHA256和窗口状态；业务图片引用、结果、进度仍由ArkTS独占。
+继续前校验副本，按内容去重；显式重选可修复损坏副本。快照导入与分析共用执行门控，
+在途队列未结束时禁止其他页面清空目录。复用原分析器及缓存，结果先保存再写单项回执；
+检查点验证结构/日期/身份、重算累计值，经临时文件校验长度后原子替换。
+暂停停止新派发，在途项允许完成；窗口失去前台、离页、撤回授权或配置变化时请求暂停。
+重启后遗留running/pausing显示为paused，用户确认后仅重试queued/failed，不自动上传。
+详见[图库恢复说明](docs/GALLERY_SCAN_RECOVERY.md)。当前编译输入144个：76不变、37适配、31平台文件。
+
+实际检查：原98项与新增24项主机检查，**122项通过**；两次prepare一致，编译来源校验通过。
+实际构建ArkTS/HAP、匹配运行库、共享APK及测试APK并安装；共用能力库强制执行**123项JVM测试通过**，
+零失败/错误/跳过，新增3项私有文件摘要/边界/中断测试。Compose1243项与会议SDK15项为SH-13基线，
+本轮未重新执行，不并入本轮JVM通过数。OPPO PKB110 / Android16最新APK**15项设备检查通过**：
+图库3、视觉工作流3、原生/会议7、聊天上下文1、提醒拒绝权限1。
+
+图库专项从合成私有图片与既有完成回执出发，真实页面确认后在失去前台时暂停；
+外部force-stop后第二次仪器测试断言PID已变化，继续仅处理未完成项，既有完成文件内容hash未变。
+真实`.invalid`模型失败保持可重试，未伪装扫描完成；JPEG准备摘要、私有副本校验和篡改检测也通过。
+验证中先遇手机锁屏，用户解锁后继续；CREATED生命周期让承载测试线程的目标进程被OPPO冻结，
+读取到`do_freezer_trap`且无ANR，检查点已暂停。改用可见但未恢复窗口的STARTED状态，再外部停止进程；
+最终两个阶段分别2.759/4.674秒通过，后续最新APK再次复测。早期一次OCR点击进入清空确认，未确认删除；
+后续重跑确认与完整性检查通过。该记录不能宣称TalkBack、后台连续执行或厂商冻结策略已经解决。
+
+合成图片、缓存、日期目录、设置、隐私、检查点和原临时文件均按备份恢复/清理；通知权限保持关闭。
+会议公开样例继续按原回归设计保留。当前APK SHA256：
+`38ea27e5a4000e6f3a6771e28072d255c52f2ba815448b1dc337d088d42009df`。
+APK负载和ZIP16 KB对齐通过；原会议依赖`libandroid-complex-math.so`静态ELF仅4 KB对齐，门禁仍返回1。
+完整私人图库选择/真实模型效果、多厂商省电杀进程、掉电持久性和副本回收仍需验收；
+本项不是后台全相册扫描或HDC移植完成。精确命令、失败及证据见[验证报告](shared-frontend/verification-gallery-scan.json)。
