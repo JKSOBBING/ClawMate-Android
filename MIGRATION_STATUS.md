@@ -7,7 +7,7 @@
 - 主前端：ArkTS/ArkUI + ArkUI-X；Android 宿主 `shared-app`，包名 `com.clawmate.shared`，版本 `0.3-integrated`。
 - 根 Gradle 同时管理共享宿主、Compose 基线 `app` 与共用 Kotlin 库 `android-capabilities`；原正式包和私有数据保留，共享版不双写或自动导入旧数据。
 - 鸿蒙只读参考：`doulujiyao12/mobiinfra-oh` / `clawmate_dev` / `cd69b68bf16b9ed352be5073939eb24d042de583`。当前144个 ArkTS 编译输入中76个不变、37个适配、31个新增平台文件（含从原Index提取的上下文编排）；不是全产品复用率。
-- 已递交评审的整合分支：`codex/meeting-sdk-integration`；新增开发在`codex/gallery-scan-recovery`，继承`codex/workflow-vlm-qa`。此前共享整合分支为`codex/android-migration`。未切换正式包名或合并 main。
+- 统一开发分支：`codex/shared-frontend`，包含 SH-01～14 并已合入上游 `13708b4`；fork `main` 跟随上游。原分层 Draft PR 和功能分支由统一上游 PR 替代，见[分支导航](docs/BRANCHES_AND_PRS.md)。未切换正式包名或将共享版合入 main。
 
 ## 功能覆盖
 
@@ -243,3 +243,15 @@ Kotlin提供有界SHA256和窗口状态；业务图片引用、结果、进度�
 APK负载和ZIP16 KB对齐通过；原会议依赖`libandroid-complex-math.so`静态ELF仅4 KB对齐，门禁仍返回1。
 完整私人图库选择/真实模型效果、多厂商省电杀进程、掉电持久性和副本回收仍需验收；
 本项不是后台全相册扫描或HDC移植完成。精确命令、失败及证据见[验证报告](shared-frontend/verification-gallery-scan.json)。
+
+## 仓库整理：统一共享分支并接入最新上游（2026-10-27）
+
+按用户要求，开发入口从 13 条历史功能分支收拢为 `codex/shared-frontend`；`main` 专用于同步上游。核对时 fork 远端已与上游同为 `13708b4`，本轮更新本地 main。原共享 Draft #3～7 由单一上游整合 PR 替代，完整提交号和恢复标签见[分支归档](docs/archive/BRANCHES_2026-10-27.json)。
+
+整合采用保留历史的 merge，不强制推送。解决旧父链带来的文档、图片请求和忽略规则冲突，移除 merge 意外复活的已迁走源码/历史文档；逐项核对后，产品源码和共享编译输入仍与 `0108ca9` 一致。保留上游三份 Linux 工具链脚本及环境说明，同时保留已授权的 Windows 工作区和共享前端策略。
+
+本轮实际运行全部122项主机检查，包括两次prepare一致性及ELF审计器单元测试；运行库绑定验证通过，摘要仍为 `b31c0fd86124b7eafe151ac710fb2f4391b7a385f7945e2977f7ef9cec89c32c`。
+
+运行 `:app:testDebugUnitTest :android-capabilities:testDebugUnitTest :meeting-sdk:testDebugUnitTest :app:assembleDebug :shared-app:assembleDebug --offline --no-daemon --console=plain`：BUILD SUCCESSFUL，4m30s，152项任务中21项执行、131项为UP-TO-DATE。Compose 1243项测试本轮实际重跑通过；共用库123项、会议SDK15项沿用Gradle已验证缓存，未声称本轮重新执行。Compose APK重新打包，共享APK任务为UP-TO-DATE；本轮未重新编译ArkTS或重跑真机。三份新接入脚本逐一执行 `bash -n` 通过，Linux完整构建仍待该环境验证。原始日志在忽略目录 `consolidation-host.log`、`consolidation-gradle.log`。
+
+此前 SH-14 的15项真机验证属于历史证据，不计作本轮重新运行。会议原生库的 16KB 对齐问题及真实云服务、多厂商/后台验收边界仍然保留，源码评审不等于生产发布批准。

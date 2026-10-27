@@ -1,44 +1,27 @@
 # 分支与 PR 导航
 
-更新：2026-10-27。以GitHub实际PR状态为准；下面的“共享1～4”是评审顺序，
-与分支名里的历史`pr-04～06`编号不同。旧编号保留，避免破坏堆叠PR的比较基底。
+更新：2026-10-27。共享前端只保留一条开发分支，不再按移植功能堆叠分支。
 
-## 先看哪一个
+## 日常使用
 
-- 看当前已经验证的完整共享版：`codex/meeting-sdk-integration`，功能检查点`7d39bc8`。
-- 看新增视觉问答：`codex/workflow-vlm-qa`，已完成SH-13本机图片问答接线与受控验证，尚未递交PR；真实模型质量等边界见迁移日志。
-- 看当前继续开发：`codex/gallery-scan-recovery`，继承视觉问答分支，新增SH-14图库批次暂停/恢复及跨进程验证；尚未递交新PR。
-- 看等待上游评审的Compose基线：[上游#4](https://github.com/yydhYYDH/ClawMate-Android/pull/4)。
-- 看共享版分层改动：按下面4个Draft PR顺序阅读。
-
-## 正在评审的PR
-
-| 顺序 | PR标题 | 内容分支 | 比较基底 |
-| --- | --- | --- | --- |
-| 前置 | [Compose 基线：主要页面对齐、工作流图编辑与文件预览](https://github.com/yydhYYDH/ClawMate-Android/pull/4) | `codex/pr-03-compose-ui-upstream` | 上游`main` |
-| 共享1/4 | [ArkUI-X 宿主、导航与 OCR/TTS](https://github.com/JKSOBBING/ClawMate-Android/pull/3) | `codex/pr-04-shared-frontend-host` | `codex/pr-03-compose-ui-workflows` |
-| 共享2/4 | [共用图片、语音与工作流引擎](https://github.com/JKSOBBING/ClawMate-Android/pull/4) | `codex/pr-05-shared-android-engines` | 共享1的分支 |
-| 共享3/4 | [图片聊天、记忆同步与工作流接线](https://github.com/JKSOBBING/ClawMate-Android/pull/5) | `codex/pr-06-shared-feature-integration` | 共享2的分支 |
-| 共享4/4 | [会议、自动摘要、采集提醒与构建校验](https://github.com/JKSOBBING/ClawMate-Android/pull/6) | `codex/meeting-sdk-integration` | 共享3的分支 |
-
-同号PR属于不同仓库，例如“上游#4”和“fork#4”是两个PR。
-共享4的源码已包含前面所有层；PR的Files changed只显示相对上一层的增量。
-这些PR不能独立合并：前置进入上游后，需核对最新main并整理提交父链/基底再递交上游。
-上游另有`build/toolchain-scripts`的工具链PR #3，不属于本共享功能链，本轮不改动它。
-
-## 历史分支
-
-| 分支 | 用途 / 状态 |
+| 分支 | 用途 |
 | --- | --- |
-| `main`（fork） | 当前仍为`7f76afb`，不是最新共享版；上游main已为`483b392` |
-| `codex/android-migration` | 旧共享整合检查点`198c8ce`，已停止作为主开发入口 |
-| `codex/arkui-x-hybrid` | 与旧共享整合检查点相同的历史分支 |
-| `codex/compose-only` | Compose页面迁移截止点`cc23078` |
-| `codex/pr-01-compose-memory-workflow` | 早期聊天/记忆/工作流批次；上游PR #2已合并 |
-| `codex/pr-02-compose-images-cloud` | 图片/云能力批次；内容已进入上游main，fork PR #1已关闭 |
-| `codex/pr-03-compose-ui-workflows` | Compose原提交链；fork PR #2已关闭，由上游PR #4的整理分支接替 |
-| `codex/pr-03-compose-ui-upstream` | 为上游PR #4整理父链的Compose分支，与旧分支用途不同 |
+| `main` | 跟随 [上游 main](https://github.com/yydhYYDH/ClawMate-Android/tree/main)，本轮核对为 `13708b4`；不直接堆入待评审功能 |
+| `codex/shared-frontend` | 唯一共享前端开发入口，包含 SH-01～14：宿主、共用能力、图片/记忆/工作流、会议、提醒、视觉问答及图库恢复 |
 
-本轮保留分支名及提交记录，没有删除、合并或强制推送分支；当前已有PR都继续可追溯。
-后续开发分支采用`codex/<具体功能>`，PR标题采用`[共享] <具体功能>`；
-只有确实需要堆叠时才增加顺序，标题不再混用Compose、hybrid和历史六批编号。
+后续相关移植直接在共享开发分支累积小提交，统一更新同一个上游整合 PR；只有独立且可能破坏稳定性的试验才另开临时分支。
+
+## 评审入口
+
+本轮整合 PR 直接以 `yydhYYDH/ClawMate-Android:main` 为基底，使用 fork 的 `codex/shared-frontend` 为内容分支。
+原 fork Draft #3～7 由该整合 PR 替代，关闭后只供历史查询。上游 Compose [#4](https://github.com/yydhYYDH/ClawMate-Android/pull/4) 已合并。
+
+共享分支已合入上游 `13708b4`，保留上游新增的三份工具链脚本；应用源码与 SH-14 提交 `0108ca9` 相同。
+不改变正式应用包名或迁移用户数据。无冲突（MERGEABLE）与 GitHub Auto-merge 是不同状态：后者还需要上游开启功能，并满足写权限、审核和必需检查。
+当前账号只能管理 fork，没有上游写权限；不得通过削弱检查或伪造成功状态绕过这些条件。
+
+## 历史追溯
+
+清理前 13 条功能分支及完整提交号保存在 [分支归档](archive/BRANCHES_2026-10-27.json)。
+原始共享提交由标签 `archive/shared-before-consolidation-20261027` 保留，Compose 评审父链由 `archive/compose-review-20261027` 保留。
+删除的只是被替代的分支引用，不删除提交或历史 PR。fork 远端最终仅保留上述两条日常分支。
