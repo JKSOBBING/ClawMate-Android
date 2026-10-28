@@ -38,7 +38,10 @@ export class AndroidWorkflow {
           catch (failure) { error = (failure as Error).message.slice(0, 500) || '视觉问答失败'; }
           cancellation.throwIfCancelled();
           if (!await bridge.callMethod('workflowToolReply', id, poll.tool.id, JSON.stringify({ response: response, error: error }))) {
-            throw new Error('视觉问答所属任务已结束，未提交迟到结果');
+            // Keep the user's refusal or transport error even if the bounded
+            // native task expired while its confirmation dialog was open.
+            let expired = '视觉问答所属任务已结束，未提交迟到结果';
+            throw new Error(error.length > 0 ? error + '；' + expired : expired);
           }
           continue;
         }

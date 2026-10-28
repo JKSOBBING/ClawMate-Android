@@ -159,4 +159,28 @@ await check('editor leaving during decode prevents persistent image creation', a
   });
   assert.equal(await Vlm.pickImage('/fixture',()=>stopped),'');
 });
+for (const rejected of [true, false]) {
+  await check(rejected ? 'expired mailbox preserves the original image refusal' : 'expired mailbox never saves a late successful model answer', async () => {
+    const updates=[]; let cancelled=0, replies=0;
+    const Workflow=module('shared-frontend/adapters/platform/AndroidWorkflow.ets','AndroidWorkflow', {
+      Bridge:{createBridge:()=>({async callMethod(method) {
+        if(method==='workflowStart') return 'expired-run';
+        if(method==='workflowPoll') return JSON.stringify({v:1,status:'running',tool:{id:'expired-request'}});
+        if(method==='workflowToolReply'){replies++;return false;}
+        if(method==='workflowCancel'){cancelled++;return true;}
+        assert.fail(method);
+      }})},
+      WorkflowVlm:class{async execute(){if(rejected)throw Error('用户取消视觉问答，未发送图片');return 'late answer must stay private';}cancel(){}},
+      WorkflowStorage:{readTaskWorkflowJson:()=>'',updateTaskRun:(_,__,status,message)=>updates.push({status,message})},
+      DataManagerFacade:class{constructor(){assert.fail('No terminal native result: never invent a summary or run record');}},
+      CollectionReminderService:{recordSuccessfulCollection(){assert.fail('No collection success');}}
+    });
+    await assert.rejects(Workflow.run('/fixture',{id:'task'},{throwIfCancelled(){},isCancelled:()=>false,setHandler(){}}),
+      rejected ? /用户取消视觉问答/ : /所属任务已结束/);
+    assert.equal(replies,1);assert.equal(cancelled,1);
+    assert.equal(updates.at(-1).status,'failed');
+    assert.match(updates.at(-1).message,/所属任务已结束/);
+    assert.ok(!updates.at(-1).message.includes('late answer must stay private'));
+  });
+}
 console.log(JSON.stringify({passed,scope:'Controlled model ports, real ArkTS authorization/transport, local image import and workflow dispatch; no actual model quality claim'}));

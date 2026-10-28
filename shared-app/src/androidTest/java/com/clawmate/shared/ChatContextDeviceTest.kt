@@ -50,6 +50,9 @@ class ChatContextDeviceTest {
             }
             line?.boundingBox?.let { tap(it); return true }
             return false
+        } catch (failure: Exception) {
+            DeviceTestDiagnostics.capture("chat-ocr", failure)
+            throw failure
         } finally { recognizer.close(); bitmap.recycle() }
     }
     private fun waitClick(text: String) {
@@ -162,6 +165,9 @@ class ChatContextDeviceTest {
                 assertTrue(second.getJSONArray("messages").toString().contains("复用本机会话"))
                 evidence("contextRecreate", "Saved summary reused after Activity recreation; no fake model reply")
             }
+        } catch (failure: Throwable) {
+            DeviceTestDiagnostics.capture("chat-lifecycle", failure)
+            throw failure
         } finally {
             Thread.sleep(500)
             originals.forEach { (file, bytes) -> if (bytes == null) file.delete() else file.writeBytes(bytes) }

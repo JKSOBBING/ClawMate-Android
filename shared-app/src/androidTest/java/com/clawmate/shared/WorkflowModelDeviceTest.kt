@@ -159,10 +159,25 @@ class WorkflowModelDeviceTest {
               <string key="cloudDeciderApiKey"></string><string key="cloudApiKey"></string></preferences>""")
             privacy.writeText("""<?xml version="1.0" encoding="utf-8"?><preferences><string key="choice">accepted</string><string key="version">2026-10-26-android-v1</string></preferences>""")
             ActivityScenario.launch(SharedActivity::class.java).use {
-                waitClick("任务");waitClick("配置任务");waitClick("运行");waitClick("取消")
-                val cancelled=awaitFailure(index,id);assertTrue(cancelled.getString("lastMessage").contains("取消"))
+                val confirmationDelay=InstrumentationRegistry.getArguments().getString("workflowConfirmationDelayMs","0").toLong()
+                require(confirmationDelay in 0..75000) { "workflowConfirmationDelayMs must be between 0 and 75000" }
+                waitClick("任务");waitClick("配置任务");waitClick("运行")
+                if(confirmationDelay>0)Thread.sleep(confirmationDelay)
+                waitClick("取消")
+                val cancelled=awaitFailure(index,id)
+                evidence("workflowCancelReceipt",cancelled.getString("lastMessage").take(1000))
+                assertTrue(cancelled.getString("lastMessage"),cancelled.getString("lastMessage").contains("取消"))
+                if(confirmationDelay>0) {
+                    assertTrue(cancelled.getString("lastMessage"),cancelled.getString("lastMessage").contains("所属任务已结束"))
+                    assertEquals(beforeRuns,File(root,"runs").list()?.toSet() ?: emptySet<String>())
+                    assertEquals(beforeLogs,File(root,"daily-log").walkTopDown().filter{it.isFile}.associate{it.absolutePath to it.readBytes().contentHashCode()})
+                    evidence("workflowExpiredConfirmation","Late image refusal and expired-task context preserved; no invented run result, summary or collection log")
+                    return@use
+                }
                 waitClick("运行");waitClick("发送图片")
-                val unavailable=awaitFailure(index,id,cancelled.getString("lastMessage"));assertFalse(unavailable.getString("lastMessage").contains("取消"))
+                val unavailable=awaitFailure(index,id,cancelled.getString("lastMessage"))
+                evidence("workflowUnavailableReceipt",unavailable.getString("lastMessage").take(1000))
+                assertFalse(unavailable.getString("lastMessage"),unavailable.getString("lastMessage").contains("取消"))
                 val records=File(root,"runs").listFiles().orEmpty().filter{it.name !in beforeRuns}.mapNotNull{dir->
                     runCatching{JSONObject(File(dir,"run_summary.json").readText())}.getOrNull()
                 }.filter{it.optString("workflow_file")==config.name}
