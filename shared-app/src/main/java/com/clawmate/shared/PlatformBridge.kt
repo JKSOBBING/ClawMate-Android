@@ -23,6 +23,8 @@ import com.clawmate.app.gallery.ocr.LocalOcrRecognizer
 import com.clawmate.platform.LocalImageAccess
 import com.clawmate.platform.NativeOperations
 import com.clawmate.platform.SharedNativeWork
+import com.clawmate.platform.avatar.AndroidAvatarForeground
+import com.clawmate.platform.avatar.AvatarForegroundRgba
 import com.clawmate.platform.reminder.CollectionReminderEngine
 import com.clawmate.app.task.runner.WorkflowModelMailbox
 import org.json.JSONObject
@@ -34,6 +36,7 @@ class PlatformBridge(private val activity: StageActivity) :
     BridgePlugin(activity, "ClawMatePlatform", activity.bridgeManager), Closeable {
     private val ocrJobs = NativeOperations<OcrResult>()
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
+    private val avatarJobs = NativeOperations<AvatarForegroundRgba>(1)
     private val workflowJobs = NativeOperations<WorkflowRunResult>(1)
     private val workflowModels = java.util.concurrent.ConcurrentHashMap<String, WorkflowModelMailbox>()
     private var asr: AndroidSpeechRecognizerAsrAdapter? = null
@@ -133,6 +136,18 @@ class PlatformBridge(private val activity: StageActivity) :
     }
     fun imagePrepareCancel(id: String): Boolean { imageJobs.cancel(id); return true }
     fun imageDigest(uri: String): String = LocalImageAccess.digest(uri, listOf(activity.filesDir, activity.cacheDir))
+    fun avatarForegroundStart(uri: String, segment: Boolean): String {
+        val checked = LocalImageAccess.validate(uri, listOf(activity.filesDir, activity.cacheDir))
+        return avatarJobs.start { AndroidAvatarForeground(activity.applicationContext).prepare(checked, segment) }
+    }
+    fun avatarForegroundPoll(id: String): String {
+        val result = avatarJobs.poll(id)
+        return JSONObject().put("v", 1).put("status", result.state)
+            .put("width", result.value?.width ?: 0).put("height", result.value?.height ?: 0)
+            .put("rgba", result.value?.let { java.util.Base64.getEncoder().encodeToString(it.pixels) } ?: "")
+            .put("error", if (result.state == "failed") "人物分割未完成，请换用人物清晰的分身图片；原图已保留" else "").toString()
+    }
+    fun avatarForegroundCancel(id: String): Boolean { avatarJobs.cancel(id); return true }
     fun workflowStart(raw: String): String {
         require(raw.length <= 256000) { "工作流配置过长" }
         val mailbox = WorkflowModelMailbox()
@@ -298,6 +313,7 @@ class PlatformBridge(private val activity: StageActivity) :
     override fun close() {
         meeting.close()
         ocrJobs.close()
+        avatarJobs.close()
         imageJobs.close(); workflowModels.values.forEach { it.close() }; workflowModels.clear(); workflowJobs.close(); asrCancel()
         onUi { tts?.release(); tts = null; voice = Voice() }
     }

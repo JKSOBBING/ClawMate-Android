@@ -158,6 +158,7 @@ struct Index {
     this.reloadSessions();
     if (this.sessions.length > 0) { await this.selectSession(this.sessions[0].id); }
     this.ready = true;
+    this.restoreAvatarForeground();
     CollectionReminderService.setWindowReady(true);
     this.startRuntime();
   }
@@ -269,6 +270,14 @@ struct Index {
     this.profile = this.facade.loadHomeViewModel();
     this.collectionViews = this.facade.loadCollectionViewModels();
     this.avatarVersions = this.facade.listAvatarVersions();
+  }
+  private async restoreAvatarForeground(): Promise<void> {
+    if (this.facade === null || this.profile.avatarVersionId.length === 0 ||
+      (this.profile.avatarForegroundUri.length > 0 && this.profile.avatarMessageForegroundUri.length > 0)) { return; }
+    try {
+      await this.facade.ensureCurrentAvatarForeground();
+      this.reloadData();
+    } catch (error) { showToastSafely('人物分割未完成，原分身已保留'); }
   }
   private unavailable(feature: string): void { showToastSafely(feature + '尚未接入安卓适配；可继续使用本地浏览和编辑'); }
   private recordRuntime(message: string): void {

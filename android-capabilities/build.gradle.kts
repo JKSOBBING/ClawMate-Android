@@ -27,6 +27,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation("com.squareup.okio:okio:3.8.0")
     implementation(libs.mlkit.text.recognition.chinese)
+    // Bundled person mask; no Play-services model download or image upload.
+    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
