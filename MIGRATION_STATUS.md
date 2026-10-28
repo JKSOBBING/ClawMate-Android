@@ -2,6 +2,10 @@
 
 更新：2026-10-28。迁移进度、阶段与验证统一记录于此；架构见[共享架构](docs/SHARED_ARCHITECTURE.md)，页面规范见[前端对齐](docs/FRONTEND_PARITY.md)，后续工作见[待办](MIGRATION_BACKLOG.md)。
 
+执行范围按用户2026-10-28纠正：迁移鸿蒙ClawMate的全部功能并适配Android；会议语音的后续接入和专项测试放在最后。
+聊天ASR/TTS、MiMO流式语音属于主线；自动控制、PC/Python、平台专有能力替代与本地模型/原生推理均在全量迁移清单中。
+受限/占位状态继续算待适配，已接入但真实服务/质量未验收的条目继续保留验收缺口。
+
 ## 当前版本
 
 - 主前端：ArkTS/ArkUI + ArkUI-X；Android 宿主 `shared-app`，包名 `com.clawmate.shared`，版本 `0.3-integrated`。
@@ -539,3 +543,22 @@ F12/P05三个子项已完成代码接入，完整产品验收未完成；下一�
 新APK SHA256 `029d904b113411bbea0f63200a529ce610edf79b679782603daadd58fffd3ca0`，312,628,469字节。
 命令、结果及20份最终/9份早期失败证据哈希见[聊天分身验证报告](shared-frontend/verification-chat-avatar.json)。
 鸿蒙源、Compose源、共用原生能力及会议SDK源码未改，用户README编辑保留；未创建/重开PR或切换正式包名/数据。
+
+## SH-23：全量迁移目标与会议后置（2026-10-28）
+
+按用户纠正，主线是鸿蒙ClawMate全功能Android适配，会议语音后续接入和专项测试是最后独立阶段。
+已将该规则写入AGENTS.md与迁移清单；移除本地模型/原生推理无限期暂缓的表述，明确受限适配不算功能完成。
+后续顺序为F13聊天流式语音、P01/P04、P02/P03、P06、本地推理/剩余功能与整体验收，最后继续会议语音。
+现有会议代码与历史验证记录保留；本轮没有新增会议功能或执行会议专项测试。
+
+修正`test-shared-device.ps1`默认回归分组：普通能力6项、聊天1项、工作流1项，共8项；
+会议专项仅在最终阶段通过`-IncludeMeeting`追加到最后，统计按实际选择分组计算，不再固定宣称9项。
+PowerShell解析检查通过；使用既有SH-22 APK在OPPO PKB110 / Android16 / 4KB执行新默认驱动，
+实际8项通过，输出`meeting included: False`。本轮没有修改产品源码，没有重跑产品构建、JVM或会议数值专项。
+
+核对F13原始实现：锁定上游同一提交的`utils/voice/MimoVoiceClient.ets`与`pages/chat/ChatVoiceOrchestrator.ets`，
+分别为blob `08c7277d9d5db9b729ead30bd5f329ff1bc4a307`、`32211f8a7c6d574ec31c3d5485df4ca439f98c28`；
+原链路是聊天会话/语音状态与MiMO流式音频协议，不是会议SDK。下一实现阶段应复用该协议与编排、适配Android播放能力；
+当前共享版仅有系统ASR/TTS，F13流式云语音尚未接入，不把本轮范围调整记为新增产品能力。
+本轮命令和原始回执保存在忽略目录`.arkui-x-validation/sh23/`与`application/sh23-non-meeting/`。
+用户README编辑保留，鸿蒙、Compose、原生能力与会议SDK源码未改；未创建或重开PR。

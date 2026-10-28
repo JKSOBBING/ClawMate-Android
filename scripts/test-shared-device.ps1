@@ -3,6 +3,7 @@ param(
     [string]$EvidenceName = 'shared-device-regression',
     [string]$Serial,
     [switch]$Require16Kb,
+    [switch]$IncludeMeeting,
     [ValidateRange(1,5)][int]$TimeoutMultiplier = 1
 )
 $ErrorActionPreference = 'Stop'
@@ -41,10 +42,15 @@ foreach ($relative in @('shared-app/build/outputs/apk/debug/shared-app-debug.apk
 # These UI fixtures replace preference files before launch. A cold target process
 # is required between groups so ArkTS singleton settings cannot outlive a fixture.
 $groups = @(
-    @{ Name='native-meeting'; Count=7; Classes='com.clawmate.shared.NativeCapabilitiesDeviceTest,com.clawmate.shared.MeetingIntegrationDeviceTest' },
+    @{ Name='native'; Count=6; Classes='com.clawmate.shared.NativeCapabilitiesDeviceTest' },
     @{ Name='chat'; Count=1; Classes='com.clawmate.shared.ChatContextDeviceTest' },
     @{ Name='workflow'; Count=1; Classes='com.clawmate.shared.WorkflowModelDeviceTest#actualTaskConfirmationCancellationAndUnavailableModelNeverWriteSuccessfulSummary' }
 )
+# Meeting integration is the final migration phase and opt-in for this driver.
+if ($IncludeMeeting) {
+    $groups += @{ Name='meeting'; Count=1; Classes='com.clawmate.shared.MeetingIntegrationDeviceTest' }
+}
+$checkCount = ($groups | Measure-Object -Property Count -Sum).Sum
 try { foreach ($group in $groups) {
     & $adbPath @deviceArguments shell am force-stop com.clawmate.shared
     if ($LASTEXITCODE -ne 0) { throw 'Unable to stop the target test process' }
@@ -62,4 +68,4 @@ try { foreach ($group in $groups) {
     & $adbPath @deviceArguments shell am force-stop com.clawmate.shared
     & $adbPath @deviceArguments shell am force-stop com.clawmate.shared.test
 }
-Write-Output '9 device checks passed in isolated target processes; no real cloud-model quality claim.'
+Write-Output "$checkCount device checks passed in isolated target processes; meeting included: $($IncludeMeeting.IsPresent); no real cloud-model quality claim."

@@ -11,6 +11,14 @@ The target must be a real Android application, not a screenshot mock or a
 minimal demo. Preserve the user-visible product flows and data contracts where
 the Android platform can support them.
 
+The objective is the full HarmonyOS ClawMate feature migration. Meeting/audio-note
+integration and its dedicated runtime tests are the final phase, after the other
+ClawMate features have been adapted. Preserve existing meeting code, but defer new
+meeting feature work and exclude meeting tests from ordinary migration regression
+until that final phase (unless the user reprioritizes). General chat ASR/TTS and
+streaming voice remain part of the main migration. Disabled adapters are tracked
+as pending, not counted as completed functionality.
+
 ## Working rules
 
 - Approved workspaces are /home/yydh/ClawMate-Android and the current Windows
