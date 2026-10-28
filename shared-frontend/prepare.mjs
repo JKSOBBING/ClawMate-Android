@@ -92,11 +92,21 @@ overlay('platform/NavigationStyle.ets', "import { AppTheme } from '../utils/AppT
   navigationConstants.join('\n') + '\nexport const MAIN_NAVIGATION_INSET: number = TAB_BAR_HEIGHT + TAB_BAR_BOTTOM_MARGIN + 12;\n' +
   'export class NavigationStyle {\n' + navigationMethods.join('\n') + '\n}\n');
 overlay('utils/gallery/GalleryAnalyzer.ets', replaceChecked(read('utils/gallery/GalleryAnalyzer.ets'), 'this.ocrService.recognize(pixelMap)', 'this.ocrService.recognizeUri(uri)'));
+let avatarService = read('datamanager/avatar/AvatarService.ets');
+avatarService = replaceChecked(avatarService, "import { image } from '@kit.ImageKit';",
+  "import { image } from '@kit.ImageKit';\nimport { util } from '@kit.ArkTS';\nimport { ChatImages } from '../../platform/ChatImages';");
+avatarService = replaceChecked(avatarService, /  private async encodeReferencePhotoToJpeg\(uri: string\): Promise<Uint8Array> \{[^]*?\n  \}/,
+  "  private async encodeReferencePhotoToJpeg(uri: string): Promise<Uint8Array> {\n    let images = await ChatImages.prepare([uri], (): boolean => false);\n    let data = images[0];\n    if (!data.startsWith('data:image/jpeg;base64,') || data.length > 1400000) { throw new Error('参考照片准备结果无效'); }\n    return new util.Base64Helper().decodeSync(data.slice(data.indexOf(',') + 1));\n  }");
+overlay('datamanager/avatar/AvatarService.ets', avatarService);
 let messageList = replaceChecked(read('pages/chat/ChatMessageList.ets'), "import { pasteboard } from '@kit.BasicServicesKit';", "import { pasteboard } from '../../platform/Pasteboard';");
 messageList = replaceChecked(messageList, '  private replayAvailable(): boolean {',
   "  private replayAvailable(): boolean {\n    if (this.detail.voice.provider === 'android-system-tts') { return this.voiceStatus !== 'synthesizing'; }");
 overlay('pages/chat/ChatMessageList.ets', messageList);
 let homePage = read('pages/home/HomePage.ets');
+for (const method of ['submitAvatarGeneration', 'submitAvatarPhotoGeneration']) {
+  homePage = replaceChecked(homePage, `        AppLogger.errorCause('Home.Avatar', '${method} failed', e as Error);`.trimStart(),
+    `AppLogger.errorCause('Home.Avatar', '${method} failed', e as Error);\n      showToastSafely('生成未完成：' + (e as Error).message, 2500);`);
+}
 for (const name of ['selectedRecommendationId', 'selectedTaskSuggestionId', 'avatarGenerationOpen', 'avatarHistoryOpen', 'selectedAvatarVersionId']) {
   homePage = replaceChecked(homePage, '@State ' + name + ':', "@State @Watch('reportAndroidOverlay') " + name + ':');
 }

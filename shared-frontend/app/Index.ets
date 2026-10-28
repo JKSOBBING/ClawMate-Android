@@ -23,7 +23,7 @@ import { showToastSafely } from '../utils/PromptSafe';
 import { SettingsStore } from '../platform/SettingsStore';
 import { DataManagerFacade, createEmptyHomeProfileViewModel, createEmptyCollectionViewModels } from '../datamanager/DataManagerFacade';
 import { HomeProfileViewModel, CollectionViewModel, IndexedEvent } from '../datamanager/DataManagerTypes';
-import { AvatarGenerationMode, AvatarVersionViewModel, AvatarProviderConfig } from '../datamanager/avatar/AvatarTypes';
+import { AvatarGenerationMode, AvatarVersionViewModel } from '../datamanager/avatar/AvatarTypes';
 import { HomeTaskSuggestion, buildHomeTaskSuggestionPrompt, parseHomeTaskSuggestions } from '../pages/home/HomeTaskSuggestion';
 import { HomeComfortConcern, HomeComfortChatMessage, buildHomeComfortConcernPrompt,
   parseHomeComfortConcerns, buildHomeComfortChatMessages, parseHomeComfortReply } from '../pages/home/HomeEmotionalSupport';
@@ -37,6 +37,7 @@ import { ChatContext } from '../platform/ChatContext';
 import { CollectionReminderService } from '../utils/CollectionReminderService';
 import { MemoryQuery } from '../platform/MemoryQuery';
 import { AndroidWorkflow } from '../platform/AndroidWorkflow';
+import { AndroidAvatar } from '../platform/AndroidAvatar';
 import { WorkflowTask } from '../utils/WorkflowTypes';
 import { WorkflowCancellation } from '../utils/WorkflowCancellation';
 import { GalleryPhotoPicker } from '../utils/gallery/GalleryPhotoPicker';
@@ -339,17 +340,8 @@ struct Index {
     } catch (error) { this.cloudOutput = '测试未完成：' + (error as Error).message; }
   }
   private async generateAvatar(mode: AvatarGenerationMode, source: string): Promise<void> {
-    if (mode === 'image_to_image') { throw new Error('安卓照片参考上传适配尚未验收，请先使用文生图；未上传照片'); }
     if (this.facade === null) { throw new Error('数据管理器未就绪'); }
-    await this.authorizeCloud();
-    let baseUrl = (AppStorage.get<string>('avatarImageBaseUrl') || '').trim();
-    let model = (AppStorage.get<string>('avatarTextToImageModel') || '').trim();
-    if (!baseUrl.startsWith('https://') || model.length === 0) { throw new Error('请在“个人与隐私”配置 HTTPS 图片服务和文生图模型'); }
-    let config: AvatarProviderConfig = { imageBaseUrl: baseUrl, apiKey: AppStorage.get<string>('avatarImageApiKey') || '',
-      textToImageModel: model, imageToImageModel: AppStorage.get<string>('avatarImageToImageModel') || '',
-      size: AppStorage.get<string>('avatarImageSize') || '1024x1024', responseFormat: 'b64_json', outputFormat: 'png',
-      sequentialImageGeneration: 'disabled', stream: false, watermark: true, timeoutMs: 120000 };
-    try { await this.facade.generateAvatar(config, this.facade.buildAvatarGenerateRequest(mode, '', nowIsoLocal())); }
+    try { await AndroidAvatar.generate(this.facade, mode, source, async (): Promise<void> => { await this.authorizeCloud(); }, (): string => nowIsoLocal()); }
     finally { this.reloadData(); }
   }
   private reloadSessions(): void { this.sessions = ChatSessionStorage.loadIndex(this.context().filesDir); }
