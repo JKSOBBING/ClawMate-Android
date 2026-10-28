@@ -167,6 +167,16 @@ Before asking for review, report:
 
 ## Collaboration protocol
 
+### User manual maintenance
+
+- Maintain the Chinese illustrated handbook at `docs/user-manual/` when changing
+  user-visible flows, button labels, settings, permissions, or capability limits.
+- Edit `content.json`, regenerate with `python docs/user-manual/build.py`, and run
+  `python docs/user-manual/build.py --check`. Keep screenshot provenance and
+  version differences current; use only reviewed, non-private UI captures.
+- Document entry points, prerequisites, steps, completion indicators, recovery,
+  and data destinations. Do not describe unavailable Android features as working.
+
 The migration is reviewed in phases. Do not start a large unrelated refactor
 while a previous phase has failing checks. Prefer an explicit TODO or adapter
 over speculative infrastructure. Keep the source-to-target mapping current as

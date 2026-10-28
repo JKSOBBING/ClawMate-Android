@@ -3,6 +3,8 @@
 [ClawMate HarmonyOS](https://github.com/doulujiyao12/mobiinfra-oh) 的 Android 迁移项目。
 当前主前端采用 **ArkTS/ArkUI + ArkUI-X**，跟随鸿蒙页面与业务源码；Android 系统能力使用 Kotlin。
 
+普通用户请从[图文用户手册](docs/user-manual/index.html)开始：首次配置、聊天与图片、图库与记忆、任务提醒、会议和数字分身均有操作说明。手册支持离线阅读、搜索、图片放大与打印；下载时保留整个 `docs/user-manual/` 目录。维护方法见[手册说明](docs/user-manual/README.md)。
+
 ## 当前版本
 
 分支与历史PR见[分支和PR导航](docs/BRANCHES_AND_PRS.md)。当前完整共享版在
