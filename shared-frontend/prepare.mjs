@@ -2,6 +2,7 @@ import { replaceChecked, applyPatches } from './source-patches.mjs';
 import { syncOverlays, recordPrepared } from './build-state.mjs';
 import { buildChatContextSource } from './context-source.mjs';
 import { buildAndroidGallerySource } from './gallery-source.mjs';
+import { buildChatAvatarView, buildChatAvatarPage, buildChatAvatarMessages } from './chat-avatar-source.mjs';
 import { verifySources, toolchainPaths, checkedPath } from './bootstrap.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -101,7 +102,8 @@ overlay('datamanager/avatar/AvatarService.ets', avatarService);
 let messageList = replaceChecked(read('pages/chat/ChatMessageList.ets'), "import { pasteboard } from '@kit.BasicServicesKit';", "import { pasteboard } from '../../platform/Pasteboard';");
 messageList = replaceChecked(messageList, '  private replayAvailable(): boolean {',
   "  private replayAvailable(): boolean {\n    if (this.detail.voice.provider === 'android-system-tts') { return this.voiceStatus !== 'synthesizing'; }");
-overlay('pages/chat/ChatMessageList.ets', messageList);
+overlay('pages/chat/ChatMessageList.ets', buildChatAvatarMessages(messageList));
+overlay('pages/chat/DigitalAvatarView.ets', buildChatAvatarView(read('pages/chat/DigitalAvatarView.ets')));
 let homePage = read('pages/home/HomePage.ets');
 for (const method of ['submitAvatarGeneration', 'submitAvatarPhotoGeneration']) {
   homePage = replaceChecked(homePage, `        AppLogger.errorCause('Home.Avatar', '${method} failed', e as Error);`.trimStart(),
@@ -138,7 +140,7 @@ overlay('config/DefaultEndpointConfig.ets',
     `  ${name}: ${name === 'voiceTtsStreamingEnabled' ? 'false' : "''"},`).join('\n') + '\n};\n' +
   "export function configuredEndpointSecretOrDefault(value: string, fallback: string = ''): string { return value.trim() || fallback; }\n");
 const stringKeys = new Set([...settings.matchAll(/@StorageLink\('([^']+)'\)/g)].map(match => match[1]));
-['firstLaunchOnboardingVersion', 'androidTaskControlMode', 'threadNumInput', 'desktopCompanionDownloadUrl'].forEach(key => stringKeys.add(key));
+['firstLaunchOnboardingVersion', 'androidTaskControlMode', 'threadNumInput', 'desktopCompanionDownloadUrl', 'androidChatAvatarStyle'].forEach(key => stringKeys.add(key));
 const booleanKeys = ['androidCloudAccessGranted', 'appDarkMode', 'autoConfirm', 'cloudAutoConfirm'];
 stringKeys.delete('voiceTtsStreamingEnabled');
 booleanKeys.push('voiceTtsStreamingEnabled');
@@ -307,6 +309,9 @@ for (const name of ['InputMethod', 'PlatformUi', 'Pasteboard']) {
 }
 // Android adjustResize already shortens the window. Keep the keyboard tracker
 // for scroll-follow, but do not apply a second sheet offset or bottom padding.
+// Keep the existing IME/focus platform adaptation before applying the chat UI delta.
+const chatPageFile = path.join(project, 'entry/src/main/ets/pages/chat/ChatPage.ets');
+fs.writeFileSync(chatPageFile, buildChatAvatarPage(fs.readFileSync(chatPageFile, 'utf8')));
 const comfortFile = path.join(project, 'entry/src/main/ets/pages/home/HomeComfortSection.ets');
 fs.writeFileSync(comfortFile, applyPatches(fs.readFileSync(comfortFile, 'utf8'), [
   ['bottom: this.keyboardHeightVp', 'bottom: 0'],

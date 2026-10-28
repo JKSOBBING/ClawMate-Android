@@ -38,6 +38,7 @@ import { CollectionReminderService } from '../utils/CollectionReminderService';
 import { MemoryQuery } from '../platform/MemoryQuery';
 import { AndroidWorkflow } from '../platform/AndroidWorkflow';
 import { AndroidAvatar } from '../platform/AndroidAvatar';
+import { ChatAvatar } from '../platform/ChatAvatar';
 import { WorkflowTask } from '../utils/WorkflowTypes';
 import { WorkflowCancellation } from '../utils/WorkflowCancellation';
 import { GalleryPhotoPicker } from '../utils/gallery/GalleryPhotoPicker';
@@ -270,6 +271,18 @@ struct Index {
     this.profile = this.facade.loadHomeViewModel();
     this.collectionViews = this.facade.loadCollectionViewModels();
     this.avatarVersions = this.facade.listAvatarVersions();
+    ChatAvatar.publish(this.profile, this.facade.paths.avatarAssetsRoot);
+  }
+  private async toggleChatAvatar(): Promise<void> {
+    let previous = ChatAvatar.style();
+    try {
+      if (previous !== 'personal') {
+        await this.restoreAvatarForeground();
+        if (!ChatAvatar.available()) { throw new Error('请先在首页生成分身并完成清晰人物前景，再使用聊天分身'); }
+      }
+      AppStorage.setOrCreate('androidChatAvatarStyle', previous === 'personal' ? 'mascot' : 'personal');
+      try { SettingsStore.save(); } catch (error) { AppStorage.setOrCreate('androidChatAvatarStyle', previous); throw error as Error; }
+    } catch (error) { showToastSafely((error as Error).message, 2500); }
   }
   private async restoreAvatarForeground(): Promise<void> {
     if (this.facade === null || this.profile.avatarVersionId.length === 0 ||
@@ -589,6 +602,7 @@ struct Index {
     ChatPage({ navigationBottomInset: this.navigationInset(), voiceStatus: this.voiceStatus, voiceActiveMessageId: this.voiceMessageId,
       chatMode: $mode, cloudUserInput: $cloudInput, userInput: $localInput, chatDeepThinkingEnabled: $deepThinking,
       sessions: this.sessions, activeSessionId: this.sessionId, messages: this.messages,
+      onToggleChatAvatar: async (): Promise<void> => { await this.toggleChatAvatar(); },
       cloudThinking: this.thinking || this.preparing, pendingImageAttachmentUris: this.pendingImages, sessionDrawerOpen: this.drawer,
       onRunCloudPlanner: async (): Promise<void> => { await this.sendMessage(); },
       onCancelCloudChat: (): void => { this.cancelChat(); this.persistChat(); },
