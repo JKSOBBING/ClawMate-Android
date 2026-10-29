@@ -119,6 +119,6 @@ class SharedActivity : StageActivity() {
         updateSystemBars()
     }
 
-    override fun onStop() { platform.ttsStop(); platform.asrCancel(); platform.meetingDetach(); platform.meetingStopPlayback(); super.onStop() }
+    override fun onStop() { platform.speechDetach(); platform.ttsStop(); platform.asrCancel(); platform.meetingDetach(); platform.meetingStopPlayback(); super.onStop() }
     override fun onDestroy() { platform.close(); super.onDestroy() }
 }

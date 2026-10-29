@@ -189,6 +189,14 @@
     {
       "path": "entry/src/main/ets/pages/settings/DesktopCompanionPage.ets",
       "gitBlob": "5fe7ede9a291161b7915b304eb1204dab76e1e2f"
+    },
+    {
+      "path": "entry/src/main/ets/utils/voice/MimoVoiceClient.ets",
+      "gitBlob": "08c7277d9d5db9b729ead30bd5f329ff1bc4a307"
+    },
+    {
+      "path": "entry/src/main/ets/utils/voice/PcmWav.ets",
+      "gitBlob": "a31ca60d8d47bf7e29e2659dd94fc0099599a7ab"
     }
   ]
 }

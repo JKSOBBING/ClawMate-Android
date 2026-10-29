@@ -3,6 +3,7 @@ import { syncOverlays, recordPrepared } from './build-state.mjs';
 import { buildChatContextSource } from './context-source.mjs';
 import { buildAndroidGallerySource } from './gallery-source.mjs';
 import { buildChatAvatarView, buildChatAvatarPage, buildChatAvatarMessages } from './chat-avatar-source.mjs';
+import { buildMimoProtocol } from './voice-source.mjs';
 import { verifySources, toolchainPaths, checkedPath } from './bootstrap.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -79,6 +80,7 @@ const navigationConstants = ['TAB_BAR_HEIGHT', 'TAB_BAR_BOTTOM_MARGIN', 'TAB_BAR
   return 'export ' + match[0];
 });
 const sourceIndex = read('pages/Index.ets');
+overlay('platform/UpstreamMimoVoice.ets', buildMimoProtocol(read('utils/voice/MimoVoiceClient.ets')));
 overlay('components/CollectionReminderPanel.ets', replaceChecked(read('components/CollectionReminderPanel.ets'),
   '      Row({ space: 8 }) {', "      Text('Android 会在设定时间附近提醒，可能因省电策略延迟。提醒本身不采集数据，点击通知后需确认任务。').fontSize(12).fontColor(AppTheme.text('#6F7584')).width('100%')\n      Row({ space: 8 }) {"));
 overlay('platform/UpstreamChatContext.ets', buildChatContextSource(sourceIndex));
@@ -102,6 +104,9 @@ overlay('datamanager/avatar/AvatarService.ets', avatarService);
 let messageList = replaceChecked(read('pages/chat/ChatMessageList.ets'), "import { pasteboard } from '@kit.BasicServicesKit';", "import { pasteboard } from '../../platform/Pasteboard';");
 messageList = replaceChecked(messageList, '  private replayAvailable(): boolean {',
   "  private replayAvailable(): boolean {\n    if (this.detail.voice.provider === 'android-system-tts') { return this.voiceStatus !== 'synthesizing'; }");
+messageList = replaceChecked(messageList, '          .opacity(this.synthesizing() ? 0.72 : 1)',
+  "          .opacity(this.synthesizing() ? 0.72 : 1)\n          .accessibilityText(this.playing() ? '暂停朗读' : this.synthesizing() ? '取消语音生成' : this.detail.voice.status === 'paused' ? '继续朗读' : '朗读消息')");
+messageList = replaceChecked(messageList, '          .enabled(this.replayAvailable())', "          .enabled(this.replayAvailable())\n          .accessibilityText('重播缓存语音')");
 overlay('pages/chat/ChatMessageList.ets', buildChatAvatarMessages(messageList));
 overlay('pages/chat/DigitalAvatarView.ets', buildChatAvatarView(read('pages/chat/DigitalAvatarView.ets')));
 let homePage = read('pages/home/HomePage.ets');

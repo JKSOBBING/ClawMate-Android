@@ -39,12 +39,13 @@ import { MemoryQuery } from '../platform/MemoryQuery';
 import { AndroidWorkflow } from '../platform/AndroidWorkflow';
 import { AndroidAvatar } from '../platform/AndroidAvatar';
 import { ChatAvatar } from '../platform/ChatAvatar';
+import { CloudSpeech } from '../platform/CloudSpeech';
 import { WorkflowTask } from '../utils/WorkflowTypes';
 import { WorkflowCancellation } from '../utils/WorkflowCancellation';
 import { GalleryPhotoPicker } from '../utils/gallery/GalleryPhotoPicker';
 import { MainNavigation } from '../platform/MainNavigation';
 import { NavigationStyle, MAIN_NAVIGATION_INSET } from '../platform/NavigationStyle';
-import { VoiceInteractionStatus, TtsVoiceRuntimeStatus, createTtsVoiceRuntimeMetadata, createVoiceErrorMetadata } from '../pages/chat/VoiceInteractionTypes';
+import { ChatVoiceMetadata, VoiceInteractionStatus, TtsVoiceRuntimeStatus, createTtsVoiceRuntimeMetadata, createVoiceErrorMetadata } from '../pages/chat/VoiceInteractionTypes';
 
 interface CaptureResult { v: number; status: string; uri: string; }
 
@@ -113,6 +114,8 @@ struct Index {
   private runtimeGeneration: number = 0;
   private voiceGeneration: number = 0;
   private voicePending: boolean = false;
+  private cloudSpeech: CloudSpeech | null = null;
+  @StorageProp('androidCloudAccessGranted') @Watch('cloudVoiceAccessChanged') private cloudVoiceAllowed: boolean = false;
   private reminderNavigation: string = '';
   private reminderRouting: boolean = false;
 
@@ -125,7 +128,7 @@ struct Index {
   }
   onPageShow(): void { CollectionReminderService.setWindowReady(true); this.startRuntime(); if (this.ready) { this.reloadData(); CollectionReminderService.refresh().catch(() => {}); } }
   onPageHide(): void { CollectionReminderService.setWindowReady(false); this.cancelChat(); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.saveSettings(); this.persistChat(); }
-  aboutToDisappear(): void { CollectionReminderService.setWindowReady(false); Bridge.createBridge('ClawMatePlatform').unRegisterMethod('collectionReminderArrived').catch(() => {}); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
+  aboutToDisappear(): void { PrivacyConsent.setRevokeHandler(null); CollectionReminderService.setWindowReady(false); Bridge.createBridge('ClawMatePlatform').unRegisterMethod('collectionReminderArrived').catch(() => {}); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
   onBackPress(): boolean {
     this.saveSettings(); this.persistChat();
     if (Number(router.getLength()) > 1) { router.back(); return true; }
@@ -153,6 +156,13 @@ struct Index {
     this.onboarding = AppStorage.get<string>(FIRST_LAUNCH_ONBOARDING_STORAGE_KEY) !== FIRST_LAUNCH_ONBOARDING_VERSION;
     this.facade = new DataManagerFacade(context.filesDir);
     this.facade.ensureReady();
+    this.cloudSpeech = new CloudSpeech({ filesDir: (): string => this.context().filesDir, sessionId: (): string => this.sessionId,
+      message: (id: string): ChatMessage | undefined => this.messages.find((item: ChatMessage): boolean => item.id === id),
+      update: (id: string, voice?: ChatVoiceMetadata): void => { let message = this.messages.find((item: ChatMessage): boolean => item.id === id);
+        if (message !== undefined) { message.voice = voice; this.messages = this.messages.slice(); this.scheduleChatSave(); } },
+      state: (id: string, status: VoiceInteractionStatus): void => { this.voiceMessageId = id; this.voiceStatus = status; },
+      authorize: async (): Promise<void> => { await this.authorizeCloud(); } });
+    PrivacyConsent.setRevokeHandler((): void => { if (this.cloudSpeech?.ownsVoice()) { this.stopVoice(); } });
     this.reloadData();
     let homeState = this.facade.storage.readJson<HomeModelState>(context.filesDir + '/shared-home-state.json', { suggestions: [], concerns: [] });
     this.suggestions = homeState.suggestions || []; this.concerns = homeState.concerns || [];
@@ -205,6 +215,7 @@ struct Index {
     finally { this.runtimeBusy = false; }
   }
   private applyVoiceSnapshot(snapshot: AndroidRuntimeSnapshot): void {
+    if (this.cloudSpeech?.ownsVoice()) { return; }
     if (snapshot.voiceMessageId.length === 0 || snapshot.voiceMessageId !== this.voiceMessageId) { return; }
     this.voiceStatus = snapshot.voiceStatus as VoiceInteractionStatus;
     this.updateVoiceMetadata(snapshot.voiceError);
@@ -212,6 +223,7 @@ struct Index {
   private updateVoiceMetadata(error: string = ''): void {
     let message = this.messages.find((item: ChatMessage): boolean => item.id === this.voiceMessageId);
     if (message === undefined) { return; }
+    if (message.voice?.provider === 'mimo') { return; }
     let status: TtsVoiceRuntimeStatus = this.voiceStatus === 'speaking' ? 'playing' : this.voiceStatus === 'synthesizing' ? 'synthesizing' :
       this.voiceStatus === 'paused' ? 'paused' : 'ready';
     if (message.voice?.status === (this.voiceStatus === 'error' ? 'error' : status) && (message.voice?.error || '') === error) { return; }
@@ -220,12 +232,18 @@ struct Index {
     this.messages = this.messages.slice(); this.scheduleChatSave();
   }
   private stopVoice(): void {
+    this.cloudSpeech?.stop().catch(() => {});
     this.voiceGeneration += 1; this.voicePending = false;
     if (this.voiceStatus === 'speaking' || this.voiceStatus === 'synthesizing') { this.voiceStatus = 'paused'; }
     this.updateVoiceMetadata();
     NativeCapabilities.stopSpeech().catch(() => {});
   }
   private async playVoice(id: string, text: string, replay: boolean = false): Promise<void> {
+    let message = this.messages.find((item: ChatMessage): boolean => item.id === id);
+    if (this.cloudSpeech !== null && (CloudSpeech.configured() || message?.voice?.provider === 'mimo')) {
+      try { await this.cloudSpeech.play(id, text, replay); } catch (error) { showToastSafely('朗读失败：' + (error as Error).message, 2500); }
+      return;
+    }
     if (!replay && this.voiceMessageId === id && this.voiceStatus === 'speaking') { this.stopVoice(); return; }
     this.stopVoice();
     let generation = this.voiceGeneration;
@@ -253,6 +271,7 @@ struct Index {
     } finally { if (generation === this.voiceGeneration) { this.voicePending = false; } }
   }
   private navigationInset(): number { return this.keyboardHeight > 0 ? 0 : MAIN_NAVIGATION_INSET; }
+  private cloudVoiceAccessChanged(): void { if (!this.cloudVoiceAllowed && this.cloudSpeech?.ownsVoice()) { this.stopVoice(); } }
 
   private completeOnboarding(): void {
     try {

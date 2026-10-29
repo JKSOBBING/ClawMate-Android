@@ -25,6 +25,9 @@ import com.clawmate.platform.NativeOperations
 import com.clawmate.platform.SharedNativeWork
 import com.clawmate.platform.avatar.AndroidAvatarForeground
 import com.clawmate.platform.avatar.AvatarForegroundRgba
+import com.clawmate.platform.voice.SpeechHttp
+import com.clawmate.platform.voice.PcmSpeechPlayer
+import com.clawmate.platform.voice.SpeechFilePlayer
 import com.clawmate.platform.reminder.CollectionReminderEngine
 import com.clawmate.app.task.runner.WorkflowModelMailbox
 import org.json.JSONObject
@@ -37,6 +40,11 @@ class PlatformBridge(private val activity: StageActivity) :
     private val ocrJobs = NativeOperations<OcrResult>()
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
     private val avatarJobs = NativeOperations<AvatarForegroundRgba>(1)
+    private var speechHttp = SpeechHttp()
+    private var speechHttpDetached = false
+    private val pcmSpeech = PcmSpeechPlayer(activity.applicationContext)
+    private val fileSpeech = SpeechFilePlayer(activity.applicationContext, java.io.File(activity.filesDir,"files/chat-sessions/assets"))
+    private var speechMode = ""
     private val workflowJobs = NativeOperations<WorkflowRunResult>(1)
     private val workflowModels = java.util.concurrent.ConcurrentHashMap<String, WorkflowModelMailbox>()
     private var asr: AndroidSpeechRecognizerAsrAdapter? = null
@@ -291,6 +299,42 @@ class PlatformBridge(private val activity: StageActivity) :
         if (voice.status == "speaking" || voice.status == "synthesizing") voice = voice.copy(status = "paused")
         true
     }
+    fun speechRequestStart(url: String, key: String, body: String, stream: Boolean): String = onUi {
+        check((activity as SharedActivity).reminderWindowReady()){"请返回前台并解锁后使用语音服务"}
+        if(speechHttpDetached){speechHttp=SpeechHttp();speechHttpDetached=false}
+        speechHttp.start(url,key,body,stream)
+    }
+    fun speechRequestPoll(id: String): String {
+        val value=speechHttp.poll(id)
+        return JSONObject().put("v",1).put("status",value.status).put("events",JSONArray(value.events)).put("body",value.body).put("error",value.error).toString()
+    }
+    fun speechRequestCancel(id: String): Boolean {speechHttp.cancel(id);return true}
+    fun speechPcmStart(id: String): Boolean = onUi {
+        check((activity as SharedActivity).reminderWindowReady()){"请返回前台并解锁后播放语音"}
+        tts?.stop();fileSpeech.close();pcmSpeech.start(id);speechMode="pcm";true
+    }
+    fun speechPcmAppend(id: String, base64: String): Boolean {
+        require(base64.length<=87384) {"语音分片过大"}
+        return pcmSpeech.append(id,java.util.Base64.getDecoder().decode(base64))
+    }
+    fun speechPcmFinish(id: String): Boolean {pcmSpeech.finish(id);return true}
+    fun speechFilePlay(id: String, uri: String): Boolean = onUi {
+        check((activity as SharedActivity).reminderWindowReady()){"请返回前台并解锁后播放语音"}
+        tts?.stop();pcmSpeech.stop();fileSpeech.play(id,uri);speechMode="file";true
+    }
+    fun speechPlaybackPause(paused: Boolean): Boolean = onUi {
+        if(!paused)check((activity as SharedActivity).reminderWindowReady()){"请返回前台并解锁后继续语音"}
+        if(speechMode=="pcm")pcmSpeech.pause(paused)else fileSpeech.pause(paused);true
+    }
+    fun speechPlaybackPoll(): String = onUi {
+        val value=if(speechMode=="pcm")pcmSpeech.snapshot()else fileSpeech.snapshot()
+        JSONObject().put("v",1).put("id",value.id).put("status",value.status).put("error",value.error).put("frames",value.frames).toString()
+    }
+    fun speechStop(id: String): Boolean = onUi {
+        val current=if(speechMode=="pcm")pcmSpeech.snapshot()else fileSpeech.snapshot()
+        if(id.isEmpty() || current.id==id){pcmSpeech.stop();fileSpeech.close();speechMode=""};true
+    }
+    fun speechDetach() {speechHttp.close();speechHttpDetached=true;speechStop("")}
 
     fun runtimeSnapshot(): String = onUi {
         (activity as? SharedActivity)?.updateSystemBars()
@@ -311,6 +355,7 @@ class PlatformBridge(private val activity: StageActivity) :
     }
 
     override fun close() {
+        speechHttp.close();pcmSpeech.close();onUi{fileSpeech.close()}
         meeting.close()
         ocrJobs.close()
         avatarJobs.close()

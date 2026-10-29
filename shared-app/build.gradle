@@ -28,6 +28,8 @@ dependencies {
     androidTestImplementation libs.androidx.junit
     androidTestImplementation 'androidx.test:runner:1.6.1'
     androidTestImplementation libs.mlkit.text.recognition.chinese
+    androidTestImplementation libs.okhttp.mockwebserver
+    androidTestImplementation 'com.squareup.okhttp3:okhttp-tls:4.12.0'
 }
 tasks.named('preBuild').configure {
     doFirst {
