@@ -634,3 +634,35 @@ Windows的localhost解析到其他域导致TLS夹具失败，改用证书SAN匹�
 最终APK SHA256 `2c6a8ce71bf9ca5359cde83cc61b594af1ee3c6bf4dc9ca230c371e06befb5a5`，312,628,469字节。
 命令、边界和证据哈希见[聊天语音验证报告](shared-frontend/verification-speech.json)。
 鸿蒙源、Compose产品源与会议SDK源码未改；用户README和其他手册阅读器改动保留，未推送或创建PR。
+
+## UM-02：手册章节导航与 App 接入基础（2026-10-29）
+
+手册由长文锚点增强为首页目录卡片、单章节阅读、独立搜索结果与未知地址恢复页。
+新增上一章/下一章、当前章高亮、浏览器前进后退、阅读位置恢复及手机目录展开/收起。
+采用离线hash路由，兼容原#home等书签；刷新保持章节，内部返回栈以本次加载为界。
+无JavaScript仍退回原长文阅读。所有图片和正文保持本地资源，不引入CDN或模型请求。
+
+navigation.js提供无DOM的版本化路由解析/编码，app-manifest.json由正文源同步生成；
+公开ClawMateManual接口支持已知章节ID跳转、首页、状态读取与返回，带host-api.d.ts。
+返回先关图再退章，入口返回false交还宿主；未知ID不会导航。APP_INTEGRATION.md列出
+可打包资源和共享前端/Android宿主接入边界；此阶段未接入App、未新建Compose帮助实现。
+
+实际检查：
+- python docs/user-manual/build.py --check通过：15章、7图、离线引用与生成一致性。
+- node --test docs/user-manual/navigation.test.cjs：8项通过；覆盖全部章节往返、旧书签、
+  中文/多词/Emoji搜索、无效地址、首尾翻页与目录版本契约。两个JS文件node --check通过。
+- 本地HTTP + 内置浏览器：章节/正文交叉跳转、翻页、前进后退、刷新、搜索到章节再返回、
+  无结果/清空、多词搜索、未知地址恢复、原图与Esc关闭通过；1280/390宽无水平溢出。
+  这些页面交互在中断前已执行；恢复后重新执行主机检查和最终宿主接口检查。
+- host-api.test.html实际浏览器8项通过：入口返回、未知ID拒绝、打开指定章、单章与事件、
+  原图打开、返回优先关闭原图、返回入口交还宿主、打开首页。实际回执及新版页面预览保存到
+  忽略目录.arkui-x-validation/user-manual-routing/。开发测试页不打包进App。
+- 同时对本阶段提交快照运行生成检查和8项路由测试，均通过；git差异检查通过。
+
+限制：内置浏览器安全策略拒绝file:协议，未绕过；直接打开本地文件仍待补验。
+打印/PDF排版沿用未验收状态。Android内嵌、系统返回/进程重建及TalkBack须移植时实测；
+本轮未运行Gradle、HAP或设备测试，不宣称已完成App移植。会议代码/专项未改或运行。
+
+并行语音工作已由独立提交a523eec保存。本阶段在其已提交正文上生成阅读器HTML和目录，
+语音功能代码未混入本阶段提交；仅提交手册导航、接入契约、开发检查与本条记录。
+最终工作区只剩用户原有shared-frontend/README.md修改，未覆盖该修改。
