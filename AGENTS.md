@@ -167,6 +167,10 @@ Before asking for review, report:
 
 ## Collaboration protocol
 
+- After each completed feature phase, update MIGRATION_BACKLOG.md and include
+  the current completed/pending checklist in the reply to the user. Distinguish
+  code integration from runtime/service acceptance and retain pending gaps.
+
 ### User manual maintenance
 
 - Maintain the Chinese illustrated handbook at `docs/user-manual/` when changing

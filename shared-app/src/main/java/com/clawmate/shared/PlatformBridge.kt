@@ -213,6 +213,13 @@ class PlatformBridge(private val activity: StageActivity) :
             .put("width",value?.width ?: 0).put("height",value?.height ?: 0).toString()
     }
     fun guiPlanReady(): Boolean = onUi { (activity as SharedActivity).reminderWindowReady() }
+    fun guiControlSettings(): Boolean = onUi { com.clawmate.platform.gui.GuiControlEntry.settings(activity);true }
+    fun guiControlOpen(): Boolean = onUi { com.clawmate.platform.gui.GuiControlEntry.open(activity);true }
+    fun guiControlStop(): Boolean = onUi { com.clawmate.platform.gui.GuiControlService.connected?.stop();true }
+    fun guiControlStatus(): String = JSONObject().put("v",1)
+        .put("supported",android.os.Build.VERSION.SDK_INT>=34)
+        .put("connected",com.clawmate.platform.gui.GuiControlService.connected!=null)
+        .put("message",com.clawmate.platform.gui.GuiControlService.lastStatus).toString()
     fun guiScreenshotCancel(id: String): Boolean { screenshotJobs.cancel(id); return true }
     fun guiScreenshotDetach() { screenshotEpoch++ }
     fun capturePoll(id: String): String = onUi { (activity as SharedActivity).pollCapture(id) }

@@ -22,6 +22,7 @@ dependencyResolutionManagement {
 rootProject.name = "ClawMate"
 include(":app")
 include(":shared-app", ":android-capabilities")
+include(":gui-control-fixture") // Disposable SDK-only cross-app test actor, not a product host.
 val meetingSdkRoot = providers.gradleProperty("meetingSdkRoot")
     .orElse(providers.environmentVariable("MEETING_SDK_ROOT")).orNull
 // The Compose regression baseline must remain buildable without the optional
