@@ -22,7 +22,7 @@ class SharedActivity : StageActivity() {
     private var captureId = ""
     private var captureStatus = "missing"
     private var captureFile: File? = null
-    private var resumedForReminder = false
+    @Volatile private var resumedForReminder = false
     private var pendingReminder = ""
 
     internal fun reminderWindowReady(): Boolean = resumedForReminder && !getSystemService(KeyguardManager::class.java).isKeyguardLocked
@@ -51,7 +51,7 @@ class SharedActivity : StageActivity() {
         super.onResume(); resumedForReminder = true
         if (reminderRequest().isNotEmpty()) platform.callMethod("collectionReminderArrived")
     }
-    override fun onPause() { resumedForReminder = false; super.onPause() }
+    override fun onPause() { resumedForReminder = false; platform.guiScreenshotDetach(); super.onPause() }
 
     internal fun startCapture(): String {
         check(captureStatus != "running") { "相机已打开" }

@@ -293,11 +293,12 @@ taskPage = replaceChecked(taskPage, '  private closeConfigView(): void {\n    th
 taskPage = replaceChecked(taskPage, '.onClick(() => { this.editorOpen = false; })', '.onClick(() => { this.requestCloseEditor(); })');
 taskPage = replaceChecked(taskPage, "Text(subtitle + ' · ' + files.length + ' 个 · ' + WorkflowStorage.formatSize(this.totalFileSize(files)))",
   "Text(subtitle + ' · ' + this.androidManagedFiles(category).length + ' 个 · ' + WorkflowStorage.formatSize(this.totalFileSize(this.androidManagedFiles(category))))");
+taskPage = replaceChecked(taskPage, '          TaskDeviceControlPanel({ mode: this.taskControlMode,', "          Button('本应用截图与单步规划').onClick(() => { router.pushUrl({ url: 'pages/task/GuiPlanPage' }); })\n          TaskDeviceControlPanel({ mode: this.taskControlMode,");
 overlay('pages/task/TaskPage.ets', taskPage);
 writeJson('entry/src/main/resources/base/profile/main_pages.json', { src: [
   'pages/Index', 'pages/gallery/GalleryPage', 'pages/collection/CollectionGroupDetailPage',
   'pages/task/WorkflowFileViewer', 'pages/settings/DesktopCompanionPage', 'pages/settings/SelfHdcTestPage',
-  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage', 'pages/meeting/MeetingPage' ] });
+  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage', 'pages/meeting/MeetingPage', 'pages/task/GuiPlanPage' ] });
 for (const name of ['onboarding_agent', 'onboarding_avatar', 'onboarding_data_home']) {
   fs.copyFileSync(path.join(repo, 'app/src/main/res/drawable-nodpi', name + '.png'),
     path.join(project, 'entry/src/main/resources/base/media', name + '.png'));

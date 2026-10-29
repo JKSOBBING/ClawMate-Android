@@ -40,6 +40,8 @@ class PlatformBridge(private val activity: StageActivity) :
     private val ocrJobs = NativeOperations<OcrResult>()
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
     private val avatarJobs = NativeOperations<AvatarForegroundRgba>(1)
+    private val screenshotJobs = NativeOperations<Pair<Int,com.clawmate.platform.gui.WindowScreenshotResult>>(1)
+    @Volatile private var screenshotEpoch = 0
     private var speechHttp = SpeechHttp()
     private var speechHttpDetached = false
     private val pcmSpeech = PcmSpeechPlayer(activity.applicationContext)
@@ -197,6 +199,22 @@ class PlatformBridge(private val activity: StageActivity) :
     }
     fun workflowCancel(id: String): Boolean { workflowModels.remove(id)?.close(); workflowJobs.cancel(id); return true }
     fun captureStart(): String = onUi { (activity as SharedActivity).startCapture() }
+    fun guiScreenshotStart(): String = onUi {
+        check((activity as SharedActivity).reminderWindowReady() && activity.window.decorView.hasWindowFocus()) { "请返回前台并解锁后截图" }
+        val epoch = screenshotEpoch
+        screenshotJobs.start { epoch to com.clawmate.platform.gui.WindowScreenshot(activity) {
+            screenshotEpoch == epoch && (activity as SharedActivity).reminderWindowReady()
+        }.capture() }
+    }
+    fun guiScreenshotPoll(id: String): String {
+        val result = screenshotJobs.poll(id)
+        val value = result.value?.takeIf { it.first == screenshotEpoch }?.second
+        return JSONObject().put("v",1).put("status",if(result.state=="done" && value==null) "cancelled" else result.state).put("dataUrl",value?.dataUrl ?: "")
+            .put("width",value?.width ?: 0).put("height",value?.height ?: 0).toString()
+    }
+    fun guiPlanReady(): Boolean = onUi { (activity as SharedActivity).reminderWindowReady() }
+    fun guiScreenshotCancel(id: String): Boolean { screenshotJobs.cancel(id); return true }
+    fun guiScreenshotDetach() { screenshotEpoch++ }
     fun capturePoll(id: String): String = onUi { (activity as SharedActivity).pollCapture(id) }
     fun cameraDiscard(value: String): Boolean {
         val root = java.io.File(activity.cacheDir, "chat-camera").canonicalFile
@@ -355,6 +373,7 @@ class PlatformBridge(private val activity: StageActivity) :
     }
 
     override fun close() {
+        guiScreenshotDetach();screenshotJobs.close()
         speechHttp.close();pcmSpeech.close();onUi{fileSpeech.close()}
         meeting.close()
         ocrJobs.close()

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "title": "ClawMate 用户手册",
   "edition": "Android 共享版 · 0.3-integrated",
-  "updated": "2026-10-28",
+  "updated": "2026-10-29",
   "entryFile": "index.html",
   "contentFile": "content.json",
   "homeRoute": "#/",
