@@ -1,5 +1,16 @@
 # ClawMate Android 迁移状态与日志
 
+## 全功能迁移架构规划（2026-11-02）
+
+新增 docs/MIGRATION_ARCHITECTURE_GUIDE.md，按30个用户功能领域建立源码映射、
+模块依赖、4组类关系图、拟新增接口契约、W00–W08实施包和出口验收。
+对照当前ArkTS适配、PlatformBridge和通用Kotlin源码，区分现有类、共享源与规划对象；
+保留GUI/PC/Python/身份替代/本地推理和真实服务待办，会议仍最后执行。
+同步MIGRATION_BACKLOG规划入口；不修改应用代码、鸿蒙参考或用户已有README修改。
+本轮为文档阶段，不运行Gradle/APK/会议测试，不新增功能验收结论。
+实际检查：Python文档结构检查通过（30个D领域、9个W工作包、5组Mermaid代码块、
+相对文档链接均存在），git diff --check通过。未运行Mermaid渲染器，图形布局尚未视觉验收。
+
 ## 图库选图 Method not implemented 修复（2026-11-02）
 
 手机日志明确 imagePrepareStart 返回 BRIDGE_METHOD_UNIMPL。SDK BridgePlugin 的
