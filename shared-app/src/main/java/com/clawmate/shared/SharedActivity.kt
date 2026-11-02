@@ -20,6 +20,37 @@ import com.clawmate.platform.reminder.CollectionReminderEngine
 class SharedActivity : StageActivity() {
     private lateinit var platform: PlatformBridge
     private var captureId = ""
+    private var photoPickerId = ""
+    private var photoPickerStatus = "missing"
+    private var photoPickerLimit = 1
+    private var photoPickerUris = emptyList<String>()
+
+    internal fun startPhotoPicker(limit: Int): String {
+        check(photoPickerStatus != "running") { "系统选图尚未结束" }
+        photoPickerId = UUID.randomUUID().toString()
+        photoPickerLimit = limit.coerceIn(1, 9)
+        photoPickerUris = emptyList()
+        photoPickerStatus = "running"
+        try {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                type = "image/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, photoPickerLimit > 1)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }, 7202)
+        } catch (_: Exception) { photoPickerStatus = "failed" }
+        return photoPickerId
+    }
+    internal fun pollPhotoPicker(id: String): String = JSONObject().put("v", 1)
+        .put("status", if (id == photoPickerId) photoPickerStatus else "missing")
+        .put("uris", org.json.JSONArray(if (id == photoPickerId && photoPickerStatus == "done") photoPickerUris else emptyList<String>()))
+        .toString()
+    internal fun cancelPhotoPicker(id: String): Boolean {
+        if (id == photoPickerId) {
+            photoPickerStatus = "cancelled"; photoPickerUris = emptyList()
+        }
+        return true
+    }
     private var captureStatus = "missing"
     private var captureFile: File? = null
     @Volatile private var resumedForReminder = false
@@ -80,6 +111,18 @@ class SharedActivity : StageActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (platform.meetingActivityResult(requestCode, resultCode, data)) return
+        if (requestCode == 7202) {
+            if (photoPickerStatus != "running") return
+            if (resultCode != Activity.RESULT_OK) { photoPickerStatus = "cancelled"; return }
+            val selected = data?.clipData?.let { clip ->
+                (0 until clip.itemCount).map { clip.getItemAt(it).uri }
+            } ?: listOfNotNull(data?.data)
+            // Keep the actual granted content URI. Never resolve MediaStore _data paths.
+            photoPickerUris = selected.filter { it.scheme == "content" && !it.authority.isNullOrBlank() }
+                .map { it.toString() }.distinct().take(photoPickerLimit)
+            photoPickerStatus = if (photoPickerUris.isEmpty()) "failed" else "done"
+            return
+        }
         if (requestCode == 7201) {
             revokeUriPermission(Uri.parse("content://$packageName.capture/$captureId.jpg"),
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)

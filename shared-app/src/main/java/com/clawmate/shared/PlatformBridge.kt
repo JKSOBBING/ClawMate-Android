@@ -135,6 +135,9 @@ class PlatformBridge(private val activity: StageActivity) :
         }
         return imageJobs.start { SharedNativeWork.prepareImages(activity.applicationContext, uris) }
     }
+    fun photoPickerStart(limit: String): String = onUi { (activity as SharedActivity).startPhotoPicker(limit.toIntOrNull() ?: 1) }
+    fun photoPickerPoll(id: String): String = onUi { (activity as SharedActivity).pollPhotoPicker(id) }
+    fun photoPickerCancel(id: String): Boolean = onUi { (activity as SharedActivity).cancelPhotoPicker(id) }
     fun imagePreparePoll(id: String): String {
         val result = imageJobs.poll(id)
         return JSONObject().put("v", 1).put("status", result.state)

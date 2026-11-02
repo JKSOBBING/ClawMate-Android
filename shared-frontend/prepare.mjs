@@ -179,13 +179,8 @@ privacy = privacy.slice(0, start) + 'export const PRIVACY_DECLARATION: string = 
 overlay('components/PrivacyConsentDialog.ets', privacy);
 overlay('components/AiLoginGuard.ets', replaceChecked(read('components/AiLoginGuard.ets'), "title: '请先登录'", "title: '请先授权云服务'"));
 overlay('utils/PrivacyConsent.ets', replaceChecked(read('utils/PrivacyConsent.ets'), "export const PRIVACY_VERSION: string = '2026-09-30-v2';", "export const PRIVACY_VERSION: string = '2026-10-26-android-v1';"));
-// Use the cross-platform picker supported by this SDK. Unsupported HarmonyOS
-// options are omitted, and the caller-side limit still bounds selected results.
-overlay('utils/gallery/GalleryPhotoPicker.ets', applyPatches(read('utils/gallery/GalleryPhotoPicker.ets'), [
-  ['      options.maxSelectNumber = maxSelectNumber;\n', ''],
-  ['      options.isOriginalSupported = true;\n', ''],
-  ['return result.photoUris;', 'return result.photoUris.slice(0, Math.max(1, Math.min(9, maxSelectNumber)));']
-]));
+// Kotlin preserves Android content grants; the SDK picker converts them to _data file paths.
+overlay('utils/gallery/GalleryPhotoPicker.ets', fs.readFileSync(path.join(here, 'adapters/utils/gallery/GalleryPhotoPicker.ets'), 'utf8'));
 let gallery = read('pages/gallery/GalleryPage.ets');
 gallery = buildAndroidGallerySource(gallery);
 gallery = replaceChecked(gallery, 'import { abilityAccessCtrl, common, Permissions }', 'import { common }');

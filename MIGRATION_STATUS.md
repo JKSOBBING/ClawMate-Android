@@ -1,5 +1,32 @@
 # ClawMate Android 迁移状态与日志
 
+## 图库选图 Method not implemented 修复（2026-11-02）
+
+手机日志明确 imagePrepareStart 返回 BRIDGE_METHOD_UNIMPL。SDK BridgePlugin 的
+反射调用把 InvocationTargetException 也映射到该错误；并非证明方法缺失。
+已核对 API20 PhotoPlugin.getImagePath：查询 MediaStore _data 并拼 file://，
+丢弃原始 content URI。该外部文件路径被现有 LocalImageAccess 私有路径门禁拒绝。
+保留门禁，改由 SharedActivity 的 ACTION_OPEN_DOCUMENT 读取选中内容授权，
+新增 photoPickerStart/Poll/Cancel 桥接和共享 GalleryPhotoPicker 平台适配。
+保留1至9张上限、取消/失败状态；不申请全相册权限，不枚举相册，不触及私人图片。
+图库、聊天与工作流共用此选图入口；旧相机入口不变。中文手册同步系统选图说明。
+
+实际检查：新增 verify-photo-picker.mjs 通过 URI 原样传递/上限/取消/失败/版本/清理；
+verify-gallery-scan.mjs 24项、verify.mjs 6项、verify-native.mjs 7项通过。
+完整共享构建成功（Hvigor 10秒、Gradle 53秒），APK SHA256
+a507b151e798161bab8c0e66ed9b441ab4607e37423365abcdae3388e058295f，
+静态 ELF 和 ZIP 16KB 对齐门禁通过，不代表16KB实机执行。
+androidTest构建33秒通过；安装主APK和测试APK均Success。
+PhotoPickerDeviceTest 真机1项通过：受控合成 ActivityResult 保留content URI、
+限制数量、取消后丢弃迟到结果。不是实际手动选择/OEM外观或模型分析验收。
+NativeCapabilitiesDeviceTest 真机6项通过（包含实际私有图片预处理和OCR）；
+最终已重新打开共享版，未清除用户配置和数据。
+手册生成和--check通过15章/7图。未运行会议专项，用户README改动保留。
+
+中间失败保留：第一次构建期间新增验证脚本触发来源过期门禁；首次指定的会议源码
+路径不含SDK；一次并行Gradle测试编译出现宿主类未解析，随后串行完整重建通过。
+待用户真实选图和云端视觉分析/落盘验收，不以合成ActivityResult冒充端到端通过。
+
 ## 自定义云中转配置与连通检查（2026-11-02）
 
 沿用共享版 Planner/OpenAI Chat Completions 请求链路，无产品源码变更。
