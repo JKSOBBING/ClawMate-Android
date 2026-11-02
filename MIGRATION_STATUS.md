@@ -1,5 +1,19 @@
 # ClawMate Android 迁移状态与日志
 
+## 导师演示交付（2026-11-02）
+
+新增 `scripts/record-mentor-demo.py`、`scripts/render-mentor-demo.py` 和
+`docs/MENTOR_DEMO.md`。在 OPPO PKB110 共享版自动演示首页/聊天界面、公开本机
+工作流 success/cancelled、图编辑器和截图本地预览。未调用云模型、未上传截图、
+未运行会议测试；不提高迁移功能或真实服务验收等级。
+scrcpy 5.0.1 录制完成，导出 91.93 秒 1920×1080 H.264 中文讲解版及竖屏原片。
+实际运行两条演示任务并核对章节截图与视频关键帧；FFmpeg 全片解码零错误，
+Python py_compile、git diff --check 通过。本次未重跑 Gradle/产品回归。
+原生 screenrecord 写文件权限失败，改用 scrcpy；原生 stdout 探测进程未正常退出且
+系统拒绝 shell 终止，后续测试机重启可清理。录像工具未修改设备权限。
+原任务保留，追加两条公开演示任务；旧索引备份、录像和下载工具均未纳入 Git。
+已有 shared-frontend/README.md 工作区改动未纳入本阶段。
+
 更新：2026-10-29。迁移进度、阶段与验证统一记录于此；架构见[共享架构](docs/SHARED_ARCHITECTURE.md)，页面规范见[前端对齐](docs/FRONTEND_PARITY.md)，后续工作见[待办](MIGRATION_BACKLOG.md)。
 
 执行范围按用户2026-10-28纠正：迁移鸿蒙ClawMate的全部功能并适配Android；会议语音的后续接入和专项测试放在最后。
