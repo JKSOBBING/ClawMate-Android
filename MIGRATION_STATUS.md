@@ -1,5 +1,23 @@
 # ClawMate Android 迁移状态与日志
 
+## 自定义云中转配置与连通检查（2026-11-02）
+
+沿用共享版 Planner/OpenAI Chat Completions 请求链路，无产品源码变更。
+新增 scripts/configure-shared-cloud.py，从本地 JSON 读取 HTTPS 地址/模型/密钥，
+停止调试共享包，只更新 Planner 三字段；保留其他偏好及隐私/云授权，提供私有备份、
+原子替换与读回失败回退。真实地址和密钥不提交。新增 docs/SHARED_CLOUD_SETUP.md，
+更新中文手册模型章节及 HTML。用户 README 修改保留。
+
+桌面真实服务：模型列表可读，DeepSeek 非流式 HTTP 200 返回 CLAWMATE_OK；
+DeepSeek/GLM 流式均 HTTP 200、完整正文 CLAWMATE_OK、收到 [DONE]（4/16块）。
+只发送合成文字，不上传私有数据。自动审批拒绝保存本地配置/写入手机/启动应用的
+组合命令，未给具体原因，未重试；不宣称配置工具真机成功或 App 联网通过。
+
+实际检查：python -m py_compile、配置工具 --help 成功；verify.mjs 6项及
+verify-integration.mjs 12项通过；手册 build.py 和 --check 通过15章/7图。
+无产品源码修改，未重建 APK，未运行会议测试。待手机配置及真实聊天、保存/重启、
+取消验收；视觉/工具/语音和长期稳定性仍待独立验收。
+
 ## 导师演示交付（2026-11-02）
 
 新增 `scripts/record-mentor-demo.py`、`scripts/render-mentor-demo.py` 和
