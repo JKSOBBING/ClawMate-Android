@@ -770,3 +770,20 @@ navigation.js提供无DOM的版本化路由解析/编码，app-manifest.json由�
 并行语音工作已由独立提交a523eec保存。本阶段在其已提交正文上生成阅读器HTML和目录，
 语音功能代码未混入本阶段提交；仅提交手册导航、接入契约、开发检查与本条记录。
 最终工作区只剩用户原有shared-frontend/README.md修改，未覆盖该修改。
+
+
+## SH-26补充：范围失败不可恢复授权（2026-11-02）
+
+GuiControlSession在目标包变化、锁屏或非单窗口核验失败时直接撤销授权，
+调用方即便捕获异常，恢复原应用也不能继续消费旧授权。原服务层已有异常停止，
+本次将同一约束下沉到授权对象；无新增用户入口，符合手册已有终止规则。
+测试分别覆盖锁屏、0/2/3窗口、错误包以及恢复正常条件后仍拒绝执行。
+
+实际执行：`:android-capabilities:testDebugUnitTest --tests com.clawmate.platform.gui.GuiControlSessionTest --offline --console=plain`
+通过，XML记录5项、0失败/错误；手册build.py --check通过（15章/7图）；git diff --check通过。
+`:shared-app:assembleDebug :gui-control-fixture:assembleDebug --offline --console=plain`
+在解析正确的本地meeting SDK参数后通过（39秒，126任务）；先前两次分别因未提供参数、错误SDK根目录失败。
+保留已有SDK依赖仅用于宿主构建，未开展会议功能或专项测试。
+用户连接OPPO PKB110后adb已识别；APK安装与真实手势验收继续，不能将本次JVM通过当作真机通过。
+android-cli技能在声明路径及本地技能搜索中未找到；本轮使用现有Gradle和adb脚本。
+用户原有shared-frontend/README.md改动保留，不纳入本次提交。

@@ -8,13 +8,17 @@ class GuiControlSessionTest {
         val grant=GuiControlSession("com.example.calculator",1000)
         grant.requireTarget(1000,"com.example.calculator",true,1)
         assertThrows(IllegalStateException::class.java){grant.requireTarget(1000,"com.example.other",true,1)}
-        assertTrue(grant.available(120999));assertFalse(grant.available(121000));assertFalse(grant.available(999))
+        assertFalse(grant.available(1000))
+        val timed=GuiControlSession("com.example.calculator",1000)
+        assertTrue(timed.available(120999));assertFalse(timed.available(121000));assertFalse(timed.available(999))
     }
-    @Test fun lockAndSplitScreenNeverConsumeAuthorization() {
-        val grant=GuiControlSession("com.example.calculator",0)
-        assertThrows(IllegalStateException::class.java){grant.consume(1,grant.target,false,1)}
-        for(count in listOf(0,2,3))assertThrows(IllegalStateException::class.java){grant.consume(1,grant.target,true,count)}
-        assertTrue(grant.available(1))
+    @Test fun lockAndSplitScreenPermanentlyRevokeAuthorization() {
+        for ((unlocked, windows) in listOf(false to 1, true to 0, true to 2, true to 3)) {
+            val grant=GuiControlSession("com.example.calculator",0)
+            assertThrows(IllegalStateException::class.java){grant.consume(1,grant.target,unlocked,windows)}
+            assertFalse(grant.available(2))
+            assertThrows(IllegalStateException::class.java){grant.consume(2,grant.target,true,1)}
+        }
     }
     @Test fun twentyActionsThenStopRequireNewGrant() {
         val grant=GuiControlSession("com.example.calculator",0)

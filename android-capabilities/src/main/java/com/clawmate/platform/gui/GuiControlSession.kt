@@ -8,7 +8,8 @@ class GuiControlSession(val target: String, private val started: Long) {
     fun available(now: Long): Boolean = !stopped && now >= started && now-started < 120000 && actions < 20
     fun requireTarget(now: Long, targetPackage: String, unlocked: Boolean, appWindows: Int) {
         check(available(now)) { "控制会话已停止、到期或达到20次动作上限" }
-        check(unlocked && appWindows == 1 && targetPackage == target) { "目标应用已变化、锁屏或处于多窗口；请重新开启会话" }
+        if (!unlocked || appWindows != 1 || targetPackage != target) stop()
+        check(!stopped) { "目标应用已变化、锁屏或处于多窗口；请重新开启会话" }
     }
     fun consume(now: Long, targetPackage: String, unlocked: Boolean, appWindows: Int) {
         requireTarget(now,targetPackage,unlocked,appWindows);actions++
