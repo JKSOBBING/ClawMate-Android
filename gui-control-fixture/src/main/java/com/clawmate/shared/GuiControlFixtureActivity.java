@@ -18,7 +18,7 @@ public class GuiControlFixtureActivity extends Activity {
         TextView title=new TextView(this);title.setText("ClawMate GUI Fixture");title.setTextSize(24);column.addView(title);
         TextView counter=new TextView(this);counter.setText("Count: 0");counter.setTextSize(24);column.addView(counter);
         scroll=new ScrollView(this);
-        Button increment=new Button(this);increment.setText("Increment fixture");increment.setOnClickListener(v->{count++;counter.setText("Count: "+count);describe();});column.addView(increment);
+        Button increment=new Button(this);increment.setText("Increment fixture");increment.setContentDescription("Increment fixture");increment.setOnClickListener(v->{count++;counter.setText("Count: "+count);describe();});column.addView(increment);
         for(int i=0;i<40;i++){TextView row=new TextView(this);row.setText("Fixture row "+i);row.setTextSize(22);row.setPadding(0,12,0,12);column.addView(row);}
         scroll.addView(column);scroll.setOnScrollChangeListener((v,x,y,oldX,oldY)->describe());describe();setContentView(scroll);
     }

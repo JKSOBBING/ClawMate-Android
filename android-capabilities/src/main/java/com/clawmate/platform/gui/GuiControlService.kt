@@ -59,6 +59,12 @@ class GuiControlService : AccessibilityService() {
         if(grant==null)return
         handler.post {
             if(grant!=null && panel==null) {
+                // Launch events can still describe the host or an OEM confirmation.
+                // Wait for the exact target within the existing watchdog grace period;
+                // do not consume/revoke a grant by validating the previous window.
+                val appWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                val targetPackage = appWindows.singleOrNull()?.root?.packageName?.toString()
+                if (targetPackage != grant?.target) return@post
                 try { currentWindow();showPanel() } catch(_:Exception) { /* short launch grace only */ }
             }
         }
