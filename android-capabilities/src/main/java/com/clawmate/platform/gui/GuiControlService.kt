@@ -38,6 +38,7 @@ class GuiControlService : AccessibilityService() {
     private var panel: LinearLayout?=null
     private var dialog: AlertDialog?=null
     private var preview: Bitmap?=null
+    private val overlayOwnership=GuiOverlayOwnership()
     private var busy=false
     private var epoch=0
     private var armedUntil=0L
@@ -82,6 +83,7 @@ class GuiControlService : AccessibilityService() {
     }
     fun stop(reason:String="用户停止控制会话") {
         val active=grant!=null
+        overlayOwnership.retain(emptySet())
         epoch++;grant?.stop();grant=null;handler.removeCallbacks(watchdog);busy=false
         dialog?.dismiss();dialog=null;preview?.recycle();preview=null
         panel?.let{runCatching{getSystemService(WindowManager::class.java).removeView(it)}};panel=null
@@ -89,16 +91,19 @@ class GuiControlService : AccessibilityService() {
         if(active)android.widget.Toast.makeText(this,reason,android.widget.Toast.LENGTH_LONG).show()
     }
     private fun currentWindow():AccessibilityWindowInfo {
-        val apps=windows.filter{it.type==AccessibilityWindowInfo.TYPE_APPLICATION}
+        val visibleWindows=windows
+        overlayOwnership.retain(visibleWindows.filter{it.type==AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY}.map{it.id}.toSet())
+        val apps=visibleWindows.filter{it.type==AccessibilityWindowInfo.TYPE_APPLICATION}
         val window=apps.singleOrNull() ?: error("多窗口或目标窗口不可见，控制已停止")
         val root=window.root ?: error("无法识别目标应用窗口")
         val pkg=root.packageName?.toString().orEmpty()
         grant?.requireTarget(SystemClock.elapsedRealtime(),pkg,!getSystemService(KeyguardManager::class.java).isKeyguardLocked,apps.size) ?: error("会话已结束")
         check(window.displayId==0) { "仅允许主屏幕操作" }
         val safe=safeBounds(Rect().also{window.getBoundsInScreen(it)})
-        for(other in windows) {
+        for(other in visibleWindows) {
             if(other.id==window.id)continue
-            if(other.type==AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && other.root?.packageName?.toString()==packageName)continue
+            if(other.type==AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
+                overlayOwnership.isOwned(other.id,other.root?.packageName?.toString(),packageName))continue
             val covered=Rect().also{other.getBoundsInScreen(it)}
             check(!Rect.intersects(safe,covered)) { "输入法、系统面板或其他浮层遮挡目标，控制已停止" }
         }

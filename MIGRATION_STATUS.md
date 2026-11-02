@@ -809,3 +809,38 @@ GuiControlService现在只在单一目标应用窗口出现后进入完整窗口
 最终辅助夹具卸载成功，另行核对服务列表为空、全局开关0。
 证据摘要和APK哈希见shared-frontend/verification-gui-control-followup.json。
 保留用户README修改；下次先定位独立驱动选择器停滞，再继续真实手势验收，不提前推进模型循环。
+
+
+## SH-26受控跨应用手势验收通过（2026-11-02）
+
+本轮8次诊断/修正后，最终在OPPO PKB110 / Android16 / 4KB上通过完整独立夹具：
+真实系统服务绑定、仅选自建应用、窗口截图预览、预览映射点按使计数0→1、
+取消滑动保持状态、确认滑动产生非零滚动、Home离开后控制面板消失。
+驱动只对宿主控件用节点点击，目标计数和滚动由真实服务dispatchGesture产生；
+预览选点仍用实际触屏输入，不直接调用产品方法、不伪造业务成功。
+
+修复GuiControlService的自有确认框关闭竞态：根节点消失时，原包名核验把自身
+无障碍浮层误判为外部遮挡。新增GuiOverlayOwnership，只记住本会话已观察到本包
+归属的无障碍浮层ID；未知ID仍拒绝、明确异包即撤销、窗口消失和会话结束清空。
+用同一窗口快照完成校验；原单应用/解锁/遮挡/像素哈希/时间和次数限制保留。
+新增2项JVM测试验证归属消失、异包、未知ID、窗口回收和会话清理。
+
+驱动递归取子节点曾停在AccessibilityInteractionClient/Parcel调用中；记录线程栈后
+改为应用侧文字查询、范围核验的节点点击，降低轮询频率，并等待启动和预览动画。
+诊断捕获1076×2366窗口与1080×2374截图差异；等待动画后原严格尺寸门禁通过，
+未增加比例猜测或放宽门禁。另捕获确认框关闭时type4/root-null，修复后场景通过。
+所有失败与主动终止保留，不宣称单凭调用栈已解决全部OEM/Binder根因。
+
+实际命令与结果：
+- :gui-control-fixture:assembleDebug --offline --console=plain 多次构建成功（最终2秒/33任务）。
+- :shared-app:assembleDebug :android-capabilities:testDebugUnitTest --tests com.clawmate.platform.gui.*
+  --offline --console=plain 成功（50秒/98任务），XML共7项、0失败/错误。
+- 独立am instrument带guiControlGranted=true，最终scenarioPassed=true，退出INSTRUMENTATION_CODE=-1。
+- 最终APK普通真机回归13项通过（默认8、本应用截图3、声明1、未授权/取消1），未运行会议专项。
+- 中文手册更新单设备受控场景验收边界，保留旧图来源；build.py生成及--check通过15章/7图，
+  8项导航测试通过；首次中文stdin编辑因编码失败，改为显式UTF-8文件写入后生成检查通过。
+- 临时权限finally恢复；最终列表为空、全局开关0；辅助夹具卸载成功。未修改系统保护策略。
+
+摘要、APK哈希、诊断和最终回执哈希见shared-frontend/verification-gui-control-accepted.json。
+本阶段仅单设备受控手动链路通过，多厂商、真实业务、模型循环/聊天工作流接入/结果提取仍待完成。
+README用户改动保留，未触碰鸿蒙参考与Compose源，会议保持最后阶段。
