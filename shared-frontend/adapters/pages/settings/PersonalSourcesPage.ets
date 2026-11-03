@@ -148,10 +148,6 @@ struct PersonalSourcesPage {
   build() {
     Column({ space: 8 }) {
       Row({ space: 16 }) { Button('‹').fontSize(28).fontColor(AppTheme.text('#18243D')).backgroundColor(Color.Transparent).onClick(() => { router.back(); }); Text(this.kind === 'calendar' ? '日历分析' : '邮箱分析').fontSize(24).fontWeight(FontWeight.Bold).fontColor(AppTheme.text('#18243D')) }.width('100%').padding(12)
-      Row({ space: 12 }) {
-        Button('日历安排').backgroundColor(this.kind === 'calendar' ? '#725CFF' : '#EDF0F8').fontColor(this.kind === 'calendar' ? '#FFFFFF' : '#53617A').enabled(!this.busy).onClick(() => { this.kind = 'calendar'; this.analysis = ''; })
-        Button('近期邮件').backgroundColor(this.kind === 'mail' ? '#3F7FEF' : '#EDF0F8').fontColor(this.kind === 'mail' ? '#FFFFFF' : '#53617A').enabled(!this.busy).onClick(() => { this.kind = 'mail'; this.analysis = ''; })
-      }.padding({ bottom: 8 })
       Scroll() {
         Column({ space: 12 }) {
           Text(this.status).fontSize(14).fontColor(AppTheme.text('#53617A')).width('100%').padding(16).backgroundColor(AppTheme.background('#EDF4FF')).borderRadius(16)

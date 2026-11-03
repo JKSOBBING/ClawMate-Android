@@ -132,7 +132,7 @@ let debug = applyPatches(read('utils/DebugSettings.ets'), [
 overlay('utils/DebugSettings.ets', debug);
 let settings = read('pages/settings/SettingsCenterPage.ets');
 overlay('pages/settings/SettingsCenterPage.ets', applyPatches(settings, [
-  ['      this.SectionTitle(SettingsSectionId.DataCollection)', "      this.SectionTitle(SettingsSectionId.DataCollection)\n      Button('日历与邮箱').onClick(() => { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage' }); })\n      Button('聊天长期记忆与本机索引').onClick(() => { router.pushUrl({ url: 'pages/settings/MemorySyncPage' }); })"],
+  ['      this.SectionTitle(SettingsSectionId.DataCollection)', "      this.SectionTitle(SettingsSectionId.DataCollection)\n      Button('日历分析').onClick(() => { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'calendar' } }); })\n      Button('邮箱分析').onClick(() => { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'mail' } }); })\n      Button('聊天长期记忆与本机索引').onClick(() => { router.pushUrl({ url: 'pages/settings/MemorySyncPage' }); })"],
   ['开启后显示并记录聊天和手机 HDC 日志', '开启后记录本次前端诊断；原生推理与自动控制日志尚未接入'],
   ['  @Builder ContextCompressionGroup() {', "  @Builder ContextCompressionGroup() {\n    Text('达到估算阈值时自动摘要较早历史，并按保留轮数续接。摘要使用当前配置的模型；失败时明确标记本地抽取。完整历史保留在本机，可随时停止。压缩后仍超预算会提示减少附件或新建会话。').fontSize(12).fontColor('#65718B').width('100%')"]
 ]));
