@@ -24,6 +24,15 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private val root = File(context.filesDir, "personal-sources").apply { mkdirs() }
     @Volatile private var transport: ImapTransport? = null
     @Volatile private var epoch = 0
+    var oauthToken: (String, String) -> String = { _, _ -> error("请先完成邮箱OAuth授权") }
+    @Synchronized fun configureOAuth(provider: String, user: String, client: String = "", tenant: String = "common") {
+        require(provider in listOf("google", "microsoft")); ImapTransport.quoted(user)
+        require(user.contains('@'))
+        val host = if (provider == "google") "imap.gmail.com" else "outlook.office365.com"
+        clear("mail")
+        check(prefs.edit().clear().putString("mode", provider).putString("host", host).putInt("port", 993)
+            .putString("user", user).putString("client", client).putString("tenant", tenant).putString("account", "$host:993:$user").commit())
+    }
     fun calendarGranted() = context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
     @Synchronized fun saveCredentials(host: String, port: Int, user: String, secret: String) {
         require(host.matches(Regex("[A-Za-z0-9][A-Za-z0-9.-]{0,251}[A-Za-z0-9]")) && port in 1..65535 && user.length in 1..254)
@@ -32,7 +41,7 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
         val actual = if (secret.isEmpty()) { require(old == account) { "新邮箱需要授权码" }; decrypt() } else secret
         ImapTransport.quoted(actual); ImapTransport.quoted(user)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key())
-        check(prefs.edit().putString("account", account).putString("host", host).putInt("port", port).putString("user", user)
+        check(prefs.edit().putString("mode", "password").putString("account", account).putString("host", host).putInt("port", port).putString("user", user)
             .putString("secret", Base64.encodeToString(cipher.doFinal(actual.toByteArray()), Base64.NO_WRAP))
             .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).commit())
         close()
@@ -40,7 +49,8 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
         clear("mail")
     }
     fun settings(): String = JSONObject().put("host", prefs.getString("host", "imap.qq.com"))
-        .put("port", prefs.getInt("port", 993)).put("username", prefs.getString("user", "")).toString()
+        .put("port", prefs.getInt("port", 993)).put("username", prefs.getString("user", "")).put("mode", prefs.getString("mode", "password"))
+        .put("client", prefs.getString("client", "")).put("tenant", prefs.getString("tenant", "common")).toString()
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey("clawmate_mail", null) as? SecretKey)?.let { return it }
@@ -63,8 +73,13 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
                 t.open(prefs.getString("host", "")!!, prefs.getInt("port", 993)); "{}"
             }
             "mailCommand" -> {
-                val command = if (argument == "@LOGIN") "LOGIN " + ImapTransport.quoted(prefs.getString("user", "")!!) + " " + ImapTransport.quoted(decrypt()) else argument
-                JSONArray((transport ?: error("邮箱未连接")).command(command)).toString()
+                val t = transport ?: error("邮箱未连接")
+                val mode = prefs.getString("mode", "password")!!; val user = prefs.getString("user", "")!!
+                if (argument == "@LOGIN" && mode != "password") JSONArray(t.authenticate(user, oauthToken(mode, user))).toString()
+                else {
+                    val command = if (argument == "@LOGIN") "LOGIN " + ImapTransport.quoted(user) + " " + ImapTransport.quoted(decrypt()) else argument
+                    JSONArray(t.command(command)).toString()
+                }
             }
             else -> error("未知来源操作")
         }

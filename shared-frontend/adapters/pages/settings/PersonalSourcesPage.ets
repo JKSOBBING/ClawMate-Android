@@ -5,7 +5,10 @@ import { MailImapClient } from '../../utils/mail/MailImapClient';
 import { defaultMailSettings, emptyMailSnapshot, mailDayBounds, MailItem, MailSettings } from '../../utils/mail/MailTypes';
 import { CloudModelClient } from '../../utils/CloudModelClient';
 import { AppTheme } from '../../utils/AppTheme';
-interface MailConfiguration { host: string; port: number; username: string; }
+import { MAIL_PROVIDERS, MailProvider } from '../../platform/MailProviders';
+interface MailConfiguration { host: string; port: number; username: string; mode: string; client: string; tenant: string; }
+interface MailAuthStatus { state: string; message: string; code: string; uri: string; }
+interface MailAuthStartResult { ok: boolean; error: string; }
 
 @Entry
 @Component
@@ -14,6 +17,15 @@ struct PersonalSourcesPage {
   @State port: string = '993';
   @State username: string = '';
   @State secret: string = '';
+  @State mode: string = 'password';
+  @State providerIndex: number = 0;
+  @State providerHint: string = MAIL_PROVIDERS[0].hint;
+  @State clientId: string = '';
+  @State tenant: string = 'common';
+  @State authPending: boolean = false;
+  @State authCode: string = '';
+  @State authUri: string = '';
+  private authEpoch: number = 0;
   @State status: string = '请选择来源，读取仅保存在本机；AI分析和聊天查询需另行确认。';
   @State busy: boolean = false;
   @State calendar: SourceSnapshot = PersonalSources.empty();
@@ -25,17 +37,50 @@ struct PersonalSourcesPage {
   private reader: MailImapClient | null = null;
   aboutToAppear(): void { this.active = true; this.reload(); }
   aboutToDisappear(): void { this.active = false; this.cancel(); }
-  onPageHide(): void { this.active = false; this.cancel(); }
-  onPageShow(): void { this.active = true; this.reload(); }
+  onPageHide(): void { this.active = false; if (!this.authPending) { this.cancel(); } }
+  onPageShow(): void { this.active = true; if (!this.authPending) { this.reload(); } }
   private async reload(): Promise<void> {
     try {
       let config = JSON.parse(await PersonalSources.call('sourcesSettings')) as MailConfiguration;
       this.host = config.host; this.port = String(config.port); this.username = config.username;
+      this.mode = config.mode || 'password';
+      this.clientId = config.client || ''; this.tenant = config.tenant || 'common';
+      let index = MAIL_PROVIDERS.findIndex((p: MailProvider): boolean => p.host === this.host && p.mode === this.mode);
+      this.providerIndex = index < 0 ? MAIL_PROVIDERS.length - 1 : index;
+      this.providerHint = MAIL_PROVIDERS[this.providerIndex].hint;
       this.calendar = await PersonalSources.snapshot('calendar'); this.selected = this.calendar.selected;
       this.mail = await PersonalSources.snapshot('mail');
     } catch (e) { this.status = '读取保存设置失败，请重试'; }
   }
-  private cancel(): void { this.reader?.close(); this.client.cancelActiveRequests(); PersonalSources.cancel(); }
+  private cancel(): void {
+    this.reader?.close(); this.client.cancelActiveRequests(); PersonalSources.cancel();
+    if (this.authPending) { this.authEpoch++; this.authPending = false; this.busy = false; PersonalSources.busy = false;
+      this.authCode = ''; this.authUri = ''; PersonalSources.call('sourcesAuthCancel'); this.status = '授权已取消'; }
+  }
+  private chooseProvider(index: number): void {
+    let provider = MAIL_PROVIDERS[index]; this.providerIndex = index; this.host = provider.host;
+    this.port = '993'; this.mode = provider.mode; this.providerHint = provider.hint; this.secret = '';
+  }
+  private async authorize(): Promise<void> {
+    if (this.busy || PersonalSources.busy) { return; }
+    this.busy = true; PersonalSources.busy = true; this.authPending = true; let generation = ++this.authEpoch;
+    this.authCode = ''; this.authUri = ''; this.analysis = '';
+    try {
+      let started = JSON.parse(await Bridge.createBridge('ClawMatePlatform').callMethod('sourcesAuthStart', this.mode, this.username.trim(), this.clientId.trim(), this.tenant.trim() || 'common') as string) as MailAuthStartResult;
+      if (!started.ok) { throw new Error(started.error); }
+      this.mail = PersonalSources.empty(); let deadline = Date.now() + 1800000;
+      while (generation === this.authEpoch && Date.now() < deadline) {
+        let result = JSON.parse(await PersonalSources.call('sourcesAuthStatus')) as MailAuthStatus;
+        if (generation !== this.authEpoch) { return; }
+        this.status = result.message; this.authCode = result.code; this.authUri = result.uri;
+        if (result.state === 'done') { return; }
+        if (result.state !== 'pending') { throw new Error(result.message); }
+        await new Promise<void>((resolve): void => { setTimeout(resolve, 1000); });
+      }
+      if (generation === this.authEpoch) { await PersonalSources.call('sourcesAuthCancel'); throw new Error('授权超时，请重试'); }
+    } catch (e) { if (generation === this.authEpoch) { this.status = '授权未完成，请检查应用注册、邮箱地址及网络。' + (e as Error).message; } }
+    finally { if (generation === this.authEpoch) { this.authPending = false; this.busy = false; PersonalSources.busy = false; this.authCode = ''; this.authUri = ''; } }
+  }
   private ensure(generation: number): void { if (!this.active || generation !== PersonalSources.epoch) { throw new Error('操作已取消'); } }
   private async run(kind: string): Promise<void> {
     if (PersonalSources.busy || this.busy) { return; }
@@ -53,7 +98,7 @@ struct PersonalSourcesPage {
         let settings = defaultMailSettings(); settings.host = this.host.trim(); settings.port = Number(this.port); settings.username = this.username.trim();
         // Configuration is saved explicitly before reading, so unsaved edits cannot label another account's mail.
         let stored = JSON.parse(await PersonalSources.call('sourcesSettings')) as MailConfiguration;
-        if (stored.host !== settings.host || stored.port !== settings.port || stored.username !== settings.username) { throw new Error('请先保存当前邮箱配置'); }
+        if (stored.host !== settings.host || stored.port !== settings.port || stored.username !== settings.username || stored.mode !== this.mode) { throw new Error('请先保存当前邮箱配置或完成OAuth授权'); }
         this.reader = new MailImapClient();
         let result = await this.reader.readToday(settings, 'stored-in-android-keystore', 'local', emptyMailSnapshot(), Date.now(), 3,
           (p): void => { this.status = p.message; });
@@ -77,7 +122,8 @@ struct PersonalSourcesPage {
   private async clear(kind: string): Promise<void> {
     if (this.busy) { return; }
     try {
-      await PersonalSources.call(kind === 'mail' ? 'sourcesForgetMail' : 'sourcesClear', kind);
+      if (kind === 'mail') { await PersonalSources.call('sourcesForgetMail'); }
+      else { await PersonalSources.call('sourcesClear', kind); }
       this.analysis = ''; if (kind === 'mail') { this.mail = PersonalSources.empty(); this.secret = ''; this.username = ''; }
       else { this.calendar = PersonalSources.empty(); this.selected = []; }
       this.status = '已清除本机来源数据' + (kind === 'mail' ? '和邮箱授权码' : '') + '；不删除系统日历或服务器邮件。已保存在聊天中的回答需自行删除会话。';
@@ -115,17 +161,29 @@ struct PersonalSourcesPage {
           Button('分析日历').enabled(!this.busy).onClick(() => { this.analyze('calendar'); })
           Button('清除日历副本').enabled(!this.busy).onClick(() => { this.clear('calendar'); })
           Text('邮箱 · IMAP加密收信').fontSize(20)
-          Row({ space: 6 }) {
-            Button('QQ').enabled(!this.busy).onClick(() => { this.host = 'imap.qq.com'; this.port = '993'; this.secret = ''; })
-            Button('Gmail').enabled(!this.busy).onClick(() => { this.host = 'imap.gmail.com'; this.port = '993'; this.secret = ''; })
-            Button('交大').enabled(!this.busy).onClick(() => { this.host = 'mail.sjtu.edu.cn'; this.port = '993'; this.secret = ''; })
-          }
-          Text('QQ：开启IMAP并使用授权码。Gmail：开启两步验证并使用应用专用密码（账户须允许）；不支持Google OAuth登录。交大：mail.sjtu.edu.cn:993，按学校说明填写账号及凭据；不等同于365交大邮箱。也可自定义服务器。每次配置一个账号，保存配置会清除旧副本。读取近三天收件箱，每天最多50封，不下载附件，不修改已读状态。')
-          TextInput({ text: this.host, placeholder: 'IMAP服务器，例如 imap.qq.com' }).enabled(!this.busy).onChange((v: string) => { this.host = v; })
-          TextInput({ text: this.port, placeholder: 'TLS端口993' }).type(InputType.Number).enabled(!this.busy).onChange((v: string) => { this.port = v; })
+          Select(MAIL_PROVIDERS.map((p: MailProvider): SelectOption => { return { value: p.name }; }))
+            .selected(this.providerIndex).value(MAIL_PROVIDERS[this.providerIndex].name).enabled(!this.busy)
+            .onSelect((index: number) => { this.chooseProvider(index); })
+          Text(this.providerHint)
+          Text('每次配置一个账号，保存/开始授权会清除旧副本。读取近三天收件箱，每天最多50封，不下载附件，不修改已读状态。提供商预设不代表该账号已通过连接验证。')
+          TextInput({ text: this.host, placeholder: 'IMAP服务器，例如 imap.qq.com' }).enabled(!this.busy && this.mode === 'password').onChange((v: string) => { this.host = v; })
+          TextInput({ text: this.port, placeholder: 'TLS端口993' }).type(InputType.Number).enabled(!this.busy && this.mode === 'password').onChange((v: string) => { this.port = v; })
           TextInput({ text: this.username, placeholder: '邮箱登录账号（交大按学校说明填写）' }).enabled(!this.busy).onChange((v: string) => { this.username = v; })
-          TextInput({ text: this.secret, placeholder: '客户端凭据（留空保留已存凭据）' }).type(InputType.Password).enabled(!this.busy).onChange((v: string) => { this.secret = v; })
-          Button('保存邮箱配置').enabled(!this.busy).onClick(() => { this.save(); })
+          if (this.mode === 'password') {
+            TextInput({ text: this.secret, placeholder: '客户端凭据（留空保留已存凭据）' }).type(InputType.Password).enabled(!this.busy).onChange((v: string) => { this.secret = v; })
+            Button('保存邮箱配置').enabled(!this.busy).onClick(() => { this.save(); })
+          } else {
+            Text('OAuth令牌只在本次进程内保存；应用重启或授权过期后需重新授权。当前不做后台同步。授权权限由服务商定义，可能比本应用只读操作更广。')
+            if (this.mode === 'microsoft') {
+              TextInput({ text: this.clientId, placeholder: 'Microsoft Entra应用客户端ID（非密钥）' }).enabled(!this.busy).onChange((v: string) => { this.clientId = v; })
+              TextInput({ text: this.tenant, placeholder: 'common 或租户ID' }).enabled(!this.busy).onChange((v: string) => { this.tenant = v; })
+            }
+            Button('授权邮箱 / 重新授权').enabled(!this.busy).onClick(() => { this.authorize(); })
+            if (this.authCode) {
+              Text('本次设备码：' + this.authCode + '\n' + this.authUri).copyOption(CopyOptions.LocalDevice)
+              Button('打开Microsoft授权网页').onClick(() => { PersonalSources.call('sourcesAuthOpen'); })
+            }
+          }
           Button('读取近三天邮件').enabled(!this.busy).onClick(() => { this.run('mail'); })
           Button('分析邮件').enabled(!this.busy).onClick(() => { this.analyze('mail'); })
           Button('清除邮件和授权码').enabled(!this.busy).onClick(() => { this.clear('mail'); })

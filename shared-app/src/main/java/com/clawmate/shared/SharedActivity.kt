@@ -110,6 +110,7 @@ class SharedActivity : StageActivity() {
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (platform.sourceAuthActivityResult(requestCode, resultCode, data)) return
         if (platform.meetingActivityResult(requestCode, resultCode, data)) return
         if (requestCode == 7202) {
             if (photoPickerStatus != "running") return

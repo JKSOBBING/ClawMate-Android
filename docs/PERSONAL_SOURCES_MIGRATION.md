@@ -36,7 +36,62 @@ instrumentation首次构建被来源摘要漂移正确拦截，重建共享前�
 未执行会议专项，构建脚本原有SDK打包完整性检查不属于会议功能测试。
 
 待验收：真实日历实例/时区/重复例外、QQ/Gmail/交大及其他提供商、模型回答质量、页面无障碍与生命周期。
-邮箱扩展与OAuth注册/接入作为接续阶段，不能把IMAP通用实现当作所有邮箱均已支持。
+邮箱扩展与OAuth注册/接入见下节；不能把IMAP通用实现当作所有邮箱均已支持。
+
+## 第二段：提供商预设与OAuth
+
+注册及使用步骤见[MAIL_OAUTH_SETUP.md](MAIL_OAUTH_SETUP.md)。
+新增QQ/Foxmail、网易163/126/yeah、腾讯/阿里企业邮箱、Gmail、Outlook/Hotmail/Microsoft 365、
+iCloud、Yahoo、交大标准邮箱预设及自定义TLS。预设不能代表真实服务验收。
+
+```mermaid
+classDiagram
+  PersonalSourcesPage --> MailProviders : 服务器与认证方式
+  PersonalSourcesPage --> PlatformBridge : 授权状态与读取作业
+  PlatformBridge --> MailOAuth : Google窗口 / Microsoft设备码
+  PlatformBridge --> PersonalSourceEngine : 来源与本机存储
+  MailOAuth --> PersonalSourceEngine : 绑定账号的内存令牌
+  PersonalSourceEngine --> ImapTransport : LOGIN / XOAUTH2
+  SharedAgent --> PersonalSources : query_calendar / query_mail
+  PersonalSources --> PlatformBridge : 逐次同意后读取有限记录
+```
+
+Google使用AuthorizationClient，绑定用户填写的Google账户及mail.google.com范围；
+Microsoft使用公共客户端设备码流程和Exchange IMAP委托范围。用户码可展示，device_code/access_token
+不返回ArkTS。取消使用代次隔离，晚到响应不能重新授权；设备码过期停止、pending间隔重试、
+slow_down延长间隔。浏览器/系统授权窗口切换保留待授权流程，退出来源页取消。
+
+XOAUTH2仅由原生专用方法发起，不放入普通桥命令白名单；认证错误challenge发空回复结束，
+服务器原始认证详情不进入异常提示。OAuth只能使用固定Gmail/Outlook TLS端点，
+防止用户修改服务器后把服务商令牌发到其他主机。凭据模式仍可配置自定义服务器。
+两类OAuth令牌仅在进程内保存，不申请离线刷新令牌；重启/过期需要重新授权。
+Google/微软授权范围可能比应用只读行为更广，页面与注册说明明确区分。
+
+Google正式注册、Microsoft客户端ID/租户注册及逐提供商真实账号验收仍待用户侧完成；
+没有将未注册状态、代码编译或合成响应测试标为真实服务成功。
+
+### 第二段实际验证
+
+- `shared-frontend/build.ps1 -JavaHome <local-jdk> -AndroidSdk <local-sdk> -MeetingSdkRoot <local-checkout> -Offline`
+  完整通过；最终一次Gradle为1分29秒、93任务，APK SHA256
+  `c35726eb82e57b1a214837114069a0b3623877561f213f8516d4b94e0b05779b`。
+  原生包完整性、ELF及ZIP静态16KB检查通过，不代表真实16KB内核运行验收。
+- `gradlew.bat :shared-app:assembleDebug :shared-app:assembleDebugAndroidTest :android-capabilities:testDebugUnitTest --tests com.clawmate.platform.sources.ImapTransportTest --offline --console=plain`
+  通过；JUnit XML为5项、0失败/错误。测试APK构建通过。
+- `verify-personal-sources.mjs`通过真实Kotlin桥签名参数数量、拒绝/取消/过期过滤及两种工具回传检查；
+  `verify-integration.mjs`12项、`verify.mjs`6项、`verify-native.mjs`7项通过。
+- 最终APK安装成功；`scripts/test-shared-device.ps1`默认普通回归8项通过，
+  `am instrument`指定PersonalSourcesDeviceTest与MailOAuthDeviceTest共4项通过（最终0.43秒，完成码-1）。
+  未运行会议专项。记录分别在忽略目录oauth-sources-final、oauth-device-final.log。
+- 手动真机确认“我的→数据采集→日历与邮箱”可进入、默认配置/空副本正确读取、
+  提供商选择与Microsoft表单可用；缺少注册参数明确提示补齐，未发起真实授权或读取私人日历/邮件。
+- `python docs/user-manual/build.py`、`--check`通过16章/8张审核图；
+  `node --test docs/user-manual/navigation.test.cjs`8项通过；新增空来源页截图与SHA/版本差异说明。
+
+过程中首轮前端构建被来源摘要漂移拦截（编译时仍有页面变更），之后重建通过。
+真机发现旧通用桥包装始终传两个参数，零/单参数方法失败；按真实签名修复并补回归。
+另将OAuth参数异常转为结构化失败，避免ArkUI-X把原生校验异常笼统显示为Method not implemented。
+两个问题均已在最终页面复核，不把之前的单纯VM成功当作完整UI验收。
 
 ## 官方服务依据
 

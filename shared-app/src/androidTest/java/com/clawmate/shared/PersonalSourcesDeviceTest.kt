@@ -27,6 +27,14 @@ class PersonalSourcesDeviceTest {
             engine.saveCredentials("imap.example.invalid", 993, "fixture@example.invalid", "") // decrypt retained secret
             engine.write("mail", JSONObject().put("syncedAt", 123).put("items", org.json.JSONArray()).toString())
             assertEquals(123, JSONObject(engine.read("mail")).getInt("syncedAt"))
+            engine.configureOAuth("google", "fixture@example.invalid")
+            assertFalse(preferences.contains("secret")); assertEquals("{}", engine.read("mail"))
+            assertEquals("imap.gmail.com", JSONObject(engine.settings()).getString("host"))
+            assertEquals("google", JSONObject(engine.settings()).getString("mode"))
+            assertThrows(IllegalStateException::class.java) { engine.oauthToken("google", "fixture@example.invalid") }
+            engine.configureOAuth("microsoft", "fixture@example.invalid", "public-fixture-id", "common")
+            assertEquals("outlook.office365.com", JSONObject(engine.settings()).getString("host"))
+            assertEquals("public-fixture-id", JSONObject(engine.settings()).getString("client"))
             engine.forgetMail(); assertEquals("{}", engine.read("mail"))
             assertEquals("", JSONObject(engine.settings()).getString("username"))
             if (!engine.calendarGranted()) {

@@ -5,11 +5,20 @@ import { runInNewContext } from 'node:vm';
 const source = fs.readFileSync(new URL('./adapters/platform/PersonalSources.ets', import.meta.url), 'utf8');
 const code = stripTypeScriptTypes(source.replace(/^import .*;\r?\n/gm, '')).replace(/^export /gm, '');
 let confirm = 0, accepted = true, snapshot = {}, readCount = 0;
+const native = fs.readFileSync(new URL('../shared-app/src/main/java/com/clawmate/shared/PlatformBridge.kt', import.meta.url), 'utf8');
 const Sources = runInNewContext(code + '\nPersonalSources;', {
-  Bridge: { createBridge: () => ({ callMethod: async name => { if (name === 'sourcesRead') { readCount++; return JSON.stringify(snapshot); } } }) },
+  Bridge: { createBridge: () => ({ callMethod: async (name, ...args) => {
+    const signature = native.match(new RegExp('fun ' + name + '\\(([^)]*)\\)'));
+    assert.ok(signature, name); assert.equal(args.length, signature[1].trim() ? signature[1].split(',').length : 0, name + ' bridge arity');
+    if (name === 'sourcesRead') { readCount++; return JSON.stringify(snapshot); }
+  } }) },
   AiServiceAccess: { requireAllowed() {} }, PrivacyConsent: { requireAccepted() {} }, AppStorage: { get: k => k === 'cloudPlannerBaseUrl' ? 'https://fixture.invalid' : 'test' },
   promptAction: { showDialog: async () => { confirm++; return { index: accepted ? 1 : 0 }; } }, setTimeout
 });
+await Sources.call('sourcesSettings'); await Sources.call('sourcesAuthStatus'); await Sources.call('sourcesForgetMail');
+await Sources.call('sourcesPoll', 'job'); await Sources.call('sourcesClear', 'calendar');
+await Sources.call('sourcesStart', 'calendar', '{}'); await Sources.call('sourcesWrite', 'mail', '{}');
+console.log('PASS bridge argument counts match real Kotlin zero/one/two-argument methods');
 assert.throws(() => Sources.date('2026-02-30', false));
 assert.throws(() => Sources.date('invalid', false));
 let result = JSON.parse(await Sources.query('calendar', '{"unknown":1}', () => true));

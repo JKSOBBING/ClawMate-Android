@@ -8,9 +8,13 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 /** Read-only IMAP transport. Literals are counted in octets, never Unicode characters. */
-class ImapTransport : AutoCloseable {
+class ImapTransport() : AutoCloseable {
     @Volatile private var socket: Socket? = null
     private var input: BufferedInputStream? = null
+    private var output: java.io.OutputStream? = null
+    internal constructor(input: java.io.InputStream, output: java.io.OutputStream) : this() {
+        this.input = BufferedInputStream(input); this.output = output
+    }
     private var sequence = 0
     @Volatile private var closed = false
     fun open(host: String, port: Int) {
@@ -27,19 +31,29 @@ class ImapTransport : AutoCloseable {
         tls.enabledProtocols = tls.supportedProtocols.filter { it == "TLSv1.2" || it == "TLSv1.3" }.toTypedArray()
         tls.startHandshake(); check(!closed)
         input = BufferedInputStream(tls.inputStream)
+        output = tls.outputStream
         check(frame().startsWith("* OK")) { "目标不是IMAP服务" }
     }
     fun command(command: String): List<String> {
+        return exchange(command, false)
+    }
+    fun authenticate(user: String, token: String): List<String> = exchange("AUTHENTICATE XOAUTH2 " + oauthPayload(user, token), true)
+    private fun exchange(command: String, oauth: Boolean): List<String> {
         check(!closed)
-        require(!command.contains('\r') && !command.contains('\n') && command.length < 4096)
-        require(command.startsWith("LOGIN ") || command == "CAPABILITY" || command.startsWith("ID ") ||
+        require(!command.contains('\r') && !command.contains('\n') && command.length < 32768)
+        require(oauth || command.startsWith("LOGIN ") || command == "CAPABILITY" || command.startsWith("ID ") ||
             command == "EXAMINE \"INBOX\"" || command.startsWith("UID SEARCH ") || command.startsWith("UID FETCH "))
         val tag = "M${++sequence}"
-        socket!!.getOutputStream().apply { write(("$tag $command\r\n").toByteArray(Charsets.UTF_8)); flush() }
-        val result = mutableListOf<String>(); var size = 0
+        (output ?: error("未连接")).apply { write(("$tag $command\r\n").toByteArray(Charsets.UTF_8)); flush() }
+        val result = mutableListOf<String>(); var size = 0; var challenged = false
         while (true) {
             check(!closed && !Thread.currentThread().isInterrupted)
             val line = frame(); size += line.length
+            if (oauth && line.startsWith("+")) {
+                check(!challenged); challenged = true
+                output!!.apply { write("\r\n".toByteArray()); flush() }
+                continue
+            }
             check(size <= 2 * 1024 * 1024 && result.size < 2000) { "邮件响应过大" }
             if (line.startsWith("$tag ")) {
                 check(line.startsWith("$tag OK")) { "服务器拒绝请求，请核对IMAP授权码及设置" }
@@ -52,6 +66,11 @@ class ImapTransport : AutoCloseable {
     private fun frame(): String = readFrame(input ?: error("未连接"))
     override fun close() { closed = true; runCatching { socket?.close() }; socket = null }
     companion object {
+        fun oauthPayload(user: String, token: String): String {
+            quoted(user)
+            require(token.length in 1..16000 && token.none { it.code <= 32 || it.code == 127 })
+            return java.util.Base64.getEncoder().encodeToString("user=$user\u0001auth=Bearer $token\u0001\u0001".toByteArray(Charsets.UTF_8))
+        }
         fun quoted(value: String): String {
             require(value.length in 1..1024 && value.none { it.code < 32 || it.code == 127 })
             return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

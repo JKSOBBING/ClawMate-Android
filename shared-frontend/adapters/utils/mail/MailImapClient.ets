@@ -16,7 +16,7 @@ export class MailImapClient {
   private async command(command: string, stage: string): Promise<string[]> {
     if (this.closed || Date.now() > this.deadline) { throw new Error('邮件读取已取消或超时'); }
     try { return JSON.parse(await PersonalSources.operation('mailCommand', command)) as string[]; }
-    catch (e) { this.failure = stage + '失败，请检查网络及邮箱授权码'; throw new Error(this.failure); }
+    catch (e) { this.failure = stage + '失败，请检查网络、IMAP权限及客户端凭据；OAuth邮箱请重新授权并核对登录账户'; throw new Error(this.failure); }
   }
   close(): void { this.closed = true; Bridge.createBridge('ClawMatePlatform').callMethod('sourcesCancel'); }
   async readToday(settings: MailSettings, secret: string, accountKey: string, cached: MailSnapshot,

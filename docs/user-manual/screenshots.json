@@ -61,5 +61,14 @@
     "capturePhase": "SH-18",
     "sha256": "bcff0930d6cc91d6f55519c5b44d74f42bc176d19685aef4b3b2bd56c8051873",
     "limitations": "已逐张核看：无密钥、私人消息或照片；包含通用设备状态栏。旧图库工具栏与当前批次流程有差异，聊天图早于SH-22分身切换；差异已标注。"
+  },
+  {
+    "file": "assets/sources.png",
+    "source": ".arkui-x-validation/sources-final-page.png",
+    "reviewed": true,
+    "reviewedDate": "2026-11-03",
+    "capturePhase": "personal-sources-oauth",
+    "sha256": "b5341205ea01a45f9fdaab5cc4e08b17eaa7858c2f5ae3f9571413a5d34c8ea5",
+    "limitations": "已核看空来源页面：无账号、凭据、日历或邮件正文，含通用系统状态栏。截图来自APK 6c4bc66359b7690a5c55ecfded983c52861c3737e22e8b82af2f30e51a4d9495；随后仅修订OAuth无效参数错误提示，本截图所示初始页面不变。不是邮箱登录或读取成功证明。"
   }
 ]

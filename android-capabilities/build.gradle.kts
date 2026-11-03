@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.mlkit.text.recognition.chinese)
     // Bundled person mask; no Play-services model download or image upload.
     implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

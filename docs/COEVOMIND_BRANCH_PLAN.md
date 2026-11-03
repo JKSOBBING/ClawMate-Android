@@ -86,6 +86,12 @@ classDiagram
 
 SourceSyncCoordinator是拟定职责名，不要求先抽取大类。先适配上游已有互斥流程。邮件结果走独立MailStore；日历快照与聊天/日志可进入个人记忆。自动更新是前台到期检查，不据此承诺Android后台定时执行。关闭自动更新不影响手动重试；本轮已经开始的来源结束后不再派发下一来源。
 
+2026-11-03实施补记：用户优先要求聊天查询日历和邮箱，已先以PersonalSourceEngine承接CalendarContract与私有快照，
+ImapTransport承接只读TLS，MailOAuth承接Google/Microsoft授权，ArkTS PersonalSources提供逐次确认的查询工具。
+上图的AndroidCalendarReader/AndroidMailTransport为规划职责名，不是当前实际类名；实际关系和支持边界见
+[来源接入说明](PERSONAL_SOURCES_MIGRATION.md)及[OAuth注册指南](MAIL_OAUTH_SETUP.md)。
+日历画像、完成标记/一周安排及邮件逐封关注筛选仍未完成，U02/U03不能整体勾选。
+
 ## 5. 对原W00–W08的增量工作包
 
 | 编号 | 依赖与归属 | 交付及验收 |

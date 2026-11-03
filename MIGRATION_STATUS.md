@@ -1,5 +1,21 @@
 # ClawMate Android 迁移状态与日志
 
+## 日历/邮箱接续：提供商与OAuth（2026-11-03）
+
+新增主流邮箱预设及自定义TLS入口；Google AuthorizationClient和Microsoft设备码流程接入
+原生MailOAuth，IMAP增加XOAUTH2。令牌按账户绑定、仅留进程内存，取消隔离晚到响应，
+不申请离线刷新令牌；重启/过期重新授权。注册指南见docs/MAIL_OAUTH_SETUP.md，
+所有服务商的真实账户验收与发布审核仍待完成，不以预设/编译成功代替。
+
+原生5项IMAP/XOAUTH2 JVM检查通过；手机4项隔离测试通过，覆盖Keystore/配置切换、
+Microsoft等待/减速、拒绝、取消晚到响应、设备码/令牌到期和账号绑定；使用合成响应、无真实邮箱登录。
+真机页面检查发现PersonalSources.call给零/单参数桥方法多传占位参数，导致读取保存设置失败；
+修正实际参数数量并补按Kotlin签名检查，不能仅凭此前VM夹具认定桥接可用。
+最终完整ArkTS→APK通过，普通真机8项及来源/OAuth 4项通过；页面入口、提供商选择、
+空配置与OAuth无效参数提示复核通过。命令、APK哈希及范围见docs/PERSONAL_SOURCES_MIGRATION.md。
+手册更新注册、授权入口、数据去向与撤销边界，生成/校验16章8图、导航8项通过；保留用户README改动，未修改鸿蒙参考源或Compose基线，
+未运行会议专项。
+
 ## 日历/邮箱与聊天查询首段（2026-11-03）
 
 按用户优先级实现显式日历读取、TLS IMAP收件箱、加密凭据、私有副本、手动分析，

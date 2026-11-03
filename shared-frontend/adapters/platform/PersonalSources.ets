@@ -14,8 +14,11 @@ interface SourceQuery { keyword?: string; start_date?: string; end_date?: string
 export class PersonalSources {
   static epoch: number = 0;
   static busy: boolean = false;
-  static async call(name: string, a: string = '', b: string = ''): Promise<string> {
-    return await Bridge.createBridge('ClawMatePlatform').callMethod(name, a, b) as string;
+  static async call(name: string, a?: string, b?: string): Promise<string> {
+    let bridge = Bridge.createBridge('ClawMatePlatform');
+    if (b !== undefined) { return await bridge.callMethod(name, a || '', b) as string; }
+    if (a !== undefined) { return await bridge.callMethod(name, a) as string; }
+    return await bridge.callMethod(name) as string;
   }
   static async operation(name: string, argument: string): Promise<string> {
     let generation = PersonalSources.epoch;

@@ -1,12 +1,14 @@
 # 共享版后续待办
 
-更新：2026-11-02。目标是把鸿蒙版ClawMate的全部功能迁移并适配Android，继续采用共享ArkTS/ArkUI-X前端和Kotlin平台能力。会议语音接入与专项测试放在最后；当前优先补齐ClawMate自身功能。先在fork继续验证，PR安排沿用既有约定。
+更新：2026-11-03。目标是把鸿蒙版ClawMate的全部功能迁移并适配Android，继续采用共享ArkTS/ArkUI-X前端和Kotlin平台能力。会议语音接入与专项测试放在最后；当前优先补齐ClawMate自身功能。先在fork继续验证，PR安排沿用既有约定。
 已完成项、关键阶段与验证统一见 [迁移日志](MIGRATION_STATUS.md)；本文只维护后续工作。
 
 ## 当前执行清单
 
 - [x] 用户优先的日历/邮箱首段代码接入：系统日历只读、TLS IMAP、Keystore凭据、私有副本与手动分析；聊天query_calendar/query_mail逐次确认；构建/受控检查和隔离设备测试通过。
-- [ ] 日历/邮箱真实服务与页面验收；主流提供商/OAuth接续、完整鸿蒙日历画像/完成标记及邮件关注偏好对齐。详见[接入说明](docs/PERSONAL_SOURCES_MIGRATION.md)。
+- [x] 主流邮箱预设、Gmail系统OAuth及Microsoft设备码OAuth代码接入；[注册指南](docs/MAIL_OAUTH_SETUP.md)和中文手册已更新。
+- [ ] Google/Entra应用注册、逐提供商真实账户/日历/模型质量与页面验收；OAuth离线刷新、多账号并存、专有邮箱协议仍未实现。
+- [ ] 完整鸿蒙日历画像/完成标记及邮件关注偏好对齐。详见[接入说明](docs/PERSONAL_SOURCES_MIGRATION.md)。
 
 - [x] 2026-11-03核查coevomind-app@4e86f625并更新[分支增量计划](docs/COEVOMIND_BRANCH_PLAN.md)：D31–D35、U00–U06、六入口、手机微信与增量同步；此项仅规划完成。
 - [ ] U00：分叉两端审计（目标侧25/旧侧8提交）、隐私调用链冲突核查、源码锁升级与准备补丁兼容。
