@@ -97,6 +97,12 @@
       "title": "遇到问题，先从这里查",
       "summary": "优先查看错误文字，再排查配置和授权。",
       "route": "#/chapter/help"
+    },
+    {
+      "id": "personalsources",
+      "title": "日历、邮箱与聊天问答",
+      "summary": "手动读取本机日历和近三天收件箱，确认后再交给配置的云端模型分析。",
+      "route": "#/chapter/personalsources"
     }
   ]
 }

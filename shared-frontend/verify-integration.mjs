@@ -32,7 +32,8 @@ await check('memory tool emits bounded valid JSON without private IDs, paths or 
   assert.equal(parsed.events[0].event_id, 0);
   assert.equal(parsed.events[0].content_truncated, true);
 });
-const { SharedAgent } = module('shared-frontend/adapters/platform/SharedAgent.ets', 'SharedAgent', { MemoryQuery });
+const { SharedAgent } = module('shared-frontend/adapters/platform/SharedAgent.ets', 'SharedAgent', { MemoryQuery,
+  PersonalSources: { definition: kind => ({ type: 'function', function: { name: 'query_' + kind } }), query: async () => '{"ok":false,"error":"fixture denied"}' } });
 const options = () => ({ baseUrl: 'https://fixture.invalid', apiKey: '', model: 'fixture-model', messages: [{ role: 'user', content: '查询历史' }] });
 const tool = (name = 'query_events') => ({ id: 'call-1', type: 'function', function: { name, arguments: '{"keywords":["测试"]}' } });
 await check('a streamed tool round sends actual query results back with the matching call ID', async () => {

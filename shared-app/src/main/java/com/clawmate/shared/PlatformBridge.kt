@@ -37,6 +37,31 @@ import java.io.Closeable
 /** Android APIs only; no account, service endpoint or vendor-specific dependency. */
 class PlatformBridge(private val activity: StageActivity) :
     BridgePlugin(activity, "ClawMatePlatform", activity.bridgeManager), Closeable {
+    private val sources = com.clawmate.platform.sources.PersonalSourceEngine(activity)
+    private val sourceJobs = NativeOperations<String>(1)
+    fun sourcesPermission(): Boolean = onUi {
+        if (!sources.calendarGranted()) activity.requestPermissions(arrayOf(android.Manifest.permission.READ_CALENDAR), 7310)
+        sources.calendarGranted()
+    }
+    fun sourcesGranted(): Boolean = sources.calendarGranted()
+    fun sourcesSettings(): String = sources.settings()
+    fun sourcesCredentials(host: String, port: String, user: String, secret: String): Boolean {
+        sources.saveCredentials(host, port.toInt(), user, secret); return true
+    }
+    fun sourcesStart(operation: String, argument: String): String = sourceJobs.start {
+        try { JSONObject().put("ok", true).put("value", sources.execute(operation, argument)).toString() }
+        catch (_: Exception) { JSONObject().put("ok", false).put("error", "读取失败或已取消，请检查权限、网络、邮箱IMAP服务和授权码；OAuth登录暂不支持").toString() }
+    }
+    fun sourcesPoll(id: String): String {
+        val job = sourceJobs.poll(id)
+        return JSONObject().put("state", job.state).put("value", job.value ?: "").toString()
+    }
+    fun sourcesCancel(): Boolean { sources.close(); return true }
+    fun sourcesCancelJob(id: String): Boolean { sourceJobs.cancel(id); sources.close(); return true }
+    fun sourcesRead(kind: String): String = sources.read(kind)
+    fun sourcesWrite(kind: String, value: String): Boolean { sources.write(kind, value); return true }
+    fun sourcesClear(kind: String): Boolean { sources.clear(kind); return true }
+    fun sourcesForgetMail(): Boolean { sources.forgetMail(); return true }
     private val ocrJobs = NativeOperations<OcrResult>()
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
     private val avatarJobs = NativeOperations<AvatarForegroundRgba>(1)
@@ -383,6 +408,7 @@ class PlatformBridge(private val activity: StageActivity) :
     }
 
     override fun close() {
+        sources.close(); sourceJobs.close()
         guiScreenshotDetach();screenshotJobs.close()
         speechHttp.close();pcmSpeech.close();onUi{fileSpeech.close()}
         meeting.close()
