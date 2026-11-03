@@ -5,6 +5,8 @@
 
 ## 当前执行清单
 
+- [x] 日历/邮箱入口按用户要求加入“汇总”的“图库分析”下方；复用鸿蒙CollectionActionRow，来源页改为分区卡片与顶部切换。
+
 - [x] 用户优先的日历/邮箱首段代码接入：系统日历只读、TLS IMAP、Keystore凭据、私有副本与手动分析；聊天query_calendar/query_mail逐次确认；构建/受控检查和隔离设备测试通过。
 - [x] 主流邮箱预设、Gmail系统OAuth及Microsoft设备码OAuth代码接入；[注册指南](docs/MAIL_OAUTH_SETUP.md)和中文手册已更新。
 - [ ] Google/Entra应用注册、逐提供商真实账户/日历/模型质量与页面验收；OAuth离线刷新、多账号并存、专有邮箱协议仍未实现。

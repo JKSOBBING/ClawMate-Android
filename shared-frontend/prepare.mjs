@@ -181,6 +181,12 @@ overlay('components/AiLoginGuard.ets', replaceChecked(read('components/AiLoginGu
 overlay('utils/PrivacyConsent.ets', replaceChecked(read('utils/PrivacyConsent.ets'), "export const PRIVACY_VERSION: string = '2026-09-30-v2';", "export const PRIVACY_VERSION: string = '2026-10-26-android-v1';"));
 // Kotlin preserves Android content grants; the SDK picker converts them to _data file paths.
 overlay('utils/gallery/GalleryPhotoPicker.ets', fs.readFileSync(path.join(here, 'adapters/utils/gallery/GalleryPhotoPicker.ets'), 'utf8'));
+let collectionSources = read('pages/collection/CollectionPage.ets');
+collectionSources = replaceChecked(collectionSources,
+  "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })",
+  "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            this.CollectionActionRow('历', '日历分析', '查看日程安排，在聊天中查询', '#725CFF', '#F1EEFF', () => {\n              router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'calendar' } });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            this.CollectionActionRow('邮', '邮箱分析', '整理近期邮件，在聊天中查询', '#3F7FEF', '#EDF4FF', () => {\n              router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'mail' } });\n            })",
+  'collection personal source entries');
+overlay('pages/collection/CollectionPage.ets', collectionSources);
 let gallery = read('pages/gallery/GalleryPage.ets');
 gallery = buildAndroidGallerySource(gallery);
 gallery = replaceChecked(gallery, 'import { abilityAccessCtrl, common, Permissions }', 'import { common }');

@@ -9,10 +9,12 @@ import { MAIL_PROVIDERS, MailProvider } from '../../platform/MailProviders';
 interface MailConfiguration { host: string; port: number; username: string; mode: string; client: string; tenant: string; }
 interface MailAuthStatus { state: string; message: string; code: string; uri: string; }
 interface MailAuthStartResult { ok: boolean; error: string; }
+interface SourceRoute { kind?: string; }
 
 @Entry
 @Component
 struct PersonalSourcesPage {
+  @State kind: string = 'calendar';
   @State host: string = 'imap.qq.com';
   @State port: string = '993';
   @State username: string = '';
@@ -35,7 +37,7 @@ struct PersonalSourcesPage {
   private active: boolean = false;
   private client: CloudModelClient = new CloudModelClient();
   private reader: MailImapClient | null = null;
-  aboutToAppear(): void { this.active = true; this.reload(); }
+  aboutToAppear(): void { this.kind = (router.getParams() as SourceRoute)?.kind === 'mail' ? 'mail' : 'calendar'; this.active = true; this.reload(); }
   aboutToDisappear(): void { this.active = false; this.cancel(); }
   onPageHide(): void { this.active = false; if (!this.authPending) { this.cancel(); } }
   onPageShow(): void { this.active = true; if (!this.authPending) { this.reload(); } }
@@ -145,11 +147,17 @@ struct PersonalSourcesPage {
   }
   build() {
     Column({ space: 8 }) {
-      Row() { Button('返回').onClick(() => { router.back(); }); Text('日历与邮箱').fontSize(22) }.width('100%')
+      Row({ space: 16 }) { Button('‹').fontSize(28).fontColor(AppTheme.text('#18243D')).backgroundColor(Color.Transparent).onClick(() => { router.back(); }); Text(this.kind === 'calendar' ? '日历分析' : '邮箱分析').fontSize(24).fontWeight(FontWeight.Bold).fontColor(AppTheme.text('#18243D')) }.width('100%').padding(12)
+      Row({ space: 12 }) {
+        Button('日历安排').backgroundColor(this.kind === 'calendar' ? '#725CFF' : '#EDF0F8').fontColor(this.kind === 'calendar' ? '#FFFFFF' : '#53617A').enabled(!this.busy).onClick(() => { this.kind = 'calendar'; this.analysis = ''; })
+        Button('近期邮件').backgroundColor(this.kind === 'mail' ? '#3F7FEF' : '#EDF0F8').fontColor(this.kind === 'mail' ? '#FFFFFF' : '#53617A').enabled(!this.busy).onClick(() => { this.kind = 'mail'; this.analysis = ''; })
+      }.padding({ bottom: 8 })
       Scroll() {
         Column({ space: 12 }) {
-          Text(this.status).width('100%')
+          Text(this.status).fontSize(14).fontColor(AppTheme.text('#53617A')).width('100%').padding(16).backgroundColor(AppTheme.background('#EDF4FF')).borderRadius(16)
           if (this.busy) { Button('取消当前操作').onClick(() => { this.cancel(); }); }
+          if (this.kind === 'calendar') {
+          Column({ space: 16 }) {
           Text('系统日历 · 只读').fontSize(20)
           Text('先读取来源列表，再勾选日历并读取内容。过去90天至未来30天；只读取Android日历提供器中的日程。')
           ForEach(this.calendar.sources, (source: SourceCalendar) => {
@@ -160,6 +168,10 @@ struct PersonalSourcesPage {
           Button('读取日历列表 / 更新所选日历').enabled(!this.busy).onClick(() => { this.run('calendar'); })
           Button('分析日历').enabled(!this.busy).onClick(() => { this.analyze('calendar'); })
           Button('清除日历副本').enabled(!this.busy).onClick(() => { this.clear('calendar'); })
+          }.width('100%').padding(20).backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).border({ width: 1, color: AppTheme.border('#E8ECF3') })
+          }
+          if (this.kind === 'mail') {
+          Column({ space: 16 }) {
           Text('邮箱 · IMAP加密收信').fontSize(20)
           Select(MAIL_PROVIDERS.map((p: MailProvider): SelectOption => { return { value: p.name }; }))
             .selected(this.providerIndex).value(MAIL_PROVIDERS[this.providerIndex].name).enabled(!this.busy)
@@ -187,19 +199,25 @@ struct PersonalSourcesPage {
           Button('读取近三天邮件').enabled(!this.busy).onClick(() => { this.run('mail'); })
           Button('分析邮件').enabled(!this.busy).onClick(() => { this.analyze('mail'); })
           Button('清除邮件和授权码').enabled(!this.busy).onClick(() => { this.clear('mail'); })
+          }.width('100%').padding(20).backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).border({ width: 1, color: AppTheme.border('#E8ECF3') })
+          }
+          if (this.kind === 'calendar') {
           Text('日历同步：' + (this.calendar.syncedAt ? new Date(this.calendar.syncedAt).toLocaleString() : '未读取'))
           ForEach(this.calendar.items.slice(0, 100), (item: SourceItem) => {
-            Text(item.title + '\n' + (item.allDay ? '全天 ' : '') + new Date(item.start).toLocaleString() + '\n' + item.location + '\n' + item.body).width('100%')
+            Text(item.title + '\n' + (item.allDay ? '全天 ' + new Date(item.start).toISOString().slice(0, 10) : new Date(item.start).toLocaleString()) + '\n' + item.location + '\n' + item.body).width('100%').padding(18).backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(16)
           }, (item: SourceItem): string => item.id)
+          }
+          if (this.kind === 'mail') {
           Text('邮件同步：' + (this.mail.syncedAt ? new Date(this.mail.syncedAt).toLocaleString() : '未读取'))
           ForEach(this.mail.items, (item: SourceItem) => {
-            Text(item.title + '\n' + item.location + '\n' + new Date(item.start).toLocaleString() + '\n' + item.body).width('100%')
+            Text(item.title + '\n' + item.location + '\n' + new Date(item.start).toLocaleString() + '\n' + item.body).width('100%').padding(18).backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(16)
           }, (item: SourceItem): string => item.id)
+          }
           Text('AI分析（本页临时展示）\n' + this.analysis).width('100%')
           Text('聊天示例：“明天有哪些日程？”“最近三天有关于发票的邮件吗？”请使用支持工具调用的云端模型；每次发送来源内容前会请求确认。日历列表最多展示100项，问答可按日期查询更多。')
         }.padding(16).width('100%')
       }.layoutWeight(1)
-    }.width('100%').height('100%').backgroundColor(AppTheme.text('#FFFFFF'))
+    }.width('100%').height('100%').backgroundColor(AppTheme.background('#F7FAFE'))
   }
 }
 interface SourceAnalysisResult { ok: boolean; }
