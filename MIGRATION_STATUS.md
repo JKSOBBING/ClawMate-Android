@@ -1,5 +1,16 @@
 # ClawMate Android 迁移状态与日志
 
+## coevomind-app规划更新（2026-11-03）
+
+通过GitHub连接器读取分支与主要新增源码，固定目标4e86f6250c7739d0ea922e2379eeedad2d35d450。
+compare显示与cd69b68分叉：ahead25/behind8，共同祖先182d2ca；不能当作线性升级。
+更新架构指南并新增docs/COEVOMIND_BRANCH_PLAN.md及backlog入口，覆盖35领域和7个增量工作包。
+新增Codex工作台/聊天委托、日历、邮件、来源管理，修订手机微信、增量同步及隐私差异。
+Git ls-remote因网络连接失败；GitHub连接器读取成功。未改源码输入锁、应用代码或用户README。
+本轮仅文档检查，不执行构建、上游测试、服务/设备测试，不提升功能完成状态。
+实际检查：Python本地链接、代码块配对、D31–D35及U00–U06覆盖检查通过；git diff --check通过。
+Mermaid未渲染；完整端点差异和新分支真实运行仍待后续核查。
+
 ## 全功能迁移架构规划（2026-11-02）
 
 新增 docs/MIGRATION_ARCHITECTURE_GUIDE.md，按30个用户功能领域建立源码映射、

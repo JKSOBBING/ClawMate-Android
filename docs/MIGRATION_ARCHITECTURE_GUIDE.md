@@ -1,10 +1,12 @@
 # ClawMate 全功能迁移代码规划与类关系指南
 
-版本：2026-11-02。用途：后续迁移的任务拆分、代码归属、接口设计和验收依据。
+版本：2026-11-03。用途：后续迁移的任务拆分、代码归属、接口设计和验收依据。
+
+最新目标增量：`coevomind-app@4e86f6250c7739d0ea922e2379eeedad2d35d450`，详见[分支差异与新增工作包](COEVOMIND_BRANCH_PLAN.md)。下文 D01–D30 的状态仍描述旧锁定源码的 Android 集成；新目标扩展为 D01–D35，以增量文档的覆盖规则为准。新分支与旧锁分叉，不能直接覆盖源码准备清单。
 
 ## 1. 使用方式与证据边界
 
-- 产品范围沿用鸿蒙参考提交 `cd69b68bf16b9ed352be5073939eb24d042de583`；输入清单见 [upstream-lock.json](../shared-frontend/upstream-lock.json)。本地参考快照不是完整上游仓库，原生、外部服务和会议仍需补充源码核查。
+- 当前构建输入仍锁定鸿蒙提交 `cd69b68bf16b9ed352be5073939eb24d042de583`；输入清单见 [upstream-lock.json](../shared-frontend/upstream-lock.json)。产品规划已扩展至上述新分支；原生、外部服务和会议仍需逐模块补充核查。
 - 当前迁移状态以 [MIGRATION_BACKLOG.md](../MIGRATION_BACKLOG.md) 和 [MIGRATION_STATUS.md](../MIGRATION_STATUS.md) 的实际证据为准。本文件定义目标结构，不替代完成记录。
 - 图中 `Existing` 表示当前目标源码中的类/组件；`SharedSource` 表示从鸿蒙准备的共享业务；`Proposed` 表示拟新增逻辑接口，尚未实现。箭头表示调用或数据依赖，不表示继承；只有实现箭头才表示接口实现。
 - 接口中的方法为职责设计，不是对现有 API 签名的声明。实际接入前必须检查当前签名与上游契约。
@@ -44,7 +46,7 @@ flowchart TB
 
 | ID / 用户功能 | 共享来源或现有入口 | Android 支持与拟补项 | 当前边界 / 验收重点 |
 | --- | --- | --- | --- |
-| D01 首次引导、五入口、主题 | FirstLaunchOnboarding、MainTabConfig、Index | MainNavigation、SharedActivity | 集成；重启不重复引导、路由及深浅色 |
+| D01 首次引导、导航、主题 | FirstLaunchOnboarding、MainTabConfig、Index | MainNavigation、SharedActivity | 旧五入口集成；新六入口含Codex待接入，任务/我的索引迁移须验证 |
 | D02 账号、隐私、撤回 | PrivacyConsent、AiServiceAccess、HuaweiAccountCard | SettingsStore；拟 IdentityPort | 隐私集成；华为账号替代待补，不把自配服务授权称作登录 |
 | D03 今日概览、画像 | HomePage、DataManagerFacade | 复用共享画像与索引 | 集成；真实来源、空态、更新一致性 |
 | D04 推荐与任务建议 | HomeRecommendationService、HomeTaskSuggestion | SharedAgent；拟 TaskExecutionCoordinator | 建议集成，GUI 执行部分；来源与过期规则、任务结果 |
@@ -52,7 +54,7 @@ flowchart TB
 | D06 数字分身与历史 | AvatarService、AvatarStorage、SeedreamAvatarProvider | AndroidAvatar、AndroidAvatarForeground、ChatAvatar | 集成；照片参考/分割/语音动画与多厂商质量待验 |
 | D07 足迹、分组、详情 | CollectionPage、CollectionGroupDetailPage | DataManagerFacade、IndexService | 集成；多源记录、分页、来源与失效图片 |
 | D08 同步、整理、长期记忆 | ChatMemorySync、GalleryMemorySync、ConsolidationService | MemorySyncPage、MemoryQuery | 集成；多源失败恢复、幂等、索引一致性 |
-| D09 微信自动汇总 | WechatAutoSummaryClient 及原页面回调 | 拟 RemoteCollectionClient、CollectionImportService | 待补共享连接；PC 服务及原始产物落盘 |
+| D09 微信自动汇总 | WechatAutoSummaryClient、新增PhoneWechatAutoSummaryClient/WechatUiParser | 拟 RemoteCollectionClient、手机采集设备适配、CollectionImportService | PC与手机两路径待补；部分覆盖、取消保存、原始产物落盘 |
 | D10 图片输入与分析 | GalleryPage、GalleryAnalyzer、GalleryOcrService | AndroidGalleryScan、LocalOcrRecognizer | 集成；真实选图→分析→保存未完成验收 |
 | D11 图库批次管理 | GalleryWorkQueue、扫描会话 | GalleryScanCheckpoint、AndroidGalleryScan | 显式选图集成；全图库/HDC 待补，恢复与副本清理待验 |
 | D12 检索、问答、月度洞察 | GallerySearchService、GalleryMonthlyInsights | 共享模型和向量服务配置 | 集成；真实检索质量、引用、缓存失效 |
@@ -305,7 +307,7 @@ classDiagram
 
 | 工作包 | 对应功能/既有编号 | 前置与主要改动 | 出口验收 |
 | --- | --- | --- | --- |
-| W00 源码与契约补全 | D09/D18/D20/D25/D29/D30 | 补读完整上游缺失模块；记录协议、入口和平台依赖 | 来源映射可追踪；未核查项仍显式保留 |
+| W00 源码与契约补全 | D01–D35 | 先执行增量文档U00分叉与锁升级审计，再补读缺失模块 | 来源映射可追踪；未核查项仍显式保留 |
 | W01 已接入主链服务验收 | D03–D17、D21–D24 / F01–F16 | 使用现有配置流程，先完成聊天与图库真实服务链 | 真机聊天/视觉/语音及数据回流有证据；失败恢复可复现 |
 | W02 手机有界动作循环 | D18/D19 / P01/P04 | 现有 GUI 手动链路；增 GUI 适配、输入/横滑、动作及结果验证 | 单应用中计划→确认→执行→观察；取消/换应用停止；不伪报成功 |
 | W03 聊天/工作流接入 GUI | D04/D18/D21 / P01/P04 | W02；接 TaskExecutionCoordinator 和工作流设备适配 | 两入口共享授权与状态，真实结果落盘；跨入口不能重复执行 |
@@ -313,7 +315,7 @@ classDiagram
 | W05 身份/分享/系统记忆替代 | D02/D29 / P06 | W00；先确定兼容语义，再实现最小可验闭环 | 登录与服务授权分清；分享预览/撤回范围、导入校验；不可替代项保留待办 |
 | W06 本地模型与原生推理 | D25/D27 | W00；下载校验→加载→流式推理→取消→卸载 | 真实 Android 模型运行；无模型/损坏/内存不足可恢复；16KB兼容专项 |
 | W07 剩余能力与生产验收 | 全部非会议领域 | W01–W06；补全图库/平台差异，真实服务和多厂商 | 无障碍、主题、恢复、16KB、性能/大小；生产切换及旧数据迁移单独验证 |
-| W08 会议最终阶段 | D30 | 其他 ClawMate 能力适配完成；保留现有代码 | 录音→转写→编辑→保存及专项测试；显式 IncludeMeeting |
+| W08 会议最终阶段 | D30 | 其他 ClawMate 能力及增量U01–U06适配完成；保留现有代码 | 录音→转写→编辑→保存及专项测试；显式 IncludeMeeting |
 
 当前推荐开始项：先完成聊天/图库真实服务验收的已知缺口，同时为 W02 核实 GUI 接口；实现推进顺序仍为 P01/P04 → P02/P03 → P06 → 本地推理及剩余功能 → 整体验收 → 会议。若前一阶段检查失败，先修复，不启动无关重构。
 
