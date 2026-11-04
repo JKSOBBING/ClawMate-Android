@@ -38,6 +38,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- jAccount 授权回调（仅交大邮箱）：自定义 Scheme。已登记服务网址的回调由前端转交。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="clawmate" android:host="jaccount" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

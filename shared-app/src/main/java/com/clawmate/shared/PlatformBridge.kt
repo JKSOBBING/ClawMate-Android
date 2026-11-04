@@ -49,6 +49,26 @@ class PlatformBridge(private val activity: StageActivity) :
     fun sourcesAuthStatus(): String = sourceAuth.status()
     fun sourcesAuthOpen(): Boolean { sourceAuth.openPage(); return true }
     fun sourcesAuthCancel(): Boolean { sourceAuth.cancel(); return true }
+    /** jAccount 授权码流：客户端密钥由用户在本机填写，只进入后台令牌兑换，不经过前端返回值。 */
+    fun sourcesJAccountStart(user: String, client: String, redirect: String, secret: String): String = try {
+        sourceAuth.startJAccount(user, client, redirect, secret); JSONObject().put("ok", true)
+            .put("url", sourceAuth.status().let { JSONObject(it).optString("uri") }).toString()
+    } catch (e: IllegalArgumentException) {
+        JSONObject().put("ok", false).put("error", e.message ?: "jAccount授权参数不正确").toString()
+    } catch (_: Exception) {
+        JSONObject().put("ok", false).put("error", "无法开始jAccount授权，请稍后重试").toString()
+    }
+    /**
+     * 宿主收到的 jAccount 回调（Deep Link 或已登记网址）：交给 MailOAuth 校验 state 并兑换令牌。
+     * 只接受本应用的 Deep Link 或带授权码查询串的回调；其它链接明确返回 false。
+     */
+    fun sourcesJAccountLink(url: String): Boolean = acceptJAccountLink(url)
+    /** Deep Link（clawmate://jaccount?code=...&state=...）到达时由宿主 Activity 调用。 */
+    fun acceptJAccountLink(url: String): Boolean {
+        if (!com.clawmate.platform.sources.JAccountCallback.isOwnLink(url)) return false
+        return runCatching { sourceAuth.completeJAccountFromRedirect(url) }.isSuccess
+    }
+    fun acceptJAccountLinkFromActivity(url: String): Boolean = acceptJAccountLink(url)
     fun sourceAuthActivityResult(code: Int, result: Int, data: Intent?): Boolean = sourceAuth.activityResult(code, result, data)
     private val sourceJobs = NativeOperations<String>(1)
     fun sourcesPermission(): Boolean = onUi {
@@ -78,6 +98,42 @@ class PlatformBridge(private val activity: StageActivity) :
     fun sourcesWrite(kind: String, value: String): Boolean { sources.write(kind, value); return true }
     fun sourcesClear(kind: String): Boolean { sources.clear(kind); return true }
     fun sourcesForgetMail(): Boolean { sourceAuth.cancel(); sources.forgetMail(); return true }
+    /** 常用节假日：只读说明数据范围与依据，不联网、不读取系统日历。 */
+    fun sourcesHolidayInfo(): String = JSONObject().put("name", com.clawmate.platform.sources.ChinaHolidays.SOURCE_NAME)
+        .put("sections", JSONArray().put("2025年放假安排（国办发明电〔2024〕7号）").put("2026年放假安排（国办发明电〔2025〕6号）"))
+        .put("note", "只收录官方通知中的放假日与调休上班日；未覆盖年份只显示常规周末并提示以官方通知为准。")
+        .toString()
+    // 本地模型下载到应用私有目录：进程内单任务，支持断点续传、SHA256 校验、暂停/取消与删除。
+    private val modelDownloader by lazy { com.clawmate.app.localmodel.download.ModelDownloadRegistry.of(activity.filesDir) }
+    private val modelManager by lazy { com.clawmate.app.localmodel.LocalModelManager(activity.filesDir) }
+    fun localModelDownloadStart(repo: String, includeAuxiliary: Boolean): String = runCatching {
+        if (modelDownloader.start(repo, includeAuxiliary)) "ok" else "已有模型下载任务正在进行，请等待完成或暂停后再试"
+    }.getOrElse { "无法开始下载：" + (it.message ?: "未知错误") }
+    fun localModelDownloadPause(): Boolean = modelDownloader.pause()
+    /** 只读的下载计划：来源、目标目录、文件选择规则与校验步骤；不联网、不写盘。 */
+    fun localModelPlan(repo: String, includeAuxiliary: Boolean): String =
+        JSONObject(com.clawmate.app.localmodel.LocalModelPlan.build(repo, includeAuxiliary)).toString()
+    /** 下载数据的网址来源（官方 ModelScope，HTTPS）。 */
+    fun localModelDownloadSource(): String = com.clawmate.app.localmodel.LocalModelPlan.source()
+    /** 应用私有的模型存储路径（不含凭据），用于真机核对下载目录。 */
+    fun localModelRoot(): String = java.io.File(activity.filesDir, "modelscope").absolutePath
+    fun localModelDownloadCancel(): Boolean = modelDownloader.cancel()
+    fun localModelDownloadProgress(): String = modelDownloader.progress().toJson()
+    fun localModelList(): String {
+        val array = JSONArray()
+        modelManager.list().forEach { model ->
+            array.put(JSONObject().put("id", model.id).put("label", model.label).put("path", model.path)
+                .put("repo", model.id.removePrefix("modelscope:").removePrefix("legacy:"))
+                .put("sizeText", com.clawmate.app.localmodel.download.ModelScopeSpec.formatBytes(model.sizeBytes))
+                .put("statusText", model.statusText).put("ready", model.ready))
+        }
+        return array.toString()
+    }
+    fun localModelSelect(modelId: String): String = runCatching { modelManager.select(modelId).id }
+        .getOrElse { throw IllegalStateException(it.message ?: "无法选择模型", it) }
+    fun localModelDelete(modelId: String): String = runCatching {
+        modelManager.delete(modelId, modelDownloader.isRunning()); "ok"
+    }.getOrElse { throw IllegalStateException(it.message ?: "无法删除模型", it) }
     private val ocrJobs = NativeOperations<OcrResult>()
     private val imageJobs = NativeOperations<List<PreparedChatImage>>(1)
     private val avatarJobs = NativeOperations<AvatarForegroundRgba>(1)
@@ -424,7 +480,7 @@ class PlatformBridge(private val activity: StageActivity) :
     }
 
     override fun close() {
-        sourceAuth.close(); sources.close(); sourceJobs.close()
+        sourceAuth.close(); sources.close(); sourceJobs.close(); modelDownloader.close()
         guiScreenshotDetach();screenshotJobs.close()
         speechHttp.close();pcmSpeech.close();onUi{fileSpeech.close()}
         meeting.close()

@@ -40,6 +40,10 @@ class MailOAuth(
     private var deviceExpires = 0L
     private var polling = false
     private var googleResolution: Int? = null
+    // jAccount：授权码流。clientSecret 只在本进程内存中存在，绝不通过桥接返回或落盘。
+    private var jaccountState = ""
+    private var jaccountRedirect = ""
+    private var jaccountSecret = ""
     companion object { const val REQUEST = 7311; const val SCOPE = "https://outlook.office.com/IMAP.AccessAsUser.All" }
 
     init { engine.oauthToken = { p, u -> accessToken(p, u) } }
@@ -47,6 +51,91 @@ class MailOAuth(
         check(p == provider && u == user && token.isNotEmpty() && now() < expires) { "请重新授权邮箱" }
         return token
     }
+
+    /**
+     * jAccount 授权（交大邮箱）：先用网络信息中心分配的客户端ID、密钥与登记的服务网址换取
+     * 授权码，再兑换访问令牌，并以 RFC 7628 OAUTHBEARER 登录 mail.sjtu.edu.cn。
+     * 授权成功后才写入邮箱配置；任何一步失败都保持“未授权”，不会回退成密码登录。
+     */
+    @Synchronized fun startJAccount(username: String, clientId: String, redirectUri: String, clientSecret: String) {
+        JAccountOAuth.validateClientId(clientId)?.let { throw IllegalArgumentException(it) }
+        JAccountOAuth.validateRedirectUri(redirectUri)?.let { throw IllegalArgumentException(it) }
+        require(clientSecret.length in 8..512) { "请填写 jAccount 接口申请时分配的密钥" }
+        val login = JAccountOAuth.normalizeAccount(username) ?: throw IllegalArgumentException("请输入 jAccount 账号（例如 abc 或 abc@sjtu.edu.cn）")
+        cancel()
+        val g = generation
+        provider = "jaccount"; user = login; client = clientId.trim(); tenant = "jaccount"
+        jaccountRedirect = redirectUri.trim(); jaccountSecret = clientSecret
+        jaccountState = generateState()
+        state = "pending"
+        message = "请打开jAccount授权网页；授权码换取令牌在本机后台完成，密钥不会显示或保存。"
+        code = ""; uri = JAccountOAuth.authorizeUrl(clientId.trim(), jaccountRedirect, jaccountState)
+    }
+
+    /**
+     * 浏览器/Deep Link 回调：取回授权码并兑换令牌。回调地址必须与授权时一致。
+     * [rawQuery] 可以是完整 URL 的查询串，也可是 `code=...&state=...`。
+     */
+    fun completeJAccount(rawQuery: String) {
+        val state = synchronized(this) {
+            if (state != "pending" || provider != "jaccount") error("没有进行中的 jAccount 授权")
+            State(generation, jaccountRedirect, jaccountSecret, jaccountState, user)
+        }
+        val code = JAccountOAuth.parseCallback(rawQuery, state.state).getOrElse { failure ->
+            synchronized(this) { if (state.generation == generation) fail(failure.message ?: "jAccount 授权失败") }
+            return
+        }
+        exchangeForToken(state, code)
+    }
+
+    private fun exchangeForToken(state: State, code: String) {
+        executor.submit {
+            try {
+                val response = tokenRequest(JAccountOAuth.tokenPayload(code, client, state.secret, state.redirect))
+                synchronized(this) {
+                    if (state.generation != generation) return@submit
+                    val value = JAccountOAuth.accessToken(response)
+                    if (value == null) { fail("jAccount 授权未返回可用的访问令牌，请重新授权"); return@submit }
+                    engine.configureBearer("jaccount", state.account, JAccountOAuth.MAIL_HOST, value)
+                    accept(value, 3600)
+                    message = "jAccount授权完成，请读取邮件；若服务器未开放OAUTHBEARER会明确报错"
+                }
+            } catch (_: Exception) {
+                synchronized(this) { if (state.generation == generation) fail("jAccount 授权兑换失败：请核对客户端ID、密钥、回调网址与网络") }
+            } finally { synchronized(this) { jaccountSecret = "" } }
+        }
+    }
+
+    /**
+     * 已登记的服务网址回调：浏览器按 redirect_uri 跳回服务网址，前端把查询串转给应用。
+     * 与 Deep Link 走同一套 state 校验和令牌兑换。
+     */
+    fun completeJAccountFromRedirect(url: String) {
+        val query = JAccountCallback.queryOf(url)
+        check(query.isNotEmpty()) { "回调网址缺少授权码" }
+        completeJAccount(query)
+    }
+
+    private fun tokenRequest(values: Map<String, String>): Map<String, Any?> {
+        exchange?.let { mock ->
+            val json = mock("jaccount", "token", values)
+            return json.keys().asSequence().associateWith { key -> json.opt(key) }
+        }
+        val body = FormBody.Builder().apply { values.forEach { (k, v) -> add(k, v) } }.build()
+        return http.newCall(Request.Builder().url(JAccountOAuth.TOKEN_ENDPOINT).post(body).build()).execute().use {
+            val raw = it.body?.string() ?: error("Empty response"); require(raw.length <= 65536)
+            val json = JSONObject(raw)
+            json.keys().asSequence().associateWith { key -> json.opt(key) }
+        }
+    }
+
+    private fun generateState(): String {
+        val bytes = ByteArray(24).also { java.security.SecureRandom().nextBytes(it) }
+        return java.math.BigInteger(1, bytes).toString(16).padStart(48, '0')
+    }
+
+    private data class State(val generation: Int, val redirect: String, val secret: String, val state: String, val account: String)
+
     @Synchronized fun start(kind: String, username: String, clientId: String, directory: String) {
         check(googleResolution == null) { "请先关闭上一次Google授权窗口" }
         require(kind in listOf("google", "microsoft"))
@@ -147,11 +236,13 @@ class MailOAuth(
     private fun accept(value: String, seconds: Long) {
         if (value.isBlank() || seconds <= 60) { fail("未获得有效授权令牌，请重新授权"); return }
         token = value; expires = now() + (seconds - 60).coerceIn(1, 3600) * 1000
-        device = ""; code = ""; uri = ""; state = "done"; message = "OAuth授权完成，请读取邮件验证邮箱访问权限"
+        device = ""; code = ""; uri = ""; jaccountState = ""; jaccountSecret = ""; state = "done"
+        message = "OAuth授权完成，请读取邮件验证邮箱访问权限"
     }
-    private fun fail(reason: String) { state = "error"; message = reason; token = ""; device = ""; code = ""; uri = "" }
+    private fun fail(reason: String) { state = "error"; message = reason; token = ""; device = ""; code = ""; uri = ""; jaccountState = ""; jaccountSecret = "" }
     @Synchronized fun cancel() {
-        generation++; http.dispatcher.cancelAll(); state = "idle"; token = ""; device = ""; code = ""; uri = ""; polling = false; message = "授权已取消或未开始"
+        generation++; http.dispatcher.cancelAll(); state = "idle"; token = ""; device = ""; code = ""; uri = ""; polling = false
+        jaccountState = ""; jaccountRedirect = ""; jaccountSecret = ""; message = "授权已取消或未开始"
     }
     override fun close() { cancel(); executor.shutdownNow() }
 }

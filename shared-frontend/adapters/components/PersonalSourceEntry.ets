@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { AppTheme } from '../utils/AppTheme';
 import { PersonalSources, MailConfiguration } from '../platform/PersonalSources';
 import { PersonalSourceSync } from '../platform/PersonalSourceSync';
@@ -6,6 +6,8 @@ import { PersonalSourceSync } from '../platform/PersonalSourceSync';
 @Component
 export struct PersonalSourceEntry {
   @Prop kind: string = 'calendar';
+  /** 打开的分析页路由；日历与邮箱分别使用独立页面。 */
+  @Prop target: string = 'pages/settings/CalendarSourcesPage';
   @State ready: boolean = false;
   @State busy: boolean = false;
   @State status: string = '';
@@ -42,14 +44,14 @@ export struct PersonalSourceEntry {
             Text(this.kind === 'calendar' ? '日程同步与聊天查询' : '邮箱设置与近三天邮件').fontSize(11).fontColor(AppTheme.text('#7C879A')).maxLines(2)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         }.layoutWeight(1).constraintSize({ minHeight: 68 }).onClick(() => {
-          if (!this.busy) { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: this.kind } }); }
+          if (!this.busy) { router.pushUrl({ url: this.target, params: { kind: this.kind } }); }
         })
         Button(this.busy ? '取消' : '同步').fontSize(12).width(56).height(36).padding({ left: 6, right: 6 }).borderRadius(12)
           .fontColor(AppTheme.text(this.ready || this.busy ? '#6577D9' : '#A5ACB9')).backgroundColor(AppTheme.background('#F3F5FA'))
           .enabled(this.ready || this.busy).accessibilityText((this.kind === 'calendar' ? '日历' : '邮箱') + (this.busy ? '取消同步' : '同步'))
           .onClick(() => { if (this.busy) { this.sync.cancel(); } else { this.read(); } })
         Text('›').fontSize(24).fontColor(AppTheme.text('#A0A8B6')).width(18).textAlign(TextAlign.Center)
-          .onClick(() => { if (!this.busy) { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: this.kind } }); } })
+          .onClick(() => { if (!this.busy) { router.pushUrl({ url: this.target, params: { kind: this.kind } }); } })
       }.width('100%').padding({ left: 14, right: 14 })
       if (this.status) { Text(this.status).fontSize(12).lineHeight(18).fontColor(AppTheme.text('#68758B')).width('100%').padding({ left: 64, right: 16, bottom: 12 }); }
     }.width('100%').onVisibleAreaChange([0.0], (visible: boolean): void => { if (visible) { this.refresh(); } })

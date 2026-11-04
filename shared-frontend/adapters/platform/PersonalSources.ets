@@ -1,13 +1,14 @@
-import Bridge from '@arkui-x.bridge';
+﻿import Bridge from '@arkui-x.bridge';
 import { CloudChatToolDefinition, CloudChatCompletionOptions } from '../utils/CloudModelClient';
 import { promptAction } from '@kit.ArkUI';
 import { AiServiceAccess } from '../utils/AiServiceAccess';
 import { PrivacyConsent } from '../utils/PrivacyConsent';
 
-export interface SourceOptions { calendarEnabled: boolean; historyDays: number; selected: number[]; maxMessages: number; }
+export interface SourceOptions { calendarEnabled: boolean; holidayEnabled: boolean; historyDays: number; selected: number[]; maxMessages: number; }
 export interface MailConfiguration { host: string; port: number; username: string; mode: string; client: string; tenant: string; }
-export interface SourceItem { id: string; title: string; body: string; start: number; end: number; location: string; allDay: boolean; timeZone: string; calendarId: number; }
-export interface SourceCalendar { id: number; name: string; }
+// source: 'system'（手机系统日历）或 'holiday'（常用节假日）。两类来源始终分开标注。
+export interface SourceItem { id: string; title: string; body: string; start: number; end: number; location: string; allDay: boolean; timeZone: string; calendarId: number; source: string; }
+export interface SourceCalendar { id: number; name: string; kind: string; }
 export interface SourceSnapshot { items: SourceItem[]; sources: SourceCalendar[]; selected: number[]; syncedAt: number; windowStart: number; windowEnd: number; partial: boolean; }
 interface SourcePoll { state: string; value: string; }
 interface SourceResult { ok: boolean; value: string; error: string; }
@@ -87,7 +88,7 @@ export class PersonalSources {
       if (base !== (AppStorage.get<string>('cloudPlannerBaseUrl') || '') || model !== (AppStorage.get<string>('cloudPlannerModel') || '')) { throw new Error('模型配置改变，请重试'); }
       let latest = await PersonalSources.snapshot(kind);
       if (latest.syncedAt !== snapshot.syncedAt) { throw new Error('来源已变化或权限撤回，请重试'); }
-      let selected = items.slice(0, 10).map((i: SourceItem): SourceItem => { return { id: i.id, title: i.title.slice(0, 200), body: i.body.slice(0, 500), start: i.start, end: i.end, location: i.location.slice(0, 120), allDay: i.allDay, timeZone: i.timeZone, calendarId: i.calendarId }; });
+      let selected = items.slice(0, 10).map((i: SourceItem): SourceItem => { return { id: i.id, title: i.title.slice(0, 200), body: i.body.slice(0, 500), start: i.start, end: i.end, location: i.location.slice(0, 120), allDay: i.allDay, timeZone: i.timeZone, calendarId: i.calendarId, source: i.source }; });
       return JSON.stringify({ ok: true, source: kind, synced_at: new Date(snapshot.syncedAt).toISOString(), local_time: new Date().toString(),
         window_start: snapshot.windowStart, window_end: snapshot.windowEnd, matched: items.length, truncated: items.length > 10 || items.some((i: SourceItem): boolean => i.body.length > 500), partial: snapshot.partial || false, records: selected });
     } catch (e) { return JSON.stringify({ ok: false, error: (e as Error).message }); }

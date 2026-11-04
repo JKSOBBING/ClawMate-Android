@@ -1,4 +1,4 @@
-# 日历、邮箱与聊天问答接入
+﻿# 日历、邮箱与聊天问答接入
 
 2026-11-03。用户已将日历/邮箱优先于原后续顺序，并要求覆盖主流邮箱。
 
@@ -101,6 +101,8 @@ Google正式注册、Microsoft客户端ID/租户注册及逐提供商真实账�
 
 - [Gmail IMAP](https://developers.google.com/workspace/gmail/imap/imap-smtp)、[应用专用密码](https://support.google.com/accounts/answer/185833?hl=zh-Hans)
 - [交大标准邮箱](https://net.sjtu.edu.cn/wlfw/dzyj.htm)：mail.sjtu.edu.cn:993；365邮箱是另一服务。
+- [jAccount接口申请](https://net.sjtu.edu.cn/xxfw/jAccountjk.htm)（分配clientId与密钥、校验登记网址）、
+  [jAccount OAuth2 公开配置](https://jaccount.sjtu.edu.cn/oauth2/.well-known/openid-configuration)。
 - [Microsoft OAuth IMAP](https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth/)
 - [iCloud](https://support.apple.com/en-ie/102525)、[Yahoo](https://uk.help.yahoo.com/kb/SLN3697.html)
 
@@ -124,3 +126,20 @@ PersonalSourceEngine的personal_source_options与邮箱凭据命名空间隔离�
 新增scripts/test-personal-source-sync.mjs使用真实邮件解析/读取器与合成IMAP响应验证上限、部分覆盖及取消不提交。
 图文手册更新三张已审核OPPO截图；最终APK与命令记录见MIGRATION_STATUS.md。
 画像、首页一周安排、邮件自动提醒/关注筛选与真实服务验收仍未完成。
+
+## 第四段：日历双来源、首页提醒、jAccount 与本地模型下载（2026-11-04）
+
+详见[CALENDAR_MAIL_MODEL_DOWNLOAD.md](CALENDAR_MAIL_MODEL_DOWNLOAD.md)。
+
+- 日历来源拆分为“手机系统日历”（CalendarContract，需 READ_CALENDAR）与“常用节假日”（内置 2025/2026
+  官方放假与调休安排，未覆盖年份只显示常规周末并提示）。条目带 `source` 字段，列表与聊天查询结果分开标注；
+  新增 `{"quick":true}` 首页快速浏览与 `calendarStatus` 只读探测，均不写日历记忆。
+- 首页“为你提醒”新增 CalendarReminderCard：最多 4 条系统日程 + 2 条节假日，按来源打标签，未配置时给出原因与入口；
+  只展示，不自动发送给模型。
+- 合并页 PersonalSourcesPage 拆分为 CalendarSourcesPage 与 MailSourcesPage（归档知识与评分均独立）。
+- 交大邮箱新增 jAccount 授权码登录：HTTPS 回调/Deeplink 回传授权码 → 本机后台换取令牌 →
+  RFC 7628 OAUTHBEARER 登录 mail.sjtu.edu.cn:993；密钥只在内存中停留，令牌不落盘，失败不回退密码。
+- 本地模型新增 ModelScope 联网下载（清单/分文件/Range 续传/大小+SHA256 校验/暂停/取消/空间检查），
+  设置页原按钮接线，已下载模型可切换与删除；原生推理仍明确未接入。
+
+验证结论与未验收项见[迁移日志](../MIGRATION_STATUS.md)最新一节。

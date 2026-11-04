@@ -1,4 +1,4 @@
-# ClawMate Android 迁移状态与日志
+﻿# ClawMate Android 迁移状态与日志
 
 ## 鸿蒙参考的日历/邮箱界面与同步设置（2026-11-04）
 
@@ -1004,3 +1004,48 @@ GuiControlService现在只在单一目标应用窗口出现后进入完整窗口
 摘要、APK哈希、诊断和最终回执哈希见shared-frontend/verification-gui-control-accepted.json。
 本阶段仅单设备受控手动链路通过，多厂商、真实业务、模型循环/聊天工作流接入/结果提取仍待完成。
 README用户改动保留，未触碰鸿蒙参考与Compose源，会议保持最后阶段。
+
+## 日历双来源、首页“为你提醒”、交大 jAccount 授权与本地模型联网下载（2026-11-04）
+
+按用户要求完成三项功能：日历来源改为“手机系统日历 + 常用节假日”并显示在首页“为你提醒”；
+交大邮箱支持 jAccount 授权登录；安卓应用支持联网下载模型到本地。
+参考仓库 doulujiyao12/mobiinfra-oh@coevomind-app 只读调研结论：该分支只有系统日历一种来源、
+没有节假日来源、没有 jAccount/OAuth 邮箱登录；本地模型下载协议（repo/files + resolve/master + Range）
+与完成标记可直接移植。节假日与 jAccount 为按用户需求新设计，设计说明见
+docs/CALENDAR_MAIL_MODEL_DOWNLOAD.md。
+
+代码接入（已完成集成，不代表真实服务验收）：
+- Kotlin：新增 ChinaHolidays（2025/2026 放假与调休，未覆盖年份只显示周末并提示）、JAccountOAuth、
+  JAccountCallback；PersonalSourceEngine 增加 holidayEnabled、source 标注、calendarStatus、
+  holiday 只读操作、{"quick":true} 首页浏览与 Bearer 登录；ImapTransport 增加 RFC 7628 OAUTHBEARER；
+  MailOAuth 增加授权码流（state 校验、密钥仅内存、令牌进程内）；PlatformBridge 接
+  sourcesJAccountStart/Link/HolidayInfo 与 localModel* 端口；SharedActivity 处理 clawmate://jaccount。
+- 模型下载：app/localmodel/download 新增 MiniJson、ModelScopeSpec、ModelScopeDownloader
+  （清单解析、路径安全、Range 续传、大小+SHA256 校验、暂停/取消、剩余空间检查、进度与速度）；
+  LocalModelManager（切换/删除，路径校验与二次确认）；LocalModelPlan（只读计划说明）。
+- ArkTS：新增 CalendarSourcesPage、MailSourcesPage（拆分原合并页）、CalendarReminderCard（首页卡片）、
+  LocalModelAccess；PersonalSources/SourceItem 增加 source，SourceSnapshot 来源区分；
+  HomePage 在“为你提醒”下插入日历卡片；SettingsCenterPage 模型下载按钮改为“下载/暂停/继续”切换
+  （原页面下载中禁用按钮，暂停后无法继续）；app/Index.ets 接入下载进度轮询、模型列表、切换、删除。
+
+验证（实际运行）：
+- `./gradlew.bat :android-capabilities:testDebugUnitTest :app:testDebugUnitTest --offline` 通过：
+  capabilities 160 项 / 0 失败（含 ChinaHolidaysTest 5 项、JAccountOAuthTest 9 项），
+  app 1267 项 / 0 失败（含 ModelScopeSpecTest 15 项、ModelScopeDownloaderTest 9 项）。
+- ArkTS 编译（hvigor assembleHap）成功；package-android.py 导出运行库 129 个、build-state seal 通过。
+- Node 24 运行 verify.mjs 6 项、verify-native.mjs 7 项、verify-integration.mjs 12 项、
+  verify-bootstrap.mjs 14 项、verify-personal-sources.mjs 3 项全部通过。
+  其中 verify.mjs 原写死“13 条路由”改为逐条校验声明路由（不降低检查强度）；verify-personal-sources.mjs
+  改为先去掉 UTF-8 BOM 再剥离 import（PersonalSources.ets 曾被 Windows 编辑器写成带 BOM）。
+- 用真实编译产物（android-capabilities classes + org.json）运行探针：2026-10-01..11 区间得到
+  “国庆节放假×7、调休上班(10-10)、周六休息(10-11)”；jAccount 账号归一化、HTTPS 回调校验、
+  授权地址参数、Bearer 载荷格式均符合预期。
+
+未完成/待验收：
+- 共享前端 Gradle 宿主（:shared-app）本机无法构建：需要 on-device-meeting-notes 的 android/meeting-sdk，
+  当前机器上没有该目录（settings.gradle.kts 按设计拒绝）；本次只验证到 ArkTS 编译与运行库导出，
+  未生成/安装新 APK，也**未在 OPPO 实机浏览新页面**。
+- 真实 jAccount 应用注册（clientId/密钥/登记网址）与交大邮箱 OAUTHBEARER 可用性未验证。
+- 真实日历授权/日程读取与首页卡片在设备上的显示未验证；节假日表每年需要随官方通知更新。
+- 模型下载：未在真机完成一次真实模型下载（体积 2.7–3.5 GB）；未做省电/中断/掉网的真机长跑。
+- MNN/HiAI/OM 原生推理仍未接入，下载到的模型不会产生任何输出。

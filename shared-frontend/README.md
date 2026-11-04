@@ -27,7 +27,7 @@ SH-15 页面/业务准备清单包含144个ArkTS文件：76个与锁定上游逐
 | --- | --- | --- |
 | 启动、四页引导 | FirstLaunchOnboarding / OnboardingTypes | 原始页面；完成版本实际持久化，更新与重启不重复引导 |
 | 主导航、主题 | MainTabConfig / FloatingMainTabs / AppTheme / FrostedPage | 原五入口及导航样式，悬浮胶囊尺寸取锁定源码；原颜色资源跟随系统主题。Android 基础模糊近似 HDS，系统栏由宿主管理 |
-| 首页、提醒、推荐、关怀 | HomePage / HomeTaskSuggestion / HomeEmotionalSupport | 原页面；真实数据管理器；建议/关怀接原提示词与响应解析，结果缓存到本机；真实模型未验收 |
+| 首页、提醒、推荐、关怀 | HomePage / HomeTaskSuggestion / HomeEmotionalSupport / CalendarReminderCard | 原页面；真实数据管理器；建议/关怀接原提示词与响应解析，结果缓存到本机；“为你提醒”下方显示未来7天系统日程与常用节假日（只展示，不发模型）；真实模型未验收 |
 | 聊天、会话、消息 | ChatPage / ChatMessageList / ChatSessionDrawer / ChatSessionStorage | 流式回复、思考参数、文件保存、会话管理；只读 query_events 工具往返已接通，最多3次查询；不执行任意模型工具 |
 | 图片聊天 | ChatPage / ChatImages / 共用 AndroidChatImagePreparer | 相册/拍照、逐次确认、最多4张去元数据 JPEG、当前回合多模态 SSE、私有历史图片；真实视觉模型与相机实拍未验收 |
 | 上下文预算与自动摘要 | ChatContextBudget / 原 Index 压缩编排 / ChatContext | 阈值与保留轮数生效；摘要、增量覆盖、会话重载复用及本地抽取回退已接入。完整原文保留；取消/撤回阻断迟到结果，仍超预算时明确报错；真实模型摘要质量待验收 |
@@ -41,7 +41,7 @@ SH-15 页面/业务准备清单包含144个ArkTS文件：76个与锁定上游逐
 | 设置与服务 | SettingsCenterPage / SettingsCenterControls | 原分组和表单；私有偏好持久化，写失败保留可重试状态；空服务显示“未配置”；用户主动测试模型时才请求配置的服务 |
 | 账号与隐私 | PrivacyConsent / PrivacyConsentDialog | 安卓授权指使用自配云服务，不代表华为账号登录；声明按实际行为改写并单独版本化；拒绝/撤回会阻断请求，小艺 A2A 明确不可用 |
 | 数字分身 | HomePage / AvatarService / SeedreamAvatarProvider | 原生成/历史/参数快照界面及文生图服务连接；真实生成待验收。照片参考上传、人物前景分割未验收/未接入，不伪造成功 |
-| 语音、本地模型 | 原语音控件 / 共用 Android ASR、TTS | TTS真实回调、暂停/文本重播；ASR连接系统服务并按需申请麦克风权限，没有伪造转录。真人识别质量未验收；MNN/HiAI/OM未接入 |
+| 语音、本地模型 | 原语音控件 / 共用 Android ASR、TTS / LocalModelAccess | TTS真实回调、暂停/文本重播；ASR连接系统服务并按需申请麦克风权限，没有伪造转录。本地模型支持 ModelScope 联网下载、续传、校验、暂停、切换与删除，但已下载模型不会自动推理；MNN/HiAI/OM未接入 |
 | HDC/GUI、Python | 平台接口与能力说明页 | 跨应用操作、外部Python服务和微信自动采集仍受限；提醒不自动启动这些能力 |
 | 桌面端、诊断、日志 | Android 平台页 / 原工作流查看页 | 用户自行填写 HTTPS 桌面下载地址；原生诊断受限；运行日志只展示实际内存日志 |
 

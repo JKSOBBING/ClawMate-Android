@@ -124,6 +124,17 @@ homePage = replaceChecked(homePage, '  private isWideProfileOverview(): boolean 
   "    else if (this.avatarHistoryOpen) { this.avatarHistoryOpen = false; }\n    else if (this.avatarGenerationOpen) { this.avatarGenerationOpen = false; }\n" +
   "    else if (this.selectedTaskSuggestionId.length > 0) { this.selectedTaskSuggestionId = ''; }\n    else { this.selectedRecommendationId = ''; }\n  }\n" +
   '  private isWideProfileOverview(): boolean {');
+// 首页“为你提醒”上方固定显示日历卡片：系统日历日程与常用节假日，均来自本机读取。
+homePage = replaceChecked(homePage, "import { HomeEmptyHint } from '../../components/HomeEmptyHint';",
+  "import { HomeEmptyHint } from '../../components/HomeEmptyHint';\nimport { CalendarReminderCard } from '../../components/CalendarReminderCard';");
+homePage = replaceChecked(homePage,
+  "          Text('为你提醒').fontSize(20).fontWeight(FontWeight.Bold).fontColor(AppTheme.text('#11182F')).layoutWeight(1)",
+  "          Text('为你提醒').fontSize(20).fontWeight(FontWeight.Bold).fontColor(AppTheme.text('#11182F')).layoutWeight(1)");
+homePage = replaceChecked(homePage, "        }.width('92%').margin({ top: 22 })\n\n        if (this.visibleRecommendations().length === 0) {",
+  "        }.width('92%').margin({ top: 22 })\n\n        this.CalendarReminderSection()\n\n        if (this.visibleRecommendations().length === 0) {");
+homePage = replaceChecked(homePage, '  @Builder EmptyRecommendationCard() {',
+  "  @Builder CalendarReminderSection() {\n    Column() {\n      CalendarReminderCard()\n    }.width('92%').margin({ top: 10 })\n  }\n\n" +
+  '  @Builder EmptyRecommendationCard() {');
 overlay('pages/home/HomePage.ets', homePage);
 let debug = applyPatches(read('utils/DebugSettings.ets'), [
   ["import native from 'libentry.so';\n", ''],
@@ -132,8 +143,12 @@ let debug = applyPatches(read('utils/DebugSettings.ets'), [
 overlay('utils/DebugSettings.ets', debug);
 let settings = read('pages/settings/SettingsCenterPage.ets');
 overlay('pages/settings/SettingsCenterPage.ets', applyPatches(settings, [
-  ['      this.SectionTitle(SettingsSectionId.DataCollection)', "      this.SectionTitle(SettingsSectionId.DataCollection)\n      Button('日历分析').onClick(() => { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'calendar' } }); })\n      Button('邮箱分析').onClick(() => { router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'mail' } }); })\n      Button('聊天长期记忆与本机索引').onClick(() => { router.pushUrl({ url: 'pages/settings/MemorySyncPage' }); })"],
+  ['      this.SectionTitle(SettingsSectionId.DataCollection)', "      this.SectionTitle(SettingsSectionId.DataCollection)\n      Button('日历分析').onClick(() => { router.pushUrl({ url: 'pages/settings/CalendarSourcesPage', params: { kind: 'calendar' } }); })\n      Button('邮箱分析').onClick(() => { router.pushUrl({ url: 'pages/settings/MailSourcesPage', params: { kind: 'mail' } }); })\n      Button('聊天长期记忆与本机索引').onClick(() => { router.pushUrl({ url: 'pages/settings/MemorySyncPage' }); })"],
   ['开启后显示并记录聊天和手机 HDC 日志', '开启后记录本次前端诊断；原生推理与自动控制日志尚未接入'],
+  // 模型下载：鸿蒙端“下载中禁用按钮、另设暂停”，安卓改为同一按钮在“下载/继续下载”和“暂停”之间切换，
+  // 否则暂停后按钮被禁用，无法续传。其余文案与进度面板沿用原页面。
+  ['      actionEnabled: !this.downloading && !this.modelScopeDownloading,', '      actionEnabled: !this.downloading,'],
+  ["label: this.modelScopePauseRequested ? '继续下载' : '从 ModelScope 下载',", "label: this.modelScopePauseRequested ? '继续下载' : this.modelScopeDownloading ? '暂停下载' : '从 ModelScope 下载',"],
   ['  @Builder ContextCompressionGroup() {', "  @Builder ContextCompressionGroup() {\n    Text('达到估算阈值时自动摘要较早历史，并按保留轮数续接。摘要使用当前配置的模型；失败时明确标记本地抽取。完整历史保留在本机，可随时停止。压缩后仍超预算会提示减少附件或新建会话。').fontSize(12).fontColor('#65718B').width('100%')"]
 ]));
 // Public defaults contain no environment service endpoints, credentials or tokens.
@@ -185,7 +200,7 @@ let collectionSources = read('pages/collection/CollectionPage.ets');
 collectionSources = "import { PersonalSourceEntry } from '../../components/PersonalSourceEntry';\n" + collectionSources;
 collectionSources = replaceChecked(collectionSources,
   "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })",
-  "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            PersonalSourceEntry({ kind: 'calendar' })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            PersonalSourceEntry({ kind: 'mail' })",
+  "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            PersonalSourceEntry({ kind: 'calendar', target: 'pages/settings/CalendarSourcesPage' })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            PersonalSourceEntry({ kind: 'mail', target: 'pages/settings/MailSourcesPage' })",
   'collection personal source entries');
 overlay('pages/collection/CollectionPage.ets', collectionSources);
 let gallery = read('pages/gallery/GalleryPage.ets');
@@ -300,7 +315,7 @@ overlay('pages/task/TaskPage.ets', taskPage);
 writeJson('entry/src/main/resources/base/profile/main_pages.json', { src: [
   'pages/Index', 'pages/gallery/GalleryPage', 'pages/collection/CollectionGroupDetailPage',
   'pages/task/WorkflowFileViewer', 'pages/settings/DesktopCompanionPage', 'pages/settings/SelfHdcTestPage',
-  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage', 'pages/settings/PersonalSourcesPage', 'pages/meeting/MeetingPage', 'pages/task/GuiPlanPage' ] });
+  'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage', 'pages/settings/CalendarSourcesPage', 'pages/settings/MailSourcesPage', 'pages/meeting/MeetingPage', 'pages/task/GuiPlanPage' ] });
 for (const name of ['source_calendar', 'source_mail']) {
   fs.copyFileSync(path.join(template, 'entry/src/main/resources/base/media', name + '.svg'),
     path.join(project, 'entry/src/main/resources/base/media', name + '.svg'));

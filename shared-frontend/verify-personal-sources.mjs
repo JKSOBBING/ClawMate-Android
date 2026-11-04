@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
-const source = fs.readFileSync(new URL('./adapters/platform/PersonalSources.ets', import.meta.url), 'utf8');
+// 适配输入可能带 UTF-8 BOM（Windows 编辑器写入），先去掉再按行剥离 import。
+const source = fs.readFileSync(new URL('./adapters/platform/PersonalSources.ets', import.meta.url), 'utf8').replace(/^\uFEFF/, '');
 const code = stripTypeScriptTypes(source.replace(/^import .*;\r?\n/gm, '')).replace(/^export /gm, '');
 let confirm = 0, accepted = true, snapshot = {}, readCount = 0;
 const native = fs.readFileSync(new URL('../shared-app/src/main/java/com/clawmate/shared/PlatformBridge.kt', import.meta.url), 'utf8');

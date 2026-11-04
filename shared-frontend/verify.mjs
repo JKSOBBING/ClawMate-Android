@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,10 +23,10 @@ check('all upstream inputs match their pinned Git blobs', () => {
     }
   }
 });
-check('all thirteen declared routes exist and were included in staging', () => {
+// 路由数跟随 main_pages.json：新增独立页面（如日历/邮箱分析）后不需要改检查脚本。
+check('every declared route exists and was included in staging', () => {
   const routes = JSON.parse(read(path.join(project, 'entry/src/main/resources/base/profile/main_pages.json'))).src;
   const manifest = JSON.parse(read(path.join(project, 'staged-sources.json')));
-  assert.equal(routes.length, 13);
   for (const route of routes) {
     assert.ok(fs.existsSync(path.join(project, 'entry/src/main/ets', route + '.ets')), route);
     assert.ok(manifest.files.some(file => file.path === route + '.ets'), route);

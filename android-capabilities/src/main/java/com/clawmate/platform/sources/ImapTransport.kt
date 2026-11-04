@@ -38,6 +38,9 @@ class ImapTransport() : AutoCloseable {
         return exchange(command, false)
     }
     fun authenticate(user: String, token: String): List<String> = exchange("AUTHENTICATE XOAUTH2 " + oauthPayload(user, token), true)
+    /** RFC 7628（OAUTHBEARER）认证，jAccount 授权令牌经此登录 IMAP。 */
+    fun authenticateBearer(user: String, token: String, host: String = "", port: Int = 0): List<String> =
+        exchange("AUTHENTICATE OAUTHBEARER " + bearerPayload(user, token, host, port), true)
     private fun exchange(command: String, oauth: Boolean): List<String> {
         check(!closed)
         require(!command.contains('\r') && !command.contains('\n') && command.length < 32768)
@@ -70,6 +73,13 @@ class ImapTransport() : AutoCloseable {
             quoted(user)
             require(token.length in 1..16000 && token.none { it.code <= 32 || it.code == 127 })
             return java.util.Base64.getEncoder().encodeToString("user=$user\u0001auth=Bearer $token\u0001\u0001".toByteArray(Charsets.UTF_8))
+        }
+        /** RFC 7628 OAUTHBEARER 初始响应：`n,a=<user>,^Ahost=<host>^Aport=<port>^Aauth=Bearer <token>^A^A`。 */
+        fun bearerPayload(user: String, token: String, host: String = "", port: Int = 0): String {
+            quoted(user)
+            require(token.length in 1..16000 && token.none { it.code <= 32 || it.code == 127 })
+            val hostPart = if (host.isEmpty()) "" else "host=${host}\u0001port=$port\u0001"
+            return java.util.Base64.getEncoder().encodeToString(("n,a=$user,\u0001$hostPart" + "auth=Bearer $token\u0001\u0001").toByteArray(Charsets.UTF_8))
         }
         fun quoted(value: String): String {
             require(value.length in 1..1024 && value.none { it.code < 32 || it.code == 127 })

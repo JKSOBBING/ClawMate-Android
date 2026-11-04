@@ -1,4 +1,4 @@
-import { common } from '@kit.AbilityKit';
+﻿import { common } from '@kit.AbilityKit';
 import { promptAction, router, KeyboardAvoidMode } from '@kit.ArkUI';
 import { FirstLaunchOnboarding } from '../pages/onboarding/FirstLaunchOnboarding';
 import { FIRST_LAUNCH_ONBOARDING_VERSION, FIRST_LAUNCH_ONBOARDING_STORAGE_KEY } from '../pages/onboarding/OnboardingTypes';
@@ -45,6 +45,7 @@ import { WorkflowCancellation } from '../utils/WorkflowCancellation';
 import { GalleryPhotoPicker } from '../utils/gallery/GalleryPhotoPicker';
 import { MainNavigation } from '../platform/MainNavigation';
 import { NavigationStyle, MAIN_NAVIGATION_INSET } from '../platform/NavigationStyle';
+import { LocalModelAccess, DownloadedModel, DownloadProgress } from '../platform/LocalModelAccess';
 import { ChatVoiceMetadata, VoiceInteractionStatus, TtsVoiceRuntimeStatus, createTtsVoiceRuntimeMetadata, createVoiceErrorMetadata } from '../pages/chat/VoiceInteractionTypes';
 
 interface CaptureResult { v: number; status: string; uri: string; }
@@ -86,6 +87,8 @@ struct Index {
   @State voiceMessageId: string = '';
   @State keyboardHeight: number = 0;
   @StorageProp('androidHomeOverlayOpen') private homeOverlayOpen: boolean = false;
+  // 交大邮箱 jAccount 回调：宿主把 Deep Link 放进 AppStorage，页面显示时上交本机桥兑换令牌。
+  @StorageProp('androidJAccountCallback') @Watch('deliverJAccountCallback') private jaccountCallback: string = '';
   @State drawer: boolean = false;
   @State sessions: ChatSessionSummary[] = [];
   @State sessionId: string = '';
@@ -103,6 +106,9 @@ struct Index {
   @State progressPercent: number = 0;
   @State progressText: string = '';
   @State progressTitle: string = '';
+  @State downloadedModels: DownloadedModel[] = [];
+  @State selectedModelId: string = '';
+  private modelTimer: number = -1;
   private client: CloudModelClient = new CloudModelClient();
   private facade: DataManagerFacade | null = null;
   private activeRecord: ChatSessionRecord | null = null;
@@ -125,10 +131,11 @@ struct Index {
     // ArkUI offset leaves a keyboard-sized empty gap below the composer.
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.NONE);
     this.initialize().catch((error: Error): void => { this.startupError = error.message; });
+    this.refreshModels();
   }
-  onPageShow(): void { CollectionReminderService.setWindowReady(true); this.startRuntime(); if (this.ready) { this.reloadData(); CollectionReminderService.refresh().catch(() => {}); } }
-  onPageHide(): void { CollectionReminderService.setWindowReady(false); this.cancelChat(); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.saveSettings(); this.persistChat(); }
-  aboutToDisappear(): void { PrivacyConsent.setRevokeHandler(null); CollectionReminderService.setWindowReady(false); Bridge.createBridge('ClawMatePlatform').unRegisterMethod('collectionReminderArrived').catch(() => {}); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
+  onPageShow(): void { this.resumeModelPolling(); CollectionReminderService.setWindowReady(true); this.startRuntime(); if (this.ready) { this.reloadData(); CollectionReminderService.refresh().catch(() => {}); } }
+  onPageHide(): void { CollectionReminderService.setWindowReady(false); this.stopModelPolling(); this.cancelChat(); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.saveSettings(); this.persistChat(); }
+  aboutToDisappear(): void { PrivacyConsent.setRevokeHandler(null); CollectionReminderService.setWindowReady(false); this.stopModelPolling(); Bridge.createBridge('ClawMatePlatform').unRegisterMethod('collectionReminderArrived').catch(() => {}); this.stopRuntime(); this.stopVoice(); this.stopAsr(); this.client.cancelActiveRequests(); this.saveSettings(); this.persistChat(); }
   onBackPress(): boolean {
     this.saveSettings(); this.persistChat();
     if (Number(router.getLength()) > 1) { router.back(); return true; }
@@ -312,6 +319,25 @@ struct Index {
     } catch (error) { showToastSafely('人物分割未完成，原分身已保留'); }
   }
   private unavailable(feature: string): void { showToastSafely(feature + '尚未接入安卓适配；可继续使用本地浏览和编辑'); }
+  /** 回到前台时若还有下载任务在跑，恢复进度轮询。 */
+  private resumeModelPolling(): void {
+    LocalModelAccess.progress().then((progress: DownloadProgress): void => {
+      if (['list', 'downloading', 'verifying', 'pausing', 'cancelling'].indexOf(progress.state) < 0) { return; }
+      this.modelDownloading = true; this.progressVisible = true;
+      if (this.modelTimer === -1) { this.modelTimer = setInterval((): void => { this.pollModelProgress(); }, 800); }
+    }).catch(() => {});
+  }
+  /** 交大邮箱 jAccount 回调：交给本机桥校验 state 并兑换令牌，成功后页面刷新为已授权。 */
+  private deliverJAccountCallback(): void {
+    let link = this.jaccountCallback;
+    if (!link || link.indexOf('clawmate://jaccount') !== 0) { return; }
+    LocalModelAccess.acceptJAccountLink(link).then((accepted: boolean): void => {
+      AppStorage.setOrCreate('androidJAccountCallback', '');
+      showToastSafely(accepted ? 'jAccount 授权回调已收到，请在邮箱分析页读取邮件' : 'jAccount 回调未被接受，请重新授权', 2500);
+    }).catch(() => { AppStorage.setOrCreate('androidJAccountCallback', ''); });
+  }
+  /** 离开应用时停止轮询；下载本身在原生后台继续，回到设置页会重新开始轮询。 */
+  private stopModelPolling(): void { if (this.modelTimer !== -1) { clearInterval(this.modelTimer); this.modelTimer = -1; } }
   private recordRuntime(message: string): void {
     if (AppStorage.get<boolean>('debugEnabled') !== true) { return; }
     let previous = AppStorage.get<string>('cloudAgentLogs') || '';
@@ -650,14 +676,75 @@ struct Index {
       onOpenRuntimeLogs: (): void => { router.pushUrl({ url: 'pages/LogView' }); }
     })
   }
-  @Builder private Settings() {
-    SettingsCenterPage({ autoConfirm: $autoConfirm, cloudAutoConfirm: $cloudAutoConfirm, threadNumInput: $threads,
+  /** 刷新已下载模型列表；没有模型时输出明确说明，不伪造条目。 */
+  private async refreshModels(): Promise<void> {
+    try {
+      let models = await LocalModelAccess.list();
+      this.downloadedModels = models;
+      let selected = models.filter((item: DownloadedModel): boolean => item.label.startsWith('★ '));
+      this.selectedModelId = selected.length > 0 ? selected[0].id : '';
+      this.output = models.length > 0 ? '已扫描到 ' + models.length + ' 个本地模型目录（来自应用私有 modelscope 目录）' : '尚无通过安卓模型管理器下载的模型';
+    } catch (e) { this.output = '读取本地模型目录失败：' + (e as Error).message; }
+  }
+
+  private async pollModelProgress(): Promise<void> {
+    try {
+      let progress = await LocalModelAccess.progress();
+      this.progressVisible = progress.state !== 'idle';
+      this.progressPercent = Math.max(0, Math.min(100, progress.percent));
+      this.progressText = LocalModelAccess.describe(progress);
+      this.progressTitle = progress.repo.length > 0 ? '本地模型下载 · ' + progress.repo : '本地模型下载';
+      this.modelDownloading = ['list', 'downloading', 'verifying', 'pausing', 'cancelling'].indexOf(progress.state) >= 0;
+      this.pauseDownload = progress.state === 'paused';
+      if (!this.modelDownloading && this.modelTimer !== -1) {
+        clearInterval(this.modelTimer); this.modelTimer = -1;
+        if (progress.state === 'done') { await this.refreshModels(); showToastSafely('模型下载完成，可在下方列表切换'); }
+        else if (progress.state === 'error') { showToastSafely('模型下载未完成：' + progress.message, 3000); await this.refreshModels(); }
+        else if (progress.state === 'cancelled') { await this.refreshModels(); }
+      }
+    } catch (e) { /* 轮询失败不打断页面，下一次继续 */ }
+  }
+
+  private async startModelDownload(): Promise<void> {
+    let repo = (AppStorage.get<string>('modelScopeMnnRepo') || '').trim();
+    if (repo.length === 0) { showToastSafely('请先填写 ModelScope 仓库，例如 owner/repo'); return; }
+    let started = await LocalModelAccess.start(repo, false);
+    if (started !== 'ok') { showToastSafely(started); return; }
+    this.progressVisible = true; this.progressPercent = 0; this.progressText = '正在读取 ModelScope 文件清单…';
+    this.progressTitle = '本地模型下载 · ' + repo; this.modelDownloading = true; this.pauseDownload = false;
+    if (this.modelTimer === -1) { this.modelTimer = setInterval((): void => { this.pollModelProgress(); }, 800); }
+  }
+
+  private pauseModelDownload(): void {
+    if (this.modelDownloading) { LocalModelAccess.pause().catch(() => {}); return; }
+    // 暂停后再次点击继续：从断点续传，已完成的文件会按大小/SHA256 校验后跳过。
+    this.startModelDownload().catch(() => {});
+  }
+
+  private async switchModel(modelId: string): Promise<void> {
+    try {
+      await LocalModelAccess.select(modelId); this.selectedModelId = modelId;
+      this.output = '已选择模型 ' + modelId + '。本地推理仍需要安卓原生推理库，当前未接入时不产生任何模型输出。';
+      await this.refreshModels();
+    } catch (e) { this.output = '切换失败：' + (e as Error).message; }
+  }
+
+  private async deleteModel(modelId: string): Promise<void> {
+    try {
+      await LocalModelAccess.remove(modelId);
+      this.output = '已删除模型目录 ' + modelId;
+      await this.refreshModels();
+    } catch (e) { this.output = '删除失败：' + (e as Error).message; }
+  }
+
+  @Builder private Settings() {    SettingsCenterPage({ autoConfirm: $autoConfirm, cloudAutoConfirm: $cloudAutoConfirm, threadNumInput: $threads,
       selectedSectionId: $settingsSection, output: $output, chunkOmCacheOutput: $cacheOutput, cloudOutput: $cloudOutput,
       modelDownloadProgressVisible: $progressVisible, modelDownloadProgressPercent: $progressPercent,
       modelDownloadProgressText: $progressText, modelDownloadProgressTitle: $progressTitle,
       downloading: $downloading, modelScopeDownloading: $modelDownloading, modelScopePauseRequested: $pauseDownload,
-      onDownloadModelScopeModel: async (): Promise<void> => { this.unavailable('本地模型下载'); },
-      onPauseModelScopeDownload: (): void => { this.unavailable('本地模型下载'); },
+      downloadedModels: this.downloadedModels, selectedModelId: this.selectedModelId,
+      onDownloadModelScopeModel: async (): Promise<void> => { await this.startModelDownload(); },
+      onPauseModelScopeDownload: (): void => { this.pauseModelDownload(); },
       onUpdateConfigThreadNum: (): void => { this.saveSettings(); },
       onShowConfigJson: (): void => { this.output = '安卓尚未接入 MNN 配置；未创建或加载模型配置'; },
       onDiscoverHdc: async (): Promise<void> => { this.unavailable('HDC 发现'); },
@@ -668,9 +755,9 @@ struct Index {
       onStartCloudBackend: async (): Promise<void> => { this.unavailable('桌面后端启动'); },
       onClearScreenshots: (): void => { this.output = '本应用规划截图请在任务页清除；尚无跨应用自动控制截图历史'; },
       onDeleteDebugOutputs: (): void => { this.unavailable('调试文件清理'); },
-      onSwitchDownloadedModel: (): void => { this.unavailable('本地模型切换'); },
-      onDeleteDownloadedModel: (): void => { this.unavailable('模型删除'); },
-      onRefreshDownloadedModels: (): void => { this.output = '尚无通过安卓模型管理器下载的模型'; },
+      onSwitchDownloadedModel: (modelId: string): void => { this.switchModel(modelId); },
+      onDeleteDownloadedModel: (modelId: string): void => { this.deleteModel(modelId); },
+      onRefreshDownloadedModels: (): void => { this.refreshModels(); },
       onListScreenshots: (): void => { this.output = '任务页已支持本应用截图与单步规划；临时预览不进入截图历史，跨应用自动控制尚未接入'; },
       onDeleteModelConfigJson: (): void => { this.unavailable('MNN 配置删除'); },
       onListModelFilesTree: (): void => { this.output = '尚无安卓模型文件目录'; },

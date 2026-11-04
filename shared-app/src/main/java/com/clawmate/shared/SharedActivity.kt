@@ -1,4 +1,4 @@
-package com.clawmate.shared
+﻿package com.clawmate.shared
 
 import android.os.Bundle
 import android.graphics.Color
@@ -76,7 +76,14 @@ class SharedActivity : StageActivity() {
     }
     override fun onNewIntent(value: Intent) {
         super.onNewIntent(value); setIntent(value); acceptReminder(value)
+        acceptJAccountLink(value)
         if (reminderRequest().isNotEmpty() && reminderWindowReady()) platform.callMethod("collectionReminderArrived")
+    }
+    /** jAccount 授权 Deep Link 回到应用时兑换令牌；其它链接不做处理。 */
+    private fun acceptJAccountLink(value: Intent?) {
+        if (value?.action != Intent.ACTION_VIEW) return
+        val data = value.data?.toString() ?: return
+        runCatching { platform.acceptJAccountLinkFromActivity(data) }
     }
     override fun onResume() {
         super.onResume(); resumedForReminder = true
@@ -136,7 +143,7 @@ class SharedActivity : StageActivity() {
         platform = PlatformBridge(this)
         setInstanceName("com.clawmate.shared:entry:EntryAbility:")
         super.onCreate(state)
-        acceptReminder(intent)
+        acceptReminder(intent); acceptJAccountLink(intent)
         updateSystemBars()
     }
 

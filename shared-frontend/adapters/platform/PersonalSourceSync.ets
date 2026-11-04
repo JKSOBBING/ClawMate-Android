@@ -1,4 +1,4 @@
-import { PersonalSources, SourceSnapshot, SourceItem, MailConfiguration } from './PersonalSources';
+﻿import { PersonalSources, SourceSnapshot, SourceItem, MailConfiguration } from './PersonalSources';
 import { MailImapClient } from '../utils/mail/MailImapClient';
 import { defaultMailSettings, emptyMailSnapshot, mailDayBounds, MailItem } from '../utils/mail/MailTypes';
 
@@ -30,7 +30,7 @@ export class PersonalSourceSync {
         let bounds = mailDayBounds(Date.now(), 3);
         let items = result.items.map((m: MailItem): SourceItem => { return { id: m.id, title: m.subject,
           body: m.body + (m.bodyError ? '\n正文提示：' + m.bodyError : ''), start: m.receivedAt, end: m.receivedAt,
-          location: m.from, allDay: false, timeZone: '', calendarId: 0 }; });
+          location: m.from, allDay: false, timeZone: '', calendarId: 0, source: 'mail' }; });
         next = { items: items, sources: [], selected: [], syncedAt: Date.now(), windowStart: bounds[0], windowEnd: bounds[1], partial: result.partial };
       }
       if (generation !== PersonalSources.epoch) { throw new Error('读取已取消'); }
