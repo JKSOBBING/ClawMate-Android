@@ -182,9 +182,10 @@ overlay('utils/PrivacyConsent.ets', replaceChecked(read('utils/PrivacyConsent.et
 // Kotlin preserves Android content grants; the SDK picker converts them to _data file paths.
 overlay('utils/gallery/GalleryPhotoPicker.ets', fs.readFileSync(path.join(here, 'adapters/utils/gallery/GalleryPhotoPicker.ets'), 'utf8'));
 let collectionSources = read('pages/collection/CollectionPage.ets');
+collectionSources = "import { PersonalSourceEntry } from '../../components/PersonalSourceEntry';\n" + collectionSources;
 collectionSources = replaceChecked(collectionSources,
   "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })",
-  "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            this.CollectionActionRow('历', '日历分析', '查看日程安排，在聊天中查询', '#725CFF', '#F1EEFF', () => {\n              router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'calendar' } });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            this.CollectionActionRow('邮', '邮箱分析', '整理近期邮件，在聊天中查询', '#3F7FEF', '#EDF4FF', () => {\n              router.pushUrl({ url: 'pages/settings/PersonalSourcesPage', params: { kind: 'mail' } });\n            })",
+  "router.pushUrl({ url: 'pages/gallery/GalleryPage' });\n            })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            PersonalSourceEntry({ kind: 'calendar' })\n            Divider().color(AppTheme.border('#E8EBF2')).margin({ left: 64 })\n            PersonalSourceEntry({ kind: 'mail' })",
   'collection personal source entries');
 overlay('pages/collection/CollectionPage.ets', collectionSources);
 let gallery = read('pages/gallery/GalleryPage.ets');
@@ -300,6 +301,10 @@ writeJson('entry/src/main/resources/base/profile/main_pages.json', { src: [
   'pages/Index', 'pages/gallery/GalleryPage', 'pages/collection/CollectionGroupDetailPage',
   'pages/task/WorkflowFileViewer', 'pages/settings/DesktopCompanionPage', 'pages/settings/SelfHdcTestPage',
   'pages/LogView', 'pages/OpTest', 'pages/ProfileTest', 'pages/settings/MemorySyncPage', 'pages/settings/PersonalSourcesPage', 'pages/meeting/MeetingPage', 'pages/task/GuiPlanPage' ] });
+for (const name of ['source_calendar', 'source_mail']) {
+  fs.copyFileSync(path.join(template, 'entry/src/main/resources/base/media', name + '.svg'),
+    path.join(project, 'entry/src/main/resources/base/media', name + '.svg'));
+}
 for (const name of ['onboarding_agent', 'onboarding_avatar', 'onboarding_data_home']) {
   fs.copyFileSync(path.join(repo, 'app/src/main/res/drawable-nodpi', name + '.png'),
     path.join(project, 'entry/src/main/resources/base/media', name + '.png'));

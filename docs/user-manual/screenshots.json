@@ -64,11 +64,29 @@
   },
   {
     "file": "assets/sources.png",
-    "source": ".arkui-x-validation/sources-final-page.png",
+    "source": ".arkui-x-validation/sources-harmony-calendar.png",
     "reviewed": true,
-    "reviewedDate": "2026-11-03",
-    "capturePhase": "personal-sources-oauth",
-    "sha256": "b5341205ea01a45f9fdaab5cc4e08b17eaa7858c2f5ae3f9571413a5d34c8ea5",
-    "limitations": "已核看空来源页面：无账号、凭据、日历或邮件正文，含通用系统状态栏。截图来自APK 6c4bc66359b7690a5c55ecfded983c52861c3737e22e8b82af2f30e51a4d9495；随后仅修订OAuth无效参数错误提示，本截图所示初始页面不变。不是邮箱登录或读取成功证明。 新版改为独立分区卡片（页面内不互相跳转），汇总新增两个入口；本图保留作旧版说明，不代表新布局。"
+    "reviewedDate": "2026-11-04",
+    "capturePhase": "harmony-source-ui-oppo",
+    "sha256": "03f45dae9b403a8aba722260eaf94ea94589a489f0441bd017f5282f76584187",
+    "limitations": "已核看OPPO Android 16当前界面：无私人日程、邮件正文、账号或凭据；日历仅显示厂商通用来源名称，汇总无记录，含通用系统状态栏。来源APK SHA256 e57cb57c00ae9734d4681404b082fab3fe09cedd6dfeafaaf9a1c5195c684a4f。截图用于布局说明，不代表真实邮箱或模型服务验收。"
+  },
+  {
+    "file": "assets/sources-mail.png",
+    "source": ".arkui-x-validation/sources-harmony-mail.png",
+    "reviewed": true,
+    "reviewedDate": "2026-11-04",
+    "capturePhase": "harmony-source-ui-oppo",
+    "sha256": "c115ff5585d3617442942221bd42306ed972d4d7fdb81b5fdc91bdcb791cbbad",
+    "limitations": "已核看OPPO Android 16当前界面：无私人日程、邮件正文、账号或凭据；日历仅显示厂商通用来源名称，汇总无记录，含通用系统状态栏。来源APK SHA256 e57cb57c00ae9734d4681404b082fab3fe09cedd6dfeafaaf9a1c5195c684a4f。截图用于布局说明，不代表真实邮箱或模型服务验收。"
+  },
+  {
+    "file": "assets/sources-summary.png",
+    "source": ".arkui-x-validation/sources-harmony-summary.png",
+    "reviewed": true,
+    "reviewedDate": "2026-11-04",
+    "capturePhase": "harmony-source-ui-oppo",
+    "sha256": "83d7c674383d3a321c00ec1e74ca989413af96bb7630824d6735bd193b61b0a3",
+    "limitations": "已核看OPPO Android 16当前界面：无私人日程、邮件正文、账号或凭据；日历仅显示厂商通用来源名称，汇总无记录，含通用系统状态栏。来源APK SHA256 e57cb57c00ae9734d4681404b082fab3fe09cedd6dfeafaaf9a1c5195c684a4f。截图用于布局说明，不代表真实邮箱或模型服务验收。"
   }
 ]

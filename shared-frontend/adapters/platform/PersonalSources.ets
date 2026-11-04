@@ -4,6 +4,8 @@ import { promptAction } from '@kit.ArkUI';
 import { AiServiceAccess } from '../utils/AiServiceAccess';
 import { PrivacyConsent } from '../utils/PrivacyConsent';
 
+export interface SourceOptions { calendarEnabled: boolean; historyDays: number; selected: number[]; maxMessages: number; }
+export interface MailConfiguration { host: string; port: number; username: string; mode: string; client: string; tenant: string; }
 export interface SourceItem { id: string; title: string; body: string; start: number; end: number; location: string; allDay: boolean; timeZone: string; calendarId: number; }
 export interface SourceCalendar { id: number; name: string; }
 export interface SourceSnapshot { items: SourceItem[]; sources: SourceCalendar[]; selected: number[]; syncedAt: number; windowStart: number; windowEnd: number; partial: boolean; }
@@ -45,6 +47,11 @@ export class PersonalSources {
     let raw = await PersonalSources.call('sourcesRead', kind);
     return raw === '{}' ? PersonalSources.empty() : JSON.parse(raw) as SourceSnapshot;
   }
+  static async options(): Promise<SourceOptions> { return JSON.parse(await PersonalSources.call('sourcesOptions')) as SourceOptions; }
+  static async saveOptions(kind: string, value: SourceOptions): Promise<void> {
+    let result = JSON.parse(await PersonalSources.call('sourcesSaveOptions', kind, JSON.stringify(value))) as SourceResult;
+    if (!result.ok) { throw new Error(result.error); }
+  }
   static definition(kind: string): CloudChatToolDefinition {
     return { type: 'function', function: { name: 'query_' + kind,
       description: (kind === 'calendar' ? '查询用户已读取的系统日历安排。安排不代表已完成。' : '查询用户已读取的近三天收件箱邮件，非全部邮箱。') +
@@ -62,7 +69,7 @@ export class PersonalSources {
       if (start >= end) { throw new Error('日期范围无效'); }
       AiServiceAccess.requireAllowed(); PrivacyConsent.requireAccepted();
       let snapshot = await PersonalSources.snapshot(kind);
-      if (!snapshot.syncedAt) { throw new Error('尚未读取或授权已撤回，请到“我的→数据采集→日历与邮箱”读取'); }
+      if (!snapshot.syncedAt) { throw new Error('尚未读取或授权已撤回，请到“汇总→日历分析 / 邮箱分析”读取'); }
       let items = snapshot.items.filter((i: SourceItem): boolean => i.start < end && i.end >= start &&
         (i.title + i.body + i.location).toLowerCase().includes(keyword.toLowerCase()));
       // Mail retention is enforced at query time, including after a restart without a refresh.

@@ -22,6 +22,34 @@ import javax.crypto.spec.GCMParameterSpec
 class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private val prefs = context.getSharedPreferences("personal_sources", Context.MODE_PRIVATE)
     private val root = File(context.filesDir, "personal-sources").apply { mkdirs() }
+    private val optionsPrefs = context.getSharedPreferences("personal_source_options", Context.MODE_PRIVATE)
+    private fun calendarEnabled() = optionsPrefs.getBoolean("calendarEnabled", File(root, "calendar.json").exists())
+    private fun calendarSelection(): JSONArray = JSONArray(optionsPrefs.getString("selected", null)
+        ?: runCatching { JSONObject(File(root, "calendar.json").readText()).optJSONArray("selected")?.toString() }.getOrNull() ?: "[]")
+    @Synchronized fun options(): String = JSONObject().put("calendarEnabled", calendarEnabled())
+        .put("historyDays", optionsPrefs.getInt("historyDays", 90)).put("selected", calendarSelection())
+        .put("maxMessages", optionsPrefs.getInt("maxMessages", 50)).toString()
+    @Synchronized fun saveOptions(kind: String, raw: String) {
+        val value = JSONObject(raw)
+        when (kind) {
+            "calendar" -> {
+                val enabled = value.getBoolean("calendarEnabled")
+                val days = value.getInt("historyDays"); require(days in listOf(0, 30, 90, 365))
+                val selected = value.getJSONArray("selected"); require(selected.length() <= 100)
+                for (i in 0 until selected.length()) require(selected.getLong(i) >= 0)
+                val changed = enabled != calendarEnabled() || days != optionsPrefs.getInt("historyDays", 90) || selected.toString() != calendarSelection().toString()
+                check(optionsPrefs.edit().putBoolean("calendarEnabled", enabled).putInt("historyDays", days)
+                    .putString("selected", selected.toString()).commit())
+                // A disabled/changed source must not remain available to chat from an older snapshot.
+                if (changed || !enabled) clear("calendar")
+            }
+            "mail" -> {
+                val limit = value.getInt("maxMessages"); require(limit in listOf(20, 50, 100))
+                check(optionsPrefs.edit().putInt("maxMessages", limit).commit())
+            }
+            else -> error("未知来源设置")
+        }
+    }
     @Volatile private var transport: ImapTransport? = null
     @Volatile private var epoch = 0
     var oauthToken: (String, String) -> String = { _, _ -> error("请先完成邮箱OAuth授权") }
@@ -88,9 +116,11 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private fun calendar(argument: String): String {
         check(calendarGranted()) { "请先授权读取系统日历" }
         val args = JSONObject(argument); val now = java.time.ZonedDateTime.now()
-        val start = now.toLocalDate().minusDays(90).atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val listOnly = args.optBoolean("listOnly", false)
+        check(listOnly || calendarEnabled()) { "请先开启接入系统日历" }
+        val start = now.toLocalDate().minusDays(optionsPrefs.getInt("historyDays", 90).toLong()).atStartOfDay(now.zone).toInstant().toEpochMilli()
         val end = now.plusDays(30).toInstant().toEpochMilli()
-        val selected = args.optJSONArray("selected") ?: JSONArray()
+        val selected = if (listOnly) JSONArray() else calendarSelection()
         require(selected.length() <= 100)
         val ids = (0 until selected.length()).map { selected.getLong(it) }.toSet()
         val sources = JSONArray()
@@ -119,14 +149,14 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     }
     @Synchronized fun write(kind: String, value: String) {
         require(kind in listOf("calendar", "mail") && value.length < 12 * 1024 * 1024)
-        if (kind == "calendar") check(calendarGranted())
+        if (kind == "calendar") check(calendarGranted() && calendarEnabled())
         JSONObject(value)
         val file = AtomicFile(File(root, "$kind.json")); val out = file.startWrite()
         try { out.write(value.toByteArray()); file.finishWrite(out) } catch (e: Exception) { file.failWrite(out); throw e }
     }
     @Synchronized fun read(kind: String): String {
         require(kind in listOf("calendar", "mail"))
-        if (kind == "calendar" && !calendarGranted()) return "{}"
+        if (kind == "calendar" && (!calendarGranted() || !calendarEnabled())) return "{}"
         val file = AtomicFile(File(root, "$kind.json"))
         if (!file.baseFile.exists()) return "{}"
         val text = file.openRead().use { it.readBytes().toString(Charsets.UTF_8) }

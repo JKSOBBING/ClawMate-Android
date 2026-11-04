@@ -1,5 +1,30 @@
 # ClawMate Android 迁移状态与日志
 
+## 鸿蒙参考的日历/邮箱界面与同步设置（2026-11-04）
+
+- PersonalSourcesPage复用AppHeader/FrostedPage：居中标题、白色分组卡片、字段标题、蓝色行式操作、清除确认；无页面内互跳。
+- 汇总图库下方的PersonalSourceEntry增加独立同步/取消与SVG图标，和详情页共用PersonalSourceSync。
+- PersonalSourceEngine增加独立来源偏好：日历启用/来源/历史0、30、90、365天（未来30天），改变范围/来源或关闭即失效旧快照；邮箱每天20、50、100封上限进入实际只读IMAP流程。
+- 设置存储与邮箱凭据分离，切换/忘记邮箱不会抹掉日历设置。聊天仍为逐次确认的query_calendar/query_mail，不自动写入画像。
+- 实机修复：生命周期重复初始化，以及Builder参数按值传递导致加载结束后控件仍灰置；改为$$引用绑定。同步按钮内边距及SVG缩放已在OPPO核看。
+
+验证与证据：
+
+- `shared-frontend/build.ps1 ... -Offline`：完整ArkTS/Android构建通过；静态原生ELF/ZIP 16KB对齐门禁通过，不等于16KB真机稳定性验收。日志`.arkui-x-validation/sources-harmony-ui-build.log`。
+- `gradlew :shared-app:assembleDebugAndroidTest :android-capabilities:testDebugUnitTest --tests com.clawmate.platform.sources.ImapTransportTest --offline --console=plain`：测试包构建及5项IMAP JVM通过；补入日历提供器夹具后再次assembleDebugAndroidTest通过。
+- `am instrument ... PersonalSourcesDeviceTest,MailOAuthDeviceTest`：最终APK上5项通过，隔离目录/合成凭据及提供器，验证0/30/90/365天查询参数、撤权、设置分离与持久化、禁用清除、OAuth状态机。日志`.arkui-x-validation/sources-harmony-device-tests.log`。
+- `scripts/test-shared-device.ps1 ... -EvidenceName sources-harmony-ui-regression`：native 6、chat 1、workflow 1全部通过；无会议专项。证据`.arkui-x-validation/application/sources-harmony-ui-regression/`。
+- `node scripts/test-personal-source-sync.mjs`：真实IMAP解析/读取器处理合成21封邮件，20/50/100上限、正文读取次数、partial、取消（含配置读取中取消）、失败不提交、并发锁与无来源拒绝通过。
+- `node shared-frontend/verify-personal-sources.mjs`：桥参数、授权/拒绝/过期/取消、日历与邮件工具回传通过；verify.mjs 6项、verify-integration.mjs 12项、verify-native.mjs 7项通过。
+- OPPO实际浏览汇总和两页，验证日历来源刷新、Outlook预设更新服务器/授权字段、邮件上限20封保存重进；随后恢复原50封。已审核三张无私人内容截图，收入docs/user-manual。未读取真实私人事件、未登录邮箱或请求真实模型。
+
+`python docs/user-manual/build.py`及`--check`通过16章/10张审核截图，`node --test docs/user-manual/navigation.test.cjs`通过8项；`git diff --check`与`build-state.mjs verify`通过。
+
+最终安装APK SHA256：`e57cb57c00ae9734d4681404b082fab3fe09cedd6dfeafaaf9a1c5195c684a4f`。
+修改集中在共享来源页面/入口/同步适配、原生来源设置及桥、隔离测试、中文手册及迁移文档；Compose基线和鸿蒙原工程未改。
+剩余：Google/Entra注册、真实提供商/日历/模型质量验收，日历画像/一周安排、邮件提醒/自动更新/关注筛选、多账号/离线令牌刷新及TalkBack专项。
+
+
 ## 鸿蒙实机界面观察（2026-11-04）
 
 用户允许USB调试后，HDC已正常连接。实际浏览已安装ClawMate的邮箱上下分区、汇总入口、

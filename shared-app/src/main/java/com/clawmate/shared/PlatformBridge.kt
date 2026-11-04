@@ -56,6 +56,10 @@ class PlatformBridge(private val activity: StageActivity) :
         sources.calendarGranted()
     }
     fun sourcesGranted(): Boolean = sources.calendarGranted()
+    fun sourcesOptions(): String = sources.options()
+    fun sourcesSaveOptions(kind: String, value: String): String = try {
+        sources.saveOptions(kind, value); JSONObject().put("ok", true).toString()
+    } catch (e: Exception) { JSONObject().put("ok", false).put("error", e.message ?: "设置保存失败").toString() }
     fun sourcesSettings(): String = sources.settings()
     fun sourcesCredentials(host: String, port: String, user: String, secret: String): Boolean {
         sources.saveCredentials(host, port.toInt(), user, secret); sourceAuth.cancel(); return true

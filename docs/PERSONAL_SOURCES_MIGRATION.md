@@ -8,9 +8,9 @@
 `entry/src/main/ets/utils/mail/MailTypes.ets`、`MailImapCodec.ets`；MailImapClient保留原只读查询、
 近三天、UIDVALIDITY、候选上限、正文选择与部分结果逻辑，仅把TLS连接替换为Android桥。
 这些文件作为适配输入纳入Git；主上游锁不整体升级。
-CalendarMemoryPolicy的过去90天/未来30天、实例读取与安排非完成事实语义由CalendarContract适配。
+CalendarMemoryPolicy的历史/未来窗口、实例读取与安排非完成事实语义由CalendarContract适配。历史默认90天，现支持0/30/90/365天，未来固定30天。
 
-入口：我的→数据采集→日历与邮箱。Kotlin通用能力位于android-capabilities/platform/sources，
+入口：汇总→图库分析下方→日历分析 / 邮箱分析；也可从我的→数据采集的两个独立入口进入。Kotlin通用能力位于android-capabilities/platform/sources，
 PlatformBridge仅接权限、作业和数据端口。页面使用ArkTS，保留Compose基线。
 
 - 日历显式选来源、系统READ_CALENDAR授权、只读重复实例；权限撤回后不提供快照。
@@ -46,6 +46,10 @@ iCloud、Yahoo、交大标准邮箱预设及自定义TLS。预设不能代表真
 
 ```mermaid
 classDiagram
+  PersonalSourceEntry --> PersonalSourceSync : 汇总同步与取消
+  PersonalSourcesPage --> PersonalSourceSync : 详情页同步
+  PersonalSourceSync --> MailImapClient : 读取已保存上限
+  PersonalSourceSync --> PersonalSources : 读取日历及原子保存
   PersonalSourcesPage --> MailProviders : 服务器与认证方式
   PersonalSourcesPage --> PlatformBridge : 授权状态与读取作业
   PlatformBridge --> MailOAuth : Google窗口 / Microsoft设备码
@@ -99,3 +103,24 @@ Google正式注册、Microsoft客户端ID/租户注册及逐提供商真实账�
 - [交大标准邮箱](https://net.sjtu.edu.cn/wlfw/dzyj.htm)：mail.sjtu.edu.cn:993；365邮箱是另一服务。
 - [Microsoft OAuth IMAP](https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth/)
 - [iCloud](https://support.apple.com/en-ie/102525)、[Yahoo](https://uk.help.yahoo.com/kb/SLN3697.html)
+
+## 第三段：鸿蒙实机样式与来源设置（2026-11-04）
+
+页面采用AppHeader/FrostedPage、白色分组卡片、常驻字段标签、行式蓝色操作和红色清除确认。
+保留两个独立页面，不提供页内互跳。汇总PersonalSourceEntry位于图库下方，使用源码SVG图标，
+分别进入页面/同步/取消。同步调用PersonalSourceSync，与详情页共享校验、读取和提交；
+配置未准备好时禁用汇总同步按钮，失败或取消不更新成功快照。
+
+PersonalSourceEngine的personal_source_options与邮箱凭据命名空间隔离；
+日历启用、来源、0/30/90/365天范围保存后生效，关闭或修改范围/来源清除旧快照以阻止聊天读到过期选择。
+仅枚举来源不读取事件。已有安装从本机快照推导原选择，不擅自勾选来源。
+邮件上限20/50/100实际传给MailImapClient.maxMessages；退出/重进后保持，邮箱重授权或忘记账号不影响日历设置。
+
+真机发现并修复重复生命周期初始化，以及ArkUI Builder按值参数冻结造成加载结束后按钮仍灰置；
+动态操作、字段和说明采用$$引用绑定。OPPO实际检查刷新来源、Outlook预设切换和20封设置保存/重进，
+验证后恢复50封。当前没有读取私人日历事件、登录真实邮箱或发送来源数据至模型。
+
+检查：完整build.ps1构建、5项IMAP JVM、5项来源/OAuth真机、8项普通真机回归通过；
+新增scripts/test-personal-source-sync.mjs使用真实邮件解析/读取器与合成IMAP响应验证上限、部分覆盖及取消不提交。
+图文手册更新三张已审核OPPO截图；最终APK与命令记录见MIGRATION_STATUS.md。
+画像、首页一周安排、邮件自动提醒/关注筛选与真实服务验收仍未完成。

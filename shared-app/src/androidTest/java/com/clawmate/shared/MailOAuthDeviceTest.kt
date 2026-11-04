@@ -26,11 +26,11 @@ class MailOAuthDeviceTest {
         val directory = File(base.cacheDir, "oauth-fixture-${System.nanoTime()}").apply { mkdirs() }
         val isolated = object : ContextWrapper(base) {
             override fun getFilesDir() = directory
-            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences(directory.name, mode)
+            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences(directory.name + "-" + name, mode)
         }
         val engine = PersonalSourceEngine(isolated)
         try { test(engine) } finally {
-            engine.close(); base.deleteSharedPreferences(directory.name); directory.walkBottomUp().forEach { it.delete() }
+            engine.close(); base.deleteSharedPreferences(directory.name + "-personal_sources"); base.deleteSharedPreferences(directory.name + "-personal_source_options"); directory.walkBottomUp().forEach { it.delete() }
         }
     }
     private fun await(condition: () -> Boolean) {
