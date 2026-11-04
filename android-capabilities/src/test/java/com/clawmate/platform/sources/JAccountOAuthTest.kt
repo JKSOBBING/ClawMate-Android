@@ -12,6 +12,7 @@ class JAccountOAuthTest {
     @Test fun redirectUriMustBeHttpsAndRegistered() {
         assertNull(JAccountOAuth.validateRedirectUri("https://myapp.sjtu.edu.cn/jaccount/callback"))
         assertNotNull(JAccountOAuth.validateRedirectUri(""))
+        assertNull(JAccountOAuth.validateRedirectUri(JAccountOAuth.DEEP_LINK_REDIRECT))
         assertNotNull(JAccountOAuth.validateRedirectUri("http://myapp.sjtu.edu.cn/cb"))
         assertNotNull(JAccountOAuth.validateRedirectUri("https://bad host/cb"))
     }

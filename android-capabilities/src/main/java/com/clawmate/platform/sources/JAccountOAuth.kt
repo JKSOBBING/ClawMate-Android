@@ -21,11 +21,14 @@ object JAccountOAuth {
     /** 交大邮箱用户名即 jAccount 账号；也接受完整 xxx@sjtu.edu.cn。 */
     const val EMAIL_DOMAIN = "@sjtu.edu.cn"
 
-    /** 授权码授权使用的回调地址：必须是 HTTPS 且位于已注册域名下。 */
+    /** 授权码授权使用的回调地址：本应用 Deep Link，或申请时登记的 HTTPS 服务网址。 */
+    const val DEEP_LINK_REDIRECT = "clawmate://jaccount"
+
     fun validateRedirectUri(uri: String): String? {
         val value = uri.trim()
-        if (value.isEmpty()) return "请填写 jAccount 接口申请时登记的服务网址（HTTPS）"
-        if (!value.startsWith("https://")) return "回调地址必须为 HTTPS"
+        if (value.isEmpty()) return "请填写 jAccount 接口申请时登记的服务网址（HTTPS）或 " + DEEP_LINK_REDIRECT
+        if (value == DEEP_LINK_REDIRECT) return null
+        if (!value.startsWith("https://")) return "回调地址必须为 HTTPS，或使用 " + DEEP_LINK_REDIRECT
         if (value.any { it.code <= 32 || it.code == 127 }) return "回调地址包含非法字符"
         if (value.length > 512) return "回调地址过长"
         return null

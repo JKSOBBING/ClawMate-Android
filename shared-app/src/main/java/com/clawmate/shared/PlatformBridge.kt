@@ -1,4 +1,4 @@
-package com.clawmate.shared
+﻿package com.clawmate.shared
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -104,17 +104,17 @@ class PlatformBridge(private val activity: StageActivity) :
         .put("note", "只收录官方通知中的放假日与调休上班日；未覆盖年份只显示常规周末并提示以官方通知为准。")
         .toString()
     // 本地模型下载到应用私有目录：进程内单任务，支持断点续传、SHA256 校验、暂停/取消与删除。
-    private val modelDownloader by lazy { com.clawmate.app.localmodel.download.ModelDownloadRegistry.of(activity.filesDir) }
-    private val modelManager by lazy { com.clawmate.app.localmodel.LocalModelManager(activity.filesDir) }
+    private val modelDownloader by lazy { com.clawmate.platform.localmodel.download.ModelDownloadRegistry.of(activity.filesDir) }
+    private val modelManager by lazy { com.clawmate.platform.localmodel.LocalModelManager(activity.filesDir) }
     fun localModelDownloadStart(repo: String, includeAuxiliary: Boolean): String = runCatching {
         if (modelDownloader.start(repo, includeAuxiliary)) "ok" else "已有模型下载任务正在进行，请等待完成或暂停后再试"
     }.getOrElse { "无法开始下载：" + (it.message ?: "未知错误") }
     fun localModelDownloadPause(): Boolean = modelDownloader.pause()
     /** 只读的下载计划：来源、目标目录、文件选择规则与校验步骤；不联网、不写盘。 */
     fun localModelPlan(repo: String, includeAuxiliary: Boolean): String =
-        JSONObject(com.clawmate.app.localmodel.LocalModelPlan.build(repo, includeAuxiliary)).toString()
+        JSONObject(com.clawmate.platform.localmodel.LocalModelPlan.build(repo, includeAuxiliary)).toString()
     /** 下载数据的网址来源（官方 ModelScope，HTTPS）。 */
-    fun localModelDownloadSource(): String = com.clawmate.app.localmodel.LocalModelPlan.source()
+    fun localModelDownloadSource(): String = com.clawmate.platform.localmodel.LocalModelPlan.source()
     /** 应用私有的模型存储路径（不含凭据），用于真机核对下载目录。 */
     fun localModelRoot(): String = java.io.File(activity.filesDir, "modelscope").absolutePath
     fun localModelDownloadCancel(): Boolean = modelDownloader.cancel()
@@ -124,7 +124,7 @@ class PlatformBridge(private val activity: StageActivity) :
         modelManager.list().forEach { model ->
             array.put(JSONObject().put("id", model.id).put("label", model.label).put("path", model.path)
                 .put("repo", model.id.removePrefix("modelscope:").removePrefix("legacy:"))
-                .put("sizeText", com.clawmate.app.localmodel.download.ModelScopeSpec.formatBytes(model.sizeBytes))
+                .put("sizeText", com.clawmate.platform.localmodel.download.ModelScopeSpec.formatBytes(model.sizeBytes))
                 .put("statusText", model.statusText).put("ready", model.ready))
         }
         return array.toString()

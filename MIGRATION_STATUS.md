@@ -1049,3 +1049,55 @@ docs/CALENDAR_MAIL_MODEL_DOWNLOAD.md。
 - 真实日历授权/日程读取与首页卡片在设备上的显示未验证；节假日表每年需要随官方通知更新。
 - 模型下载：未在真机完成一次真实模型下载（体积 2.7–3.5 GB）；未做省电/中断/掉网的真机长跑。
 - MNN/HiAI/OM 原生推理仍未接入，下载到的模型不会产生任何输出。
+## 跳过会议模块后的安卓实机验证（2026-11-05）
+
+为在不准备 on-device-meeting-notes 的前提下产出可装 APK，在忽略目录
+`.arkui-x-validation/meeting-sdk-stub/` 建了一个**临时会议 SDK 桩**：只镜像 MeetingBridge 引用的
+类型与签名（`MeetingOperation.HANDOFF`、`engine.phase.name`、`MeetingHandoff.parse().toJson()`、
+`stop/pause/resumeRecording` 等），行为一律明确失败（不启动 Python/ONNX、不开端口、不录音）。
+产品代码未为桩做任何让步（MeetingBridge 保持原样）。该桩与构建脚本不进 Git，也不代表会议功能完成。
+
+同时按仓库约定把模型下载代码从 `:app` 移到 `:android-capabilities`
+（`com.clawmate.platform.localmodel[.download]`），因为 `:android-capabilities` 不能反向依赖 `:app`，
+而共享宿主需要复用这套能力；`LocalModelManager` 改为自包含扫描，不依赖 Compose 基线的 inventory。
+
+实机结果（OPPO PKB110 / Android 16）：
+- 日历：进入“汇总 → 日历分析”，两个来源开关渲染正确（系统日历默认关、常用节假日默认开）。
+  勾选 `local account` 后自动开启系统日历来源并保存（prefs 中 calendarEnabled=true、selected=[1]）。
+  点“读取并同步日历记忆”：先得到“已同步 28 项（系统日历 0 项、常用节假日 28 项）”——
+  设备自带日历当时没有任何日程，属真实结果而非失败；随后用 shell 插入一条测试日程
+  （calendar_id=1，2026-11-06 09:00–10:00，验收后已删除），再次同步得到
+  “已同步 29 项（系统日历 1 项、常用节假日 28 项）”，快照 JSON 中 items 带 source=system/holiday、
+  sources 含 -1:常用节假日:holiday 与 5 个系统日历。
+- 首页“为你提醒”：卡片同时显示
+  “明天 11月6日 · 09:00–10:00｜系统日历｜ClawMateTestEvent”与
+  “后天 11月7日 · 全天｜常用节假日｜周末休息”，下方“日历记忆同步于 …”与刷新/去设置入口。
+- 实机发现并修复两个真实缺陷：
+  1) 全天日期用 `toISOString()` 格式化，在东八区把 10-31 显示成 10-30（与后文日期矛盾）——
+     改为按本机时区拼 YYYY-MM-DD；日历页与邮箱页同步修正。
+  2) 两个来源开关放在 `@Builder SwitchRow(…, on: boolean, …)` 里，ArkUI 按值参数冻结导致保存后
+     开关仍显示旧状态——把开关内联进页面，直接读 `this.options.*`；删除不再使用的 builder。
+- 邮箱：进入“汇总 → 邮箱分析”，点“使用jAccount”切到 jAccount 模式，页面正确渲染
+  `jAccount账号 / IMAP加密收信服务器(mail.sjtu.edu.cn:993) / jAccount客户端ID / jAccount回调网址 /
+  jAccount密钥` 与“需先申请 jAccount 接口”的说明。空表单点“启动jAccount授权”得到明确失败：
+  “授权未完成…请填写 jAccount 接口申请时分配的客户端ID”，没有伪造授权成功。
+- 模型下载：设置 → 模型与智能体 → 本地模型 → 本地模型下载，默认仓库
+  `fengerhu1/mobi_2B_offline_npu2_kirin9030_online_v2` 真实下载完成：29 个文件、
+  3,279,889,376 字节（界面显示 3.1 GB、约 26 MB/s），`vision/` 子目录按规则跳过，
+  `.download_complete` 与 `.download_manifest.json` 已写入；列表显示
+  “下载完成 · 3.1 GB”并可“切换/删除”，切换后选择写入 `files/models/selected.json`；
+  页面仍明确显示“安卓本地推理尚未接入”。
+- Deep Link：`am start -a android.intent.action.VIEW -d clawmate://jaccount?...` 能解析到
+  `com.clawmate.shared/.SharedActivity` 并拉起应用（Manifest intent-filter 生效）。
+
+仍未验收：
+- 未用真实 jAccount 应用（clientId/密钥/登记网址）完成授权码→令牌→OAUTHBEARER 登录的端到端；
+  设备上只验证到“页面渲染 + 参数校验 + Deep Link 能被系统分发”，回调后的 state 校验与令牌兑换
+  只有 JVM 单元测试覆盖。
+- 未验证交大邮箱服务器是否开放 OAUTHBEARER。
+- 会议模块仍是桩：会议页会显示“当前构建未包含会议模块”，会议语音留待最后阶段。
+- 模型下载的长跑（掉网/省电/中断续传）未专项测试；本次为一次连续 3 GB 下载。
+
+本轮检查：`:android-capabilities:testDebugUnitTest :app:testDebugUnitTest` 全绿
+（184 项 + 1243 项，0 失败）；ArkTS hvigor 编译、package-android、build-state seal 通过；
+APK 构建并安装到 PKB110，上述页面均在实机浏览。

@@ -204,6 +204,14 @@ struct MailSourcesPage {
     finally { this.busy = false; }
   }
 
+  /** 全天日期按本机时区显示（YYYY-MM-DD），不能用 toISOString 做时区换算。 */
+  private dayLabel(value: number): string {
+    let date = new Date(value);
+    let month = date.getMonth() + 1;
+    let day = date.getDate();
+    return date.getFullYear() + '-' + (month < 10 ? '0' : '') + month + '-' + (day < 10 ? '0' : '') + day;
+  }
+
   @Builder Section(title: string) {
     Text(title).fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.text('#748096'))
       .width('100%').padding({ left: 16, top: 22, bottom: 8 })
@@ -351,7 +359,7 @@ struct MailSourcesPage {
     ForEach(this.mail.items.slice(0, 100), (item: SourceItem) => {
       Column({ space: 8 }) {
         Text(item.title).width('100%').fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.text('#161B28'))
-        Text((item.allDay ? '全天 ' + new Date(item.start).toISOString().slice(0, 10) : new Date(item.start).toLocaleString()) +
+        Text((item.allDay ? '全天 ' + this.dayLabel(item.start) : new Date(item.start).toLocaleString()) +
           (item.location ? ' · ' + item.location : '')).width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A'))
         if (item.body) { Text(item.body).width('100%').fontSize(14).lineHeight(22).fontColor(AppTheme.text('#53617A')).copyOption(CopyOptions.LocalDevice); }
       }.width('100%').padding(18).backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).margin({ top: 12 })

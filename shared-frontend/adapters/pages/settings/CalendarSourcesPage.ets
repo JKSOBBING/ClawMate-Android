@@ -1,4 +1,4 @@
-﻿import Bridge from '@arkui-x.bridge';
+import Bridge from '@arkui-x.bridge';
 import { router, promptAction } from '@kit.ArkUI';
 import { PersonalSources, SourceSnapshot, SourceCalendar, SourceItem, SourceOptions } from '../../platform/PersonalSources';
 import { PersonalSourceSync } from '../../platform/PersonalSourceSync';
@@ -125,6 +125,14 @@ struct PersonalSourcesPage {
     finally { this.busy = false; }
   }
 
+  /** 全天日期按本机时区显示（YYYY-MM-DD），不能用 toISOString 做时区换算。 */
+  private dayLabel(value: number): string {
+    let date = new Date(value);
+    let month = date.getMonth() + 1;
+    let day = date.getDate();
+    return date.getFullYear() + '-' + (month < 10 ? '0' : '') + month + '-' + (day < 10 ? '0' : '') + day;
+  }
+
   private sourceName(item: SourceItem): string {
     return item.source === 'holiday' ? HOLIDAY_SOURCE : SYSTEM_SOURCE;
   }
@@ -148,16 +156,6 @@ struct PersonalSourcesPage {
       .fontColor(AppTheme.text($$.enabled ? ($$.danger ? '#D94848' : '#3978E8') : '#A0A8B6'))
       .backgroundColor(Color.Transparent).enabled($$.enabled).onClick($$.action)
   }
-  @Builder SwitchRow(title: string, desc: string, on: boolean, change: (value: boolean) => void, enabled: boolean) {
-    Row() {
-      Column({ space: 4 }) {
-        Text(title).fontSize(16).fontColor(AppTheme.text('#161B28')).width('100%')
-        Text(desc).fontSize(12).lineHeight(18).fontColor(AppTheme.text('#7C879A')).width('100%')
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Toggle({ type: ToggleType.Switch, isOn: on }).selectedColor('#3978E8').enabled(enabled)
-        .accessibilityText(title).onChange((value: boolean) => { if (value !== on) { change(value); } })
-    }.width('100%').padding(16)
-  }
   @Builder SourceTag(label: string, tone: string) {
     Text(label).fontSize(10).fontColor(AppTheme.text(tone)).padding({ left: 6, right: 6, top: 2, bottom: 2 })
       .backgroundColor(AppTheme.background(tone === '#B4690E' ? '#FDF3E3' : '#EEF2FF')).borderRadius(6)
@@ -166,11 +164,28 @@ struct PersonalSourcesPage {
   @Builder CalendarSettings() {
     this.Section('日历来源')
     Column() {
-      this.SwitchRow(SYSTEM_SOURCE, '手机系统自带的日历（含账号同步的日程）；需要系统日历读取权限。',
-        this.options.calendarEnabled, (value: boolean): void => { this.setCalendar(value, this.options.holidayEnabled, this.options.historyDays, this.selected); }, !this.busy)
+      // 开关直接写在页面里：@Builder 的按值参数会被冻结，导致保存后开关仍显示旧状态。
+      Row() {
+        Column({ space: 4 }) {
+          Text(SYSTEM_SOURCE).fontSize(16).fontColor(AppTheme.text('#161B28')).width('100%')
+          Text('手机系统自带的日历（含账号同步的日程）；需要系统日历读取权限。')
+            .fontSize(12).lineHeight(18).fontColor(AppTheme.text('#7C879A')).width('100%')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.options.calendarEnabled }).selectedColor('#3978E8').enabled(!this.busy)
+          .accessibilityText(SYSTEM_SOURCE)
+          .onChange((value: boolean) => { if (value !== this.options.calendarEnabled) { this.setCalendar(value, this.options.holidayEnabled, this.options.historyDays, this.selected); } })
+      }.width('100%').padding(16)
       this.Line()
-      this.SwitchRow(HOLIDAY_SOURCE, '内置的常用节假日与调休安排（本地数据，不联网、不读取系统日历）。',
-        this.options.holidayEnabled, (value: boolean): void => { this.setCalendar(this.options.calendarEnabled, value, this.options.historyDays, this.selected); }, !this.busy)
+      Row() {
+        Column({ space: 4 }) {
+          Text(HOLIDAY_SOURCE).fontSize(16).fontColor(AppTheme.text('#161B28')).width('100%')
+          Text('内置的常用节假日与调休安排（本地数据，不联网、不读取系统日历）。')
+            .fontSize(12).lineHeight(18).fontColor(AppTheme.text('#7C879A')).width('100%')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.options.holidayEnabled }).selectedColor('#3978E8').enabled(!this.busy)
+          .accessibilityText(HOLIDAY_SOURCE)
+          .onChange((value: boolean) => { if (value !== this.options.holidayEnabled) { this.setCalendar(this.options.calendarEnabled, value, this.options.historyDays, this.selected); } })
+      }.width('100%').padding(16)
     }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20)
     this.Hint({ message: '两个来源可以同时开启：系统日历读取日程，常用节假日提供节假日与调休信息。' +
       (this.options.calendarEnabled && !this.granted ? '尚未获得系统日历权限，请再次开启以授权。' : '') })
@@ -203,10 +218,11 @@ struct PersonalSourcesPage {
           Text(source.name).fontSize(15).fontColor(AppTheme.text('#161B28')).layoutWeight(1)
           if (source.kind !== 'holiday') {
             Checkbox({ name: String(source.id) }).select(this.selected.indexOf(source.id) >= 0).selectedColor('#3978E8')
-              .enabled(!this.busy && this.options.calendarEnabled).accessibilityText(source.name)
+              .enabled(!this.busy).accessibilityText(source.name)
               .onChange((on: boolean) => {
                 if (on !== (this.selected.indexOf(source.id) >= 0)) {
-                  this.setCalendar(this.options.calendarEnabled, this.options.holidayEnabled, this.options.historyDays,
+                  // 勾选具体日历即表示使用系统日历来源：同时打开开关并在需要时申请权限。
+                  this.setCalendar(true, this.options.holidayEnabled, this.options.historyDays,
                     on ? this.selected.concat([source.id]) : this.selected.filter((id: number): boolean => id !== source.id));
                 }
               })
@@ -246,7 +262,7 @@ struct PersonalSourcesPage {
           this.SourceTag(this.sourceName(item), item.source === 'holiday' ? '#B4690E' : '#3978E8')
           Text(item.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.text('#161B28')).layoutWeight(1)
         }.width('100%')
-        Text((item.allDay ? '全天 ' + new Date(item.start).toISOString().slice(0, 10) : new Date(item.start).toLocaleString()) +
+        Text((item.allDay ? '全天 ' + this.dayLabel(item.start) : new Date(item.start).toLocaleString()) +
           (item.location ? ' · ' + item.location : '')).width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A'))
         if (item.body) { Text(item.body).width('100%').fontSize(14).lineHeight(22).fontColor(AppTheme.text('#53617A')).copyOption(CopyOptions.LocalDevice); }
       }.alignItems(HorizontalAlign.Start).width('100%').padding(18).backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).margin({ top: 12 })

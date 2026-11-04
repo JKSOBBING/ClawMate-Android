@@ -106,8 +106,8 @@ Proton/Tuta专用接入、POP3、Exchange专有协议及STARTTLS尚未接入。
 3. 在应用内到「汇总 → 邮箱分析 → 邮箱类型：上海交大邮箱（jAccount授权）」填写：
    - **jAccount账号**：`abc` 或 `abc@sjtu.edu.cn`
    - **jAccount客户端ID**：第 2 步分配的 clientId
-   - **jAccount回调网址**：申请时登记的服务网址（必须是 HTTPS），或本应用的 Deep Link
-     `clawmate://jaccount`（Deep Link 也要在申请表中登记）
+   - **jAccount回调网址**：申请时登记的服务网址（HTTPS），或本应用的 Deep Link `clawmate://jaccount`
+     （Deep Link 同样要在申请表中登记；两者都通过校验，填其它值会被明确拒绝）
    - **jAccount密钥**：第 2 步分配的密钥，只用于本次换取令牌，**不会保存**
 4. 点「启动jAccount授权 / 重新授权」→「打开授权网页」，在浏览器完成 jAccount 登录；
    浏览器回到回调网址（Deep Link 会直接拉起应用）后，应用在本机后台用授权码换取访问令牌。

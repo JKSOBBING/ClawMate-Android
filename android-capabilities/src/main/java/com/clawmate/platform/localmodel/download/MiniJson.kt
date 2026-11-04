@@ -1,4 +1,4 @@
-package com.clawmate.app.localmodel.download
+﻿package com.clawmate.platform.localmodel.download
 
 /**
  * 最小 JSON 读写工具：与 Android 平台解耦，纯 JVM 单元测试可直接覆盖下载清单解析。

@@ -1,4 +1,4 @@
-package com.clawmate.app.localmodel.download
+﻿package com.clawmate.platform.localmodel.download
 
 import okhttp3.OkHttpClient
 import okhttp3.Request

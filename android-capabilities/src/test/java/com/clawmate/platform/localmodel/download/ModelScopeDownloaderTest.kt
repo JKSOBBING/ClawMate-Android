@@ -1,4 +1,4 @@
-﻿package com.clawmate.app.localmodel.download
+﻿package com.clawmate.platform.localmodel.download
 
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient

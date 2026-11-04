@@ -1,6 +1,6 @@
-﻿package com.clawmate.app.localmodel
+﻿package com.clawmate.platform.localmodel
 
-import com.clawmate.app.localmodel.download.ModelScopeSpec
+import com.clawmate.platform.localmodel.download.ModelScopeSpec
 
 /**
  * 模型下载“计划”的只读说明：不联网、不写盘，只把默认仓库、来源域名、目标目录和
