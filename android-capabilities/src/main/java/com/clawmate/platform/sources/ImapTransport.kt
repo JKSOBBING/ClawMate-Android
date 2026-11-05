@@ -69,6 +69,9 @@ class ImapTransport() : AutoCloseable {
     private fun frame(): String = readFrame(input ?: error("未连接"))
     override fun close() { closed = true; runCatching { socket?.close() }; socket = null }
     companion object {
+        /** IMAP 字面量标记（`{n}` 或 `{n+}`）的预编译模式；右花括号必须转义。 */
+        val literalPattern = Regex("\\{(\\d+)\\+?\\}\\r\\n$")
+
         fun oauthPayload(user: String, token: String): String {
             quoted(user)
             require(token.length in 1..16000 && token.none { it.code <= 32 || it.code == 127 })
@@ -96,7 +99,9 @@ class ImapTransport() : AutoCloseable {
                     previous = b
                 }
                 val bytes = line.toByteArray(); out.write(bytes)
-                val literal = Regex("\\{(\\d+)\\+?}\\r\\n$").find(bytes.toString(Charsets.ISO_8859_1))
+                // 字面量标记形如 `{123}` 或 `{123+}`；右花括号在 Java 正则里必须转义，否则会抛
+                // PatternSyntaxException，导致所有 IMAP 读取失败。
+                val literal = literalPattern.find(bytes.toString(Charsets.ISO_8859_1))
                 if (literal == null) return out.toByteArray().dropLast(2).toByteArray().toString(Charsets.ISO_8859_1)
                 val count = literal.groupValues[1].toInt(); require(count <= 1024 * 1024 && out.size() + count <= 2 * 1024 * 1024)
                 repeat(count) { val b = input.read(); check(b >= 0); out.write(b) }

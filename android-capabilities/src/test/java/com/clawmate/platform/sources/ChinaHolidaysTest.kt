@@ -33,13 +33,15 @@ class ChinaHolidaysTest {
         val saturday = entries.firstOrNull { it.start == "2026-10-10" }
         assertNotNull(saturday)
         assertEquals("调休上班", saturday!!.title)
+        // 普通周末不再生成条目（用户明确要求不要周末信息）。
+        assertFalse(titles.any { it.contains("周末") || it.contains("周六休息") })
     }
 
-    @Test fun uncoveredYearShowsWeekendsWithNotice() {
-        val entries = ChinaHolidays.entries(day(2027, 1, 1), day(2027, 1, 10))
-        val weekends = entries.filter { it.title == "周六休息" || it.title == "周末休息" }
-        assertTrue(weekends.isNotEmpty())
-        assertTrue(weekends.all { it.description.contains("尚未发布") })
+    @Test fun weekendsAreNotRecordedAsHolidayEntries() {
+        // 2027 年通知尚未发布：既没有节日条目，也不能退化成“周末条目”。
+        assertTrue(ChinaHolidays.entries(day(2027, 1, 1), day(2027, 1, 10)).isEmpty())
+        // 2026 年 11 月只有周末、没有法定节日：同样不产生条目。
+        assertTrue(ChinaHolidays.entries(day(2026, 11, 1), day(2026, 11, 30)).isEmpty())
     }
 
     @Test fun springFestivalSpanIsContiguousAcrossDays() {

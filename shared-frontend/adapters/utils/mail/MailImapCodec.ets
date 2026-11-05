@@ -1,4 +1,5 @@
 import { util } from '@kit.ArkTS';
+import { gb18030Decode } from './Gb18030Table';
 
 // One code unit per byte: IMAP literal lengths are octets, not UTF-8 characters.
 export function mailBinary(bytes: Uint8Array): string {
@@ -171,21 +172,101 @@ export function mailDecode(raw: string, encoding: string, charset: string): stri
       (_match: string, hex: string): string => String.fromCharCode(parseInt(hex, 16))));
   }
   let name = charset.toLowerCase().replace(/^"|"$/g, '');
-  if (name === 'gb2312' || name === 'gbk' || name === 'x-gbk') { name = 'gb18030'; }
+  if (name === 'gb2312' || name === 'gbk' || name === 'x-gbk' || name === 'cp936' || name === 'gb18030') {
+    return gb18030Decode(bytes);
+  }
+  // 没有声明字符集、或声明成 us-ascii，却出现高位字节：按内容判断。
+  // 注意 GBK 的两字节序列常常“碰巧”也是合法 UTF-8 的一部分，只看合法性不够，
+  // 所以这里要求 UTF-8 解码结果里中文占多数，否则按 GB18030（交大 Exchange 代理就是这种）。
+  let asciiLike = name === 'us-ascii' || name === 'ascii' || name === '' || name === 'unknown-8bit';
+  if (asciiLike && !sniffUtf8(bytes)) { return gb18030Decode(bytes); }
+  if (name === 'utf-8' && !sniffUtf8(bytes)) { return gb18030Decode(bytes); }
+  return decodeAs(bytes, name);
+}
+
+function decodeAs(bytes: Uint8Array, name: string): string {
   try { return new util.TextDecoder(name).decodeToString(bytes); }
   catch (e) { throw new Error('暂不支持邮件字符集：' + name.replace(/[^a-z0-9_-]/gi, '').slice(0, 30)); }
 }
 
+/** 判断一串字节更像 UTF-8（中文字符正常）还是 GBK。 */
+function sniffUtf8(bytes: Uint8Array): boolean {
+  let hasHigh = false;
+  for (let index = 0; index < bytes.length; index++) { if (bytes[index] >= 0x80) { hasHigh = true; break; } }
+  if (!hasHigh) { return true; }
+  if (!validUtf8(bytes)) { return false; }
+  let text = '';
+  try { text = new util.TextDecoder('utf-8').decodeToString(bytes); } catch (e) { return false; }
+  let cjk = 0; let odd = 0;
+  for (let index = 0; index < text.length; index++) {
+    let code = text.charCodeAt(index);
+    if (code >= 0x4E00 && code <= 0x9FFF) { cjk++; }
+    // 拉丁补充、私有区、拉丁扩展等通常是“GBK 被当成 UTF-8”造成的乱码。
+    else if (code >= 0xE000 && code <= 0xF8FF) { odd += 2; }
+    else if ((code >= 0x80 && code <= 0x24F) || (code >= 0x250 && code <= 0x36F)) { odd++; }
+  }
+  return cjk >= odd;
+}
+
+/** 严格检查一串字节是否为合法 UTF-8，用于判断没有声明字符集的邮件实际编码。 */
+function validUtf8(bytes: Uint8Array): boolean {
+  let index = 0;
+  while (index < bytes.length) {
+    let b = bytes[index];
+    if (b < 0x80) { index++; continue; }
+    let need = 0;
+    if ((b & 0xE0) === 0xC0) { need = 1; } else if ((b & 0xF0) === 0xE0) { need = 2; }
+    else if ((b & 0xF8) === 0xF0) { need = 3; } else { return false; }
+    if (index + need >= bytes.length) { return false; }
+    for (let k = 1; k <= need; k++) { if ((bytes[index + k] & 0xC0) !== 0x80) { return false; } }
+    index += need + 1;
+  }
+  return true;
+}
+
 export function mailHeader(raw: string, name: string): string {
-  let lines = raw.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/);
-  let line = lines.find((value: string): boolean => value.toLowerCase().startsWith(name.toLowerCase() + ':')) || '';
-  let value = line.substring(line.indexOf(':') + 1).trim();
-  if (/[\x80-\xff]/.test(value)) { value = mailDecode(value, '8BIT', 'utf-8'); }
+  let value = mailHeaderValue(raw, name);
+  if (value.length === 0) { return ''; }
+  if (/[\x80-\xff]/.test(value)) { value = mailDecode(value, '8BIT', 'us-ascii'); }
   value = value.replace(/(\?=)\s+(=\?)/g, '$1$2');
+  return decodeWords(value).slice(0, 1000);
+}
+
+/** 按头部块取值：只有真正的头部起始行（不以空白开头）参与比较，折叠行并入前一个头部。 */
+function mailHeaderValue(raw: string, name: string): string {
+  let valueParts: string[] = [];
+  let wanted = name.toLowerCase() + ':';
+  let current = '';
+  let lines = raw.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    let line = lines[index];
+    if (line.length === 0) { continue; }
+    if ((line[0] === ' ' || line[0] === '\t') && current.length > 0) {
+      if (current === wanted) { valueParts.push(line.trim()); }
+      continue;
+    }
+    let colon = line.indexOf(':');
+    let key = colon > 0 ? line.substring(0, colon + 1).toLowerCase() : '';
+    current = key;
+    if (key === wanted) { valueParts = [line.substring(colon + 1).trim()]; }
+  }
+  return valueParts.join(' ').trim();
+}
+
+/** 解码 RFC 2047 编码字（`=?GB2312?B?...?=` / `=?utf-8?Q?...?=`）。 */
+function decodeWords(value: string): string {
   return value.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi,
-    (_match: string, charset: string, encoding: string, content: string): string =>
-      mailDecode(encoding.toUpperCase() === 'Q' ? content.replace(/_/g, ' ') : content,
-        encoding.toUpperCase() === 'Q' ? 'QUOTED-PRINTABLE' : 'BASE64', charset)).slice(0, 1000);
+    (_match: string, charset: string, encoding: string, content: string): string => {
+      // charset 只到第一个 `?`；`utf-8*zh` 这类 RFC 2231 语言后缀也去掉。
+      let name = charset.split('*')[0].trim();
+      try {
+        return mailDecode(encoding.toUpperCase() === 'Q' ? content.replace(/_/g, ' ') : content,
+          encoding.toUpperCase() === 'Q' ? 'QUOTED-PRINTABLE' : 'BASE64', name);
+      } catch (error) {
+        // 单个编码字解不开时保留原文，不让整封邮件读取失败。
+        return _match;
+      }
+    });
 }
 
 export function mailPlainHtml(html: string): string {

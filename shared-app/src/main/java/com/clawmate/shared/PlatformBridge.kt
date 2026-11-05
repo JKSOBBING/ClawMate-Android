@@ -91,7 +91,15 @@ class PlatformBridge(private val activity: StageActivity) :
     }
     fun sourcesStart(operation: String, argument: String): String = sourceJobs.start {
         try { JSONObject().put("ok", true).put("value", sources.execute(operation, argument)).toString() }
-        catch (_: Exception) { JSONObject().put("ok", false).put("error", "读取失败或已取消，请检查权限、网络、邮箱IMAP服务和授权码；OAuth邮箱请重新授权并核对登录账户").toString() }
+        catch (error: Exception) {
+            if (Thread.currentThread().isInterrupted) JSONObject().put("ok", false).put("error", "读取已取消").toString()
+            else {
+                // 把真实原因带回页面：IMAP 服务器拒绝、TLS/证书、超时等都要能看到。
+                val reason = generateSequence(error as Throwable) { it.cause }.last().let { it.message ?: it.javaClass.simpleName }
+                JSONObject().put("ok", false).put("detail", "$reason").put("error",
+                    "读取失败：$reason。（邮箱请核对账号、密码与IMAP开关；日历请检查权限）").toString()
+            }
+        }
     }
     fun sourcesPoll(id: String): String {
         val job = sourceJobs.poll(id)

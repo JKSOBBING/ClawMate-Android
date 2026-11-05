@@ -23,6 +23,14 @@ class ImapTransportTest {
         assertThrows(IllegalArgumentException::class.java) { ImapTransport.oauthPayload("test@example.com", "token\r\n") }
         assertThrows(IllegalArgumentException::class.java) { ImapTransport.oauthPayload("test@example.com", "") }
     }
+    @Test fun literalPatternIsValidAndMatchesBothForms() {
+        // 回归：早先的正则没有转义右花括号，Java 会抛 PatternSyntaxException，
+        // 结果任何一次 IMAP 读取都会失败。
+        val pattern = ImapTransport.literalPattern
+        assertNotNull(pattern.find("* 1 FETCH (BODY[] {12}\r\n"))
+        assertNotNull(pattern.find("* 1 FETCH (BODY[] {12+}\r\n"))
+        assertNull(pattern.find("* 1 FETCH (BODY[] {12}\r\n) more"))
+    }
     @Test fun literalCountsBytesAndAllowsEmbeddedNewlines() {
         val body = "中\r\n文".toByteArray(Charsets.UTF_8)
         val prefix = "* 1 FETCH (BODY[] {${body.size}}\r\n".toByteArray()

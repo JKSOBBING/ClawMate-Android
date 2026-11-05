@@ -65,13 +65,17 @@ object ChinaHolidays {
 
     fun isWeekend(date: LocalDate): Boolean = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
 
-    /** 快速浏览窗口内的条目：放假日逐日成条，常规周末合并成条，调休上班单独成条。 */
+    /**
+     * 窗口内的节日条目：放假日逐日成条，调休上班单独成条。
+     *
+     * 常规周末**不**再生成条目：用户已明确表示周末信息多余，日历记忆与首页提醒只保留
+     * 真实节日与调休；周末由日历本身表达，不需要写进记忆。
+     */
     fun entries(from: LocalDate, to: LocalDate): List<HolidayEntry> {
         if (to < from) return emptyList()
         val out = ArrayList<HolidayEntry>()
         var date = from
         while (date <= to) {
-            val covered = covered(date)
             val day = day(date)
             when {
                 day != null && !day.workday -> {
@@ -99,26 +103,6 @@ object ChinaHolidays {
                         notice = day.notice,
                     ))
                     date = date.plusDays(1)
-                }
-                isWeekend(date) && (!covered || day == null) -> {
-                    var end = date
-                    while (end < to) {
-                        val next = end.plusDays(1)
-                        if (!isWeekend(next) || day(next) != null) break
-                        end = next
-                    }
-                    out.add(HolidayEntry(
-                        id = "$KIND:$date:$end",
-                        title = if (date == end) "周六休息" else "周末休息",
-                        description = if (covered) "$date${if (date == end) "" else " 至 $end"} 为常规周末。"
-                        else "$date${if (date == end) "" else " 至 $end"} 为常规周末；该年度放假安排尚未发布，具体以官方通知为准。",
-                        start = date.toString(),
-                        end = end.toString(),
-                        allDay = true,
-                        kind = KIND,
-                        notice = null,
-                    ))
-                    date = end.plusDays(1)
                 }
                 else -> date = date.plusDays(1)
             }

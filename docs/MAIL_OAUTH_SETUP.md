@@ -104,11 +104,25 @@ Proton/Tuta专用接入、POP3、Exchange专有协议及STARTTLS尚未接入。
 - 密码用 Android Keystore（AES-GCM）加密保存在本机，不通过桥接返回，也不写日志；
 - 不需要申请 jAccount 接口、不需要客户端ID/密钥/回调网址。
 
+### 交大邮箱的中文编码（2026-11-05 实机定位并修复）
+
+交大邮箱的 Exchange 代理用 `Subject: =?GB2312?B?...?=` 这类 RFC 2047 编码字发送标题，
+实时抓取原始邮件头确认过。修复了两处真实缺陷：
+
+1. **RFC 2047 字符集名解析错误**：正则捕获组把 `GB2312?B` 当成字符集名，解码直接失败，
+   主题退化为带 `?` 的原文。
+2. **ArkUI-X 的 TextDecoder 不支持 gb18030/gb2312**：它**不抛错**，而是按 Latin-1 逐字节解码，
+   于是中文变成 `¹ØÓÚ` 这种乱码。应用内改为自带 GB18030 码表解码
+   （`shared-frontend/adapters/utils/mail/Gb18030Table.ets`，按 WHATWG index-gb18030.txt 生成）。
+
+实机结果：标题「关于组织参加中国电科“网信杯”人工智能创新大赛的通知」、
+发件人「王鑫 <wwwxin@sjtu.edu.cn>」，正文中文均正常。
+
 实机验证（2026-11-05）：保存后本机记录为
 `user=clawmtest@sjtu.edu.cn`、`host=mail.sjtu.edu.cn`、`port=993`，密码字段为加密串；
 用测试账号读取时服务器在 TLS 握手后返回 `* OK IMAP4rev1 proxy server ready`，
-`LOGIN` 得到明确的 `A1 NO LOGIN failed`——说明账号密码方式链路可用，
-失败原因是测试账号不存在。真实 jAccount 账号的收信验收仍需你本人完成。
+`LOGIN` 得到明确的 `A1 NO LOGIN failed`——说明账号密码方式链路可用。
+随后用真实 jAccount 账号验收：**成功读取近三天 2 封邮件**，标题、发件人、正文中文均正常。
 
 边界：如果学校以后关闭密码登录、要求统一身份认证，应用会明确报“读取失败”，
 不会回退成别的登录方式。

@@ -1133,3 +1133,42 @@ APK 构建并安装到 PKB110，上述页面均在实机浏览。
 CalendarMonthViewTest 6 项）；ArkTS 编译、package-android、seal 通过；APK 构建并安装到 PKB110 逐页验证。
 
 仍未验收：真实 jAccount 账号的收信、真实日程（本机日历为空）与跨月日程显示、会议模块（仍是临时桩）。
+## 邮件读取回归修复、周末条目移除与日历黄历边界（2026-11-05 下午）
+
+用户用真实 jAccount 账号验收时报告“读取失败”，并指出日历里读不到节气/记者节/寒衣节、
+周末条目多余。逐项定位与修复如下。
+
+**1. 邮箱读取失败（真实原因：Java 正则语法错误）**
+`ImapTransport.readFrame` 里字面量标记的正则写成 `"\\{(\\d+)\\+?}\\r\\n$"`，右花括号未转义，
+Java 抛 `PatternSyntaxException`：**任何一次 IMAP 读取都会失败**，与账号密码无关。
+修复为 companion 中的预编译 `literalPattern`（`\\{(\\d+)\\+?\\}\\r\\n$`），
+并补回归测试 `ImapTransportTest.literalPatternIsValidAndMatchesBothForms`。
+同时把来源读取的通用错误“读取失败或已取消…”改为回传真实原因（取消时仍显示“读取已取消”），
+否则这类缺陷永远看不到。
+
+**2. 邮件中文乱码（两个独立缺陷）**
+- `mailHeader` 的 RFC 2047 正则把 `GB2312?B` 整个当成字符集名，解码必然失败；
+  修复为 `charset.split('*')[0]`，并按“头部块”解析（折叠行并入前一个头部）。
+- **ArkUI-X 的 `TextDecoder('gb18030')` 不报错，而是按 Latin-1 逐字节解码**（设备实测：
+  对同一串字节 `gb18030` 与 `utf-8` 两种结果都只是乱码）。改为应用自带码表：
+  `shared-frontend/adapters/utils/mail/Gb18030Table.ets`（按 WHATWG index-gb18030.txt 生成，
+  23940 项，二分查找），并在无字符集声明时按“UTF-8 是否解出合理中文”探测。
+- 实机结果：标题「关于组织参加中国电科“网信杯”人工智能创新大赛的通知」/「人工智能学院2026年度
+  研究生学业奖学金评定工作通知」，发件人「王鑫」「艾茹洁」，正文中文全部正常；
+
+**3. 交大邮箱真实收信验收**
+用用户真实 jAccount 账号保存后读取：**成功读取近三天 2 封邮件**，正文完整，未下载附件。
+密码用 Keystore 加密保存在本机；排障时用过的临时密码环境变量已清除。
+
+**4. 移除周末条目**
+`ChinaHolidays.entries()` 不再为常规周末生成“周末休息/周六休息”条目，只保留法定节假日与
+调休上班日。实机同步结果从 28 项降为 **12 项（全部为真实节假日/调休）**，
+首页“为你提醒”不再出现周末。单测更新为 `weekendsAreNotRecordedAsHolidayEntries`。
+
+**5. 节气/记者节/寒衣节读不到（能力边界，已核实）**
+设备实测：`CalendarContract` 与 `content://com.coloros.calendar/events` 均 0 行记录；
+OPPO 日历里的节气、记者节、寒衣节只存在于 `com.coloros.calendar` 自己的黄历面板与私有数据中，
+不写入 CalendarProvider，第三方应用没有读取入口。应用不伪造这类内容，已在文档与用户手册中写明。
+
+本轮检查：`:android-capabilities:testDebugUnitTest` **196 项 / 0 失败**；ArkTS 编译、package-android、
+seal 通过；APK 安装到 PKB110 并在真实账号下验证收信、标题/正文中文、周末条目移除。
