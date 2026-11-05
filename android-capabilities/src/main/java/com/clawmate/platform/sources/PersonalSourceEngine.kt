@@ -32,8 +32,82 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private fun holidayEnabled() = optionsPrefs.getBoolean("holidayEnabled", true)
     private fun calendarSelection(): JSONArray = JSONArray(optionsPrefs.getString("selected", null)
         ?: runCatching { JSONObject(File(root, "calendar.json").readText()).optJSONArray("selected")?.toString() }.getOrNull() ?: "[]")
+    /** 已停用的日历类别（生日/纪念日/倒计时等），与“本机日历”分开控制。 */
+    private fun disabledGroups(): Set<String> = (optionsPrefs.getString("disabledGroups", "") ?: "")
+        .split(',').filter { it.isNotBlank() }.toSet()
+    @Volatile private var cachedCalendars: List<CalendarMeta> = emptyList()
+    @Volatile private var cachedCalendarsAt: Long = 0L
+    private data class CalendarMeta(
+        val id: Long, val name: String, val accountType: String, val owner: String,
+        val readOnly: Boolean, val visible: Boolean, val group: String, val label: String, val detail: String,
+    )
+    private fun calendars(): List<CalendarMeta> {
+        val cached = cachedCalendars
+        if (cached.isNotEmpty() && System.currentTimeMillis() - cachedCalendarsAt < 10 * 60 * 1000L) return cached
+        val out = ArrayList<CalendarMeta>()
+        context.contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            arrayOf("_id", "calendar_displayName", "account_type", "ownerAccount", "calendar_access_level", "visible"),
+            null, null, "_id",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                // 系统日历 id 必须为非负整数，才能与节假日的 -1 区分来源。
+                val id = c.getLong(0)
+                if (id < 0) continue
+                val name = c.getString(1) ?: ""
+                val type = c.getString(2) ?: ""
+                val owner = c.getString(3) ?: ""
+                val readOnly = c.getInt(4) <= CalendarContract.Calendars.CAL_ACCESS_READ
+                val info = CalendarSourceLabels.describe(id, name, type, owner, readOnly)
+                out.add(CalendarMeta(id, name, type, owner, readOnly, c.getInt(5) != 0, info.group, info.name, info.detail))
+            }
+        } ?: run { if (calendarEnabled()) error("无法读取日历来源") }
+        cachedCalendars = out
+        cachedCalendarsAt = System.currentTimeMillis()
+        return out
+    }
+    /** 实际读取的日历：只取勾选且类别启用的系统日历。 */
+    private fun effectiveIds(): Set<Long> {
+        val disabled = disabledGroups()
+        val all = calendars()
+        return (0 until calendarSelection().length()).mapNotNull {
+            val id = calendarSelection().getLong(it)
+            all.firstOrNull { meta -> meta.id == id && meta.group !in disabled }?.id
+        }.toSet()
+    }
+    /** 按类别汇总的来源（界面用中文名展示，逗号分隔具体日历）。 */
+    private fun groupedSources(): JSONArray {
+        val groups = calendars().groupBy { it.group }
+        val disabled = disabledGroups()
+        val array = JSONArray()
+        for (group in CalendarSourceLabels.GROUP_ORDER) {
+            val members = groups[group] ?: continue
+            if (members.isEmpty()) continue
+            val enabled = group !in disabled
+            val ids = JSONArray()
+            members.forEach { ids.put(it.id) }
+            array.put(JSONObject().put("id", -2L - CalendarSourceLabels.GROUP_ORDER.indexOf(group))
+                .put("name", CalendarSourceLabels.groupTitle(group))
+                .put("kind", if (group == "local") "system" else "group")
+                .put("group", group)
+                .put("groupLabel", CalendarSourceLabels.groupTitle(group))
+                .put("groupHint", CalendarSourceLabels.groupHint(group))
+                .put("enabled", enabled)
+                .put("members", ids)
+                .put("memberNames", describeMembers(members))
+                .put("count", members.size))
+        }
+        return array
+    }
+    private fun describeMembers(members: List<CalendarMeta>): String {
+        // 同一类别里的日历常是同一含义的不同账户（如“生日提醒”“新建生日”），只显示一次。
+        val labels = members.map { it.label.removeSuffix("新建").removeSuffix("提醒") }.distinct().filter { it.isNotBlank() }
+        return if (labels.size <= 1) labels.joinToString("") else labels.joinToString("、")
+    }
+    private fun CalendarMeta.rawNameForApi(): String = name.ifBlank { label }
     @Synchronized fun options(): String = JSONObject().put("calendarEnabled", calendarEnabled())
         .put("holidayEnabled", holidayEnabled())
+        .put("disabledGroups", JSONArray(disabledGroups().sorted()))
         .put("historyDays", optionsPrefs.getInt("historyDays", 90)).put("selected", calendarSelection())
         .put("maxMessages", optionsPrefs.getInt("maxMessages", 50)).toString()
     @Synchronized fun saveOptions(kind: String, raw: String) {
@@ -45,10 +119,17 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
                 val days = value.getInt("historyDays"); require(days in listOf(0, 30, 90, 365))
                 val selected = value.getJSONArray("selected"); require(selected.length() <= 100)
                 for (i in 0 until selected.length()) require(selected.getLong(i) >= 0)
+                val groups = value.optJSONArray("disabledGroups")
+                val disabled = if (groups == null) disabledGroups() else (0 until groups.length())
+                    .map { groups.getString(it) }
+                    .filter { it in CalendarSourceLabels.GROUP_ORDER && it != "local" && it != "other" }
+                    .toSet()
                 val changed = enabled != calendarEnabled() || holiday != holidayEnabled() ||
-                    days != optionsPrefs.getInt("historyDays", 90) || selected.toString() != calendarSelection().toString()
+                    days != optionsPrefs.getInt("historyDays", 90) || selected.toString() != calendarSelection().toString() ||
+                    disabled.sorted() != disabledGroups().sorted()
                 check(optionsPrefs.edit().putBoolean("calendarEnabled", enabled).putBoolean("holidayEnabled", holiday)
-                    .putInt("historyDays", days).putString("selected", selected.toString()).commit())
+                    .putInt("historyDays", days).putString("selected", selected.toString())
+                    .putString("disabledGroups", disabled.sorted().joinToString(",")).commit())
                 // A disabled/changed source must not remain available to chat from an older snapshot.
                 if (changed) clear("calendar")
             }
@@ -122,7 +203,7 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
             "calendar" -> calendar(argument)
             // 只读探测：不读取事件、不保存，只回答来源开关与系统日历授权状态，供首页卡片使用。
             "calendarStatus" -> JSONObject().put("calendarEnabled", calendarEnabled()).put("holidayEnabled", holidayEnabled())
-                .put("granted", calendarGranted()).put("selected", calendarSelection().length()).toString()
+                .put("granted", calendarGranted()).put("selected", calendarSelection().length()).put("effective", effectiveIds().size).toString()
             // 只读：节假日数据范围与依据，供设置页核对；不读取系统日历、不联网。
             "holiday" -> JSONObject().put("name", ChinaHolidays.SOURCE_NAME)
                 .put("sections", JSONArray().put("2025年放假安排（国办发明电〔2024〕7号）").put("2026年放假安排（国办发明电〔2025〕6号）"))
@@ -163,17 +244,11 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
         val end = now.plusDays(30).toInstant().toEpochMilli()
         val selected = if (listOnly) JSONArray() else calendarSelection()
         require(selected.length() <= 100)
-        val ids = (0 until selected.length()).map { selected.getLong(it) }.toSet()
+        val ids = if (listOnly) emptySet() else effectiveIds()
         val sources = JSONArray()
         if (useSystem) sources.put(JSONObject().put("id", ChinaHolidays.SOURCE_ID).put("name", ChinaHolidays.SOURCE_NAME).put("kind", "holiday"))
-        context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, arrayOf("_id", "calendar_displayName"), null, null, "_id")?.use { c ->
-            while (c.moveToNext()) {
-                // 系统日历 id 必须为非负整数，才能与节假日的 -1 区分来源。
-                val id = c.getLong(0)
-                if (id < 0) continue
-                sources.put(JSONObject().put("id", id).put("name", c.getString(1) ?: "日历").put("kind", "system"))
-            }
-        } ?: run { if (useSystem) error("无法读取日历来源") }
+        // 来源按用户看得懂的类别汇总，同时附上每个类别的具体日历 id，读取仍逐日历进行。
+        groupedSources().let { grouped -> for (i in 0 until grouped.length()) sources.put(grouped.getJSONObject(i)) }
         val items = JSONArray()
         if (useSystem && ids.isNotEmpty()) {
             val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
@@ -211,7 +286,7 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private fun quickCalendar(now: java.time.ZonedDateTime): String {
         val system = calendarEnabled() && calendarGranted()
         val holiday = holidayEnabled()
-        val ids = if (system) (0 until calendarSelection().length()).map { calendarSelection().getLong(it) }.toSet() else emptySet()
+        val ids = if (system) effectiveIds() else emptySet()
         val today = now.toLocalDate()
         val startDate = today.minusDays(1)
         val endDate = today.plusDays(QUICK_DAYS.toLong())

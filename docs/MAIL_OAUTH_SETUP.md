@@ -93,7 +93,27 @@ Proton/Tuta专用接入、POP3、Exchange专有协议及STARTTLS尚未接入。
 - 邮件正文保存在应用私有目录；仅在每次确认后，有限记录才会发往当前配置的聊天模型。
   服务商OAuth同意与向AI发送内容的确认是两个独立步骤。
 
-## 交大邮箱 jAccount 授权（2026-11-04 新增）
+## 交大邮箱：默认用 jAccount 账号 + 密码（2026-11-05）
+
+学校对安卓客户端的官方说明就是「填写交大邮箱邮箱地址和密码」，因此**推荐并默认**使用预设
+「上海交大邮箱」：
+
+- 账号填 `abc`（会自动归一化成 `abc@sjtu.edu.cn`）或直接填完整地址；
+- 密码填 jAccount 密码；
+- 服务器固定 `mail.sjtu.edu.cn:993`（IMAP over TLS），走标准 `LOGIN`；
+- 密码用 Android Keystore（AES-GCM）加密保存在本机，不通过桥接返回，也不写日志；
+- 不需要申请 jAccount 接口、不需要客户端ID/密钥/回调网址。
+
+实机验证（2026-11-05）：保存后本机记录为
+`user=clawmtest@sjtu.edu.cn`、`host=mail.sjtu.edu.cn`、`port=993`，密码字段为加密串；
+用测试账号读取时服务器在 TLS 握手后返回 `* OK IMAP4rev1 proxy server ready`，
+`LOGIN` 得到明确的 `A1 NO LOGIN failed`——说明账号密码方式链路可用，
+失败原因是测试账号不存在。真实 jAccount 账号的收信验收仍需你本人完成。
+
+边界：如果学校以后关闭密码登录、要求统一身份认证，应用会明确报“读取失败”，
+不会回退成别的登录方式。
+
+## 交大邮箱 jAccount 授权（高级选项，2026-11-04 新增）
 
 交大邮箱的传统接入方式是 IMAP + jAccount 账号密码/客户端授权码（学校说明：
 [交大邮箱](https://net.sjtu.edu.cn/wlfw/dzyj.htm)，IMAP `mail.sjtu.edu.cn:993`）。本次新增的是

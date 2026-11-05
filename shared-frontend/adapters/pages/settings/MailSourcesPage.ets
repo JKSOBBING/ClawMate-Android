@@ -85,6 +85,8 @@ struct MailSourcesPage {
   }
   private isJAccount(): boolean { return this.mode === 'jaccount'; }
   private isOAuth(): boolean { return this.mode === 'google' || this.mode === 'microsoft'; }
+  /** 交大标准邮箱（账号密码方式）：把 abc 归一化成 abc@sjtu.edu.cn。 */
+  private isSjtU(): boolean { return this.mode === 'password' && this.host.trim().toLowerCase() === 'mail.sjtu.edu.cn'; }
 
   private async authorize(): Promise<void> {
     if (this.busy || PersonalSources.busy) { return; }
@@ -170,10 +172,20 @@ struct MailSourcesPage {
     if (this.busy || PersonalSources.busy) { return; }
     this.busy = true; let saved = false;
     try {
-      await Bridge.createBridge('ClawMatePlatform').callMethod('sourcesCredentials', this.host.trim(), Number(this.port), this.username.trim(), this.secret);
+      let account: string = this.username.trim();
+      if (this.isSjtU()) {
+        // 交大邮箱用 jAccount 账号：允许只填 abc，保存前归一化成 abc@sjtu.edu.cn。
+        account = await Bridge.createBridge('ClawMatePlatform').callMethod('sourcesJAccountUser', account) as string;
+        if (account.length === 0) { throw new Error('请输入 jAccount 账号，例如 abc 或 abc@sjtu.edu.cn'); }
+        this.username = account;
+      }
+      // 端口在 Kotlin 侧是字符串参数，不能传 Number。
+      await Bridge.createBridge('ClawMatePlatform').callMethod('sourcesCredentials', this.host.trim(), this.port.trim(), account, this.secret);
       this.secret = ''; this.mail = PersonalSources.empty(); this.analysis = ''; saved = true;
-      this.status = '邮箱配置已保存，授权码加密保存在本机；请重新读取邮件。';
-    } catch (e) { this.status = '保存失败，请核对服务器、端口、账号和授权码。新账号必须填写授权码。'; }
+      this.status = this.isSjtU()
+        ? '已保存 ' + account + '，密码已用系统密钥库加密保存在本机；请读取近三天邮件。'
+        : '邮箱配置已保存，授权码加密保存在本机；请重新读取邮件。';
+    } catch (e) { this.status = '保存失败：' + (e as Error).message + '。新账号必须填写密码或授权码。'; }
     finally { this.busy = false; }
     if (saved && andRead && this.active) { await this.run(); }
   }
@@ -226,13 +238,15 @@ struct MailSourcesPage {
       .fontColor(AppTheme.text($$.enabled ? ($$.danger ? '#D94848' : '#3978E8') : '#A0A8B6'))
       .backgroundColor(Color.Transparent).enabled($$.enabled).onClick($$.action)
   }
-  @Builder Field($$: SourceFieldOptions) {
+  /** 行内字段：直接读页面状态，避免 @Builder 按值参数冻结导致标题/占位符不更新。 */
+  @Builder FieldRow(label: string, value: string, placeholder: string, password: boolean, enabled: boolean, change: (v: string) => void) {
     Column({ space: 2 }) {
-      Text($$.label).width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A')).padding({ left: 16, right: 16, top: 12 })
-      TextInput({ text: $$.value, placeholder: $$.placeholder }).type($$.type === undefined ? InputType.Normal : $$.type).fontSize(15).height(44)
+      Text(label).width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A')).padding({ left: 16, right: 16, top: 12 })
+      TextInput({ text: value, placeholder: placeholder })
+        .type(password ? InputType.Password : InputType.Normal).fontSize(15).height(44)
         .fontColor(AppTheme.text('#161B28')).placeholderColor(AppTheme.text('#A0A8B6'))
         .backgroundColor(Color.Transparent).padding({ left: 16, right: 16 }).borderRadius(0)
-        .accessibilityText($$.label).enabled(!this.busy && $$.editable !== false).onChange($$.change)
+        .accessibilityText(label).enabled(!this.busy && enabled).onChange(change)
     }.width('100%').padding({ bottom: 4 })
   }
 
@@ -248,50 +262,60 @@ struct MailSourcesPage {
           .enabled(!this.busy).onSelect((index: number) => { this.chooseProviderReset(); this.chooseProvider(index); })
       }.width('100%').padding({ right: 8, bottom: 4 })
       this.Line()
-      this.Field({ label: this.isJAccount() ? 'jAccount账号' : '邮箱账号', value: this.username,
-        placeholder: this.isJAccount() ? 'abc 或 abc@sjtu.edu.cn' : 'name@example.com', change: (v: string) => { this.username = v; } })
+      Text(this.isSjtU() || this.isJAccount() ? 'jAccount账号' : '邮箱账号')
+        .width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A')).padding({ left: 16, right: 16, top: 12 })
+      TextInput({ text: this.username, placeholder: this.isSjtU() || this.isJAccount() ? 'abc 或 abc@sjtu.edu.cn' : 'name@example.com' })
+        .fontSize(15).height(44).fontColor(AppTheme.text('#161B28')).placeholderColor(AppTheme.text('#A0A8B6'))
+        .backgroundColor(Color.Transparent).padding({ left: 16, right: 16 }).borderRadius(0)
+        .accessibilityText('邮箱账号').enabled(!this.busy)
+        .onChange((value: string) => { this.username = value; })
       this.Line()
-      this.Field({ label: 'IMAP加密收信服务器', value: this.host, placeholder: 'imap.qq.com', change: (v: string) => { this.host = v; },
-        type: InputType.Normal, editable: this.mode === 'password' })
+      Text('IMAP加密收信服务器').width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A')).padding({ left: 16, right: 16, top: 12 })
+      TextInput({ text: this.host, placeholder: 'imap.qq.com' })
+        .fontSize(15).height(44).fontColor(AppTheme.text(this.mode === 'password' ? '#161B28' : '#6B7385'))
+        .placeholderColor(AppTheme.text('#A0A8B6')).backgroundColor(Color.Transparent)
+        .padding({ left: 16, right: 16 }).borderRadius(0).accessibilityText('IMAP加密收信服务器')
+        .enabled(!this.busy && this.mode === 'password')
+        .onChange((value: string) => { this.host = value; })
       this.Line()
-      this.Field({ label: 'TLS端口', value: this.port, placeholder: '993', change: (v: string) => { this.port = v; },
-        type: InputType.Number, editable: this.mode === 'password' })
+      Text('TLS端口').width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A')).padding({ left: 16, right: 16, top: 12 })
+      TextInput({ text: this.port, placeholder: '993' })
+        .type(InputType.Number).fontSize(15).height(44).fontColor(AppTheme.text(this.mode === 'password' ? '#161B28' : '#6B7385'))
+        .placeholderColor(AppTheme.text('#A0A8B6')).backgroundColor(Color.Transparent)
+        .padding({ left: 16, right: 16 }).borderRadius(0).accessibilityText('TLS端口')
+        .enabled(!this.busy && this.mode === 'password')
+        .onChange((value: string) => { this.port = value; })
       if (this.mode === 'password') {
         this.Line()
-        this.Field({ label: '客户端授权码', value: this.secret, placeholder: '首次必填，留空保留已存授权码', change: (v: string) => { this.secret = v; }, type: InputType.Password })
+        Text(this.isSjtU() ? 'jAccount密码' : '客户端授权码')
+          .width('100%').fontSize(12).fontColor(AppTheme.text('#7C879A')).padding({ left: 16, right: 16, top: 12 })
+        TextInput({ text: this.secret, placeholder: this.isSjtU() ? 'jAccount 密码；留空保留已存密码' : '首次必填，留空保留已存授权码' })
+          .type(InputType.Password).fontSize(15).height(44).fontColor(AppTheme.text('#161B28'))
+          .placeholderColor(AppTheme.text('#A0A8B6')).backgroundColor(Color.Transparent)
+          .padding({ left: 16, right: 16 }).borderRadius(0).accessibilityText('客户端授权码')
+          .enabled(!this.busy).onChange((value: string) => { this.secret = value; })
       }
       if (this.mode === 'microsoft') {
         this.Line()
-        this.Field({ label: 'Microsoft应用客户端ID', value: this.clientId, placeholder: '应用注册中的客户端ID（非密钥）', change: (v: string) => { this.clientId = v; } })
+        this.FieldRow('Microsoft应用客户端ID', this.clientId, '应用注册中的客户端ID（非密钥）', false, true,
+          (value: string) => { this.clientId = value; })
         this.Line()
-        this.Field({ label: 'Microsoft租户', value: this.tenant, placeholder: 'common 或租户ID', change: (v: string) => { this.tenant = v; } })
+        this.FieldRow('Microsoft租户', this.tenant, 'common 或租户ID', false, true,
+          (value: string) => { this.tenant = value; })
       }
       if (this.isJAccount()) {
         this.Line()
-        this.Field({ label: 'jAccount客户端ID', value: this.clientId, placeholder: '网络信息中心分配的clientId', change: (v: string) => { this.clientId = v; } })
+        this.FieldRow('jAccount客户端ID', this.clientId, '网络信息中心分配的clientId', false, true,
+          (value: string) => { this.clientId = value; })
         this.Line()
-        this.Field({ label: 'jAccount回调网址', value: this.jaccountRedirect,
-          placeholder: '在交我办登记的服务网址（HTTPS）或 ' + JACCOUNT_DEEP_LINK, change: (v: string) => { this.jaccountRedirect = v; } })
+        this.FieldRow('jAccount回调网址', this.jaccountRedirect, 'HTTPS 服务网址或 clawmate://jaccount', false, true,
+          (value: string) => { this.jaccountRedirect = value; })
         this.Line()
-        this.Field({ label: 'jAccount密钥', value: this.jaccountSecret, placeholder: '仅用于本次换取令牌，不保存',
-          change: (v: string) => { this.jaccountSecret = v; }, type: InputType.Password })
+        this.FieldRow('jAccount密钥', this.jaccountSecret, '仅用于本次换取令牌，不保存', true, true,
+          (value: string) => { this.jaccountSecret = value; })
       }
     }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).clip(true)
     this.Hint({ message: this.providerHint })
-    Column() {
-      Row() {
-        Column({ space: 4 }) {
-          Text('交大邮箱登录方式').fontSize(15).fontColor(AppTheme.text('#161B28')).width('100%')
-          Text(this.isJAccount() ? '当前：jAccount 授权（OAuth2）。' : '当前：客户端授权码。').fontSize(12).fontColor(AppTheme.text('#7C879A')).width('100%')
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button(this.isJAccount() ? '改用授权码' : '使用jAccount').fontSize(12).height(34).padding({ left: 12, right: 12 }).borderRadius(10)
-          .fontColor(AppTheme.text('#3978E8')).backgroundColor(AppTheme.background('#EEF2FF')).enabled(!this.busy)
-          .onClick(() => {
-            let index = MAIL_PROVIDERS.findIndex((p: MailProvider): boolean => p.mode === (this.isJAccount() ? 'password' : 'jaccount'));
-            if (index >= 0) { this.chooseProviderReset(); this.chooseProvider(index); }
-          })
-      }.width('100%').padding(16)
-    }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).margin({ top: 12 })
     this.Hint({ message: '每次配置一个账号。保存或开始授权会清除旧邮件副本；不下载附件、不修改邮件已读状态。' })
     if (this.isJAccount()) {
       this.Section('jAccount 授权')
@@ -306,9 +330,8 @@ struct MailSourcesPage {
         }
         if (this.status) { this.Line(); Text(this.status).fontSize(12).lineHeight(18).fontColor(AppTheme.text('#68758B')).padding(16).width('100%'); }
       }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20)
-      this.Hint({ message: '交大邮箱需要先申请 jAccount 接口，网络信息中心分配 clientId 与密钥，并在交我办登记服务网址。' +
-        '授权成功后以 OAUTHBEARER 登录 mail.sjtu.edu.cn；若学校服务器未开放该登录方式会明确报错，不会回退成密码登录。' +
-        'Deep Link 回调（' + JACCOUNT_DEEP_LINK + '）需要在 jAccount 申请表单中登记。' })
+      this.Hint({ message: '需要先在交我办申请 jAccount 接口，网络信息中心分配 clientId 与密钥，并在交我办登记服务网址或 clawmate://jaccount。' +
+        '授权成功后以 OAUTHBEARER 登录 mail.sjtu.edu.cn；若学校服务器未开放该登录方式会明确报错，不会回退成密码登录。' })
     }
     if (this.isOAuth()) {
       this.Section('邮箱授权')

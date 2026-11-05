@@ -1,4 +1,4 @@
-﻿package com.clawmate.shared
+package com.clawmate.shared
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -58,6 +58,11 @@ class PlatformBridge(private val activity: StageActivity) :
     } catch (_: Exception) {
         JSONObject().put("ok", false).put("error", "无法开始jAccount授权，请稍后重试").toString()
     }
+    /**
+     * 交大邮箱登录名归一化：`abc` → `abc@sjtu.edu.cn`；非法输入返回空串，由前端提示。
+     * 只做规范化与校验，不保存任何凭据。
+     */
+    fun sourcesJAccountUser(raw: String): String = com.clawmate.platform.sources.JAccountOAuth.normalizeAccount(raw) ?: ""
     /**
      * 宿主收到的 jAccount 回调（Deep Link 或已登记网址）：交给 MailOAuth 校验 state 并兑换令牌。
      * 只接受本应用的 Deep Link 或带授权码查询串的回调；其它链接明确返回 false。

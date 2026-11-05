@@ -4,11 +4,13 @@ import { promptAction } from '@kit.ArkUI';
 import { AiServiceAccess } from '../utils/AiServiceAccess';
 import { PrivacyConsent } from '../utils/PrivacyConsent';
 
-export interface SourceOptions { calendarEnabled: boolean; holidayEnabled: boolean; historyDays: number; selected: number[]; maxMessages: number; }
+// disabledGroups：按类别停用的系统日历分组（birthday/anniversary/countdown），本机日历始终可读。
+export interface SourceOptions { calendarEnabled: boolean; holidayEnabled: boolean; historyDays: number; selected: number[]; maxMessages: number; disabledGroups?: string[]; }
 export interface MailConfiguration { host: string; port: number; username: string; mode: string; client: string; tenant: string; }
 // source: 'system'（手机系统日历）或 'holiday'（常用节假日）。两类来源始终分开标注。
 export interface SourceItem { id: string; title: string; body: string; start: number; end: number; location: string; allDay: boolean; timeZone: string; calendarId: number; source: string; }
-export interface SourceCalendar { id: number; name: string; kind: string; }
+// 系统日历按类别汇总：id 为分类用的负编号，members 是该类别下的真实日历 id。
+export interface SourceCalendar { id: number; name: string; kind: string; group?: string; enabled?: boolean; members?: number[]; memberNames?: string; count?: number; }
 export interface SourceSnapshot { items: SourceItem[]; sources: SourceCalendar[]; selected: number[]; syncedAt: number; windowStart: number; windowEnd: number; partial: boolean; }
 interface SourcePoll { state: string; value: string; }
 interface SourceResult { ok: boolean; value: string; error: string; }

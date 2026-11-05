@@ -1101,3 +1101,35 @@ docs/CALENDAR_MAIL_MODEL_DOWNLOAD.md。
 本轮检查：`:android-capabilities:testDebugUnitTest :app:testDebugUnitTest` 全绿
 （184 项 + 1243 项，0 失败）；ArkTS hvigor 编译、package-android、build-state seal 通过；
 APK 构建并安装到 PKB110，上述页面均在实机浏览。
+## 日历来源整合、页首月视图、交大邮箱账号密码登录（2026-11-05）
+
+按用户要求做三项调整，并在 OPPO PKB110 上逐项验证。
+
+日历来源整合与中文命名（Kotlin `CalendarSourceLabels`）：
+- 原来直接列出 6 个系统日历（`local account`、`birthday@localhost`、`oplus_new_birthday_default_calendar`、
+  `oplus_anniversary_default_calendar`、`oplus_countdown_default_calendar` 等包名），现在按规则归成
+  「本机日历 / 生日 / 纪念日 / 倒计时和订阅 / 常用节假日」，界面只显示中文名，具体日历放在“包含：…”小字里。
+- 每类一个开关；`disabledGroups` 持久化停用类别，`effectiveIds()` 只返回“已勾选且类别启用”的日历，
+  同步与首页快速浏览都走这一层，避免关掉的类别仍被读取。
+- 实机：四个分类开关全部渲染；关闭“生日”后 prefs 变为 `disabledGroups=birthday`、`selected` 去掉 2/3；
+  再打开恢复为 `disabledGroups` 为空、`selected=[1,4,5,2,3]`，列表消失/恢复的问题已修复。
+
+页首月视图（页面内建，避免 @Builder/@Prop 按值参数冻结）：
+- 月视图可翻月、回合今天；日期格子用蓝/橙小圆点标记“有日程/有节假日”；
+  点日期在卡片内展开当天条目（来源、时间、标题），“收起/展开”可折叠。
+- 实机：11 月网格中 11-07/08、11-14/15、11-21/22 等日期带节假日标记（共 11 个日期）；
+  点 11-08 展开得到“常用节假日 · 全天 · 周末休息”。底部“日历记忆”改为只列所选日期。
+
+交大邮箱改为 jAccount 账号 + 密码（默认）：
+- 预设「上海交大邮箱」= jAccount 账号 + 密码，IMAP `mail.sjtu.edu.cn:993` 走标准 LOGIN；
+  账号允许只填 `abc`，保存前经 `sourcesJAccountUser` 归一化成 `abc@sjtu.edu.cn`。
+- OAuth 授权码流程保留为「上海交大邮箱（jAccount授权·高级）」，需要先申请 jAccount 接口。
+- 实机：切换预设后字段标题正确变为“jAccount账号 / jAccount密码”（修复了切换预设后标题不刷新的问题）；
+  保存后本机记录 `user=clawmtest@sjtu.edu.cn`、密码为 Keystore 加密串；读取时服务器返回
+  `* OK IMAP4rev1 proxy server ready`，`LOGIN` 得到 `A1 NO LOGIN failed`（测试账号不存在），
+  证明账号密码链路可用；测试凭据已清除。
+
+本轮检查：`:android-capabilities:testDebugUnitTest` 195 项 / 0 失败（新增 CalendarSourceLabelsTest 5 项、
+CalendarMonthViewTest 6 项）；ArkTS 编译、package-android、seal 通过；APK 构建并安装到 PKB110 逐页验证。
+
+仍未验收：真实 jAccount 账号的收信、真实日程（本机日历为空）与跨月日程显示、会议模块（仍是临时桩）。
