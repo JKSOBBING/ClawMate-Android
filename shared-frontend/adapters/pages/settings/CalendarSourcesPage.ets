@@ -11,11 +11,15 @@ interface SourceActionOptions { label: string; enabled: boolean; action: () => v
 interface SourceHintOptions { message: string; }
 interface SourceRoute { kind?: string; }
 interface SourceAnalysisResult { ok: boolean; }
-interface CalendarCell { date: string; day: number; inMonth: boolean; hasEvent: boolean; hasHoliday: boolean; isToday: boolean; isSelected: boolean; }
+interface FestivalCategoryRow { key: string; label: string; }
+interface CalendarCell { date: string; day: number; inMonth: boolean; hasEvent: boolean; hasHoliday: boolean;
+  hasFestival: boolean; hasTerm: boolean; isToday: boolean; isSelected: boolean; }
 const WEEKDAYS: string[] = ['一', '二', '三', '四', '五', '六', '日'];
 
 const SYSTEM_SOURCE: string = '系统日历';
 const HOLIDAY_SOURCE: string = '常用节假日';
+const FESTIVAL_SOURCE: string = '节日';
+const SOLAR_TERM_SOURCE: string = '二十四节气';
 
 // 日历分析：来源分为“系统日历”和“常用节假日”两类，读取结果按来源标注后进入本机记忆，
 // 并出现在首页“为你提醒”。日程是计划，不代表已经完成。
@@ -24,7 +28,8 @@ const HOLIDAY_SOURCE: string = '常用节假日';
 struct PersonalSourcesPage {
   @State kind: string = 'calendar';
   @State status: string = '';
-  @State options: SourceOptions = { calendarEnabled: false, holidayEnabled: true, historyDays: 90, selected: [], maxMessages: 50 };
+  @State options: SourceOptions = { calendarEnabled: false, holidayEnabled: true, festivalEnabled: true, solarTermEnabled: true,
+    disabledFestivalCategories: [], historyDays: 90, selected: [], maxMessages: 50 };
   private scroller: Scroller = new Scroller();
   @State busy: boolean = false;
   @State calendar: SourceSnapshot = PersonalSources.empty();
@@ -37,10 +42,18 @@ struct PersonalSourcesPage {
   @State cursorMonth: number = new Date().getMonth() + 1;
   @State expanded: boolean = true;
   private active: boolean = false;
+  /** 节日类别行：放在组件字段里，ForEach 不内联对象字面量。 */
+  private festivalRows: FestivalCategoryRow[] = [
+    { key: 'chinese', label: '中国传统节日' },
+    { key: 'western', label: '西方节日' },
+    { key: 'international', label: '国际日与纪念日' },
+  ];
   private client: CloudModelClient = new CloudModelClient();
   private sync: PersonalSourceSync = new PersonalSourceSync();
 
-  aboutToAppear(): void { this.kind = (router.getParams() as SourceRoute)?.kind === 'mail' ? 'mail' : 'calendar'; this.active = true; this.reload(); }
+  aboutToAppear(): void {
+    this.kind = (router.getParams() as SourceRoute)?.kind === 'mail' ? 'mail' : 'calendar'; this.active = true; this.reload();
+  }
   aboutToDisappear(): void { this.active = false; this.cancel(); }
   onPageHide(): void { this.active = false; this.cancel(); }
   onPageShow(): void { this.active = true; this.reload(); }
@@ -78,12 +91,16 @@ struct PersonalSourcesPage {
         this.granted = await Bridge.createBridge('ClawMatePlatform').callMethod('sourcesPermission') as boolean;
         if (!this.granted) { this.status = '请允许系统日历权限，返回后再次开启“系统日历”。'; return; }
       }
-      if (!enabled && !holiday) { this.status = '至少保留一个日历来源：系统日历或常用节假日。'; return; }
-      let next: SourceOptions = { calendarEnabled: enabled, holidayEnabled: holiday, historyDays: days, selected: selected, maxMessages: this.options.maxMessages };
+      if (!enabled && !holiday && !this.festivalEnabled() && !this.solarTermEnabled()) {
+        this.status = '至少保留一个日历来源：系统日历、常用节假日、节日或节气。'; return;
+      }
+      let next: SourceOptions = { calendarEnabled: enabled, holidayEnabled: holiday, festivalEnabled: this.festivalEnabled(),
+        solarTermEnabled: this.solarTermEnabled(), disabledFestivalCategories: this.options.disabledFestivalCategories,
+        historyDays: days, selected: selected, maxMessages: this.options.maxMessages };
       await PersonalSources.saveOptions('calendar', next); this.options = next; this.selected = selected;
       this.calendar = await PersonalSources.snapshot('calendar'); this.analysis = '';
       // 保存选项会清空旧记忆；来源列表必须重新加载，否则页面会误显示成没有可用来源。
-      if ((enabled && this.granted) || holiday) { await this.loadCalendars(); }
+      if ((enabled && this.granted) || holiday || this.festivalEnabled() || this.solarTermEnabled()) { await this.loadCalendars(); }
       this.status = '设置已保存，请读取并同步日历记忆，日程与节假日会显示在首页“为你提醒”。';
     } catch (e) { this.status = '设置未完成：' + (e as Error).message; }
     finally { this.busy = false; }
@@ -120,6 +137,52 @@ struct PersonalSourcesPage {
     catch (e) { this.status = '分类开关保存失败：' + (e as Error).message; }
   }
 
+  /** 切换“节日”或“节气”这类内置来源。 */
+  private async setBuiltIn(festival: boolean, solarTerm: boolean): Promise<void> {
+    if (this.busy || PersonalSources.busy) { return; }
+    let next: SourceOptions = { calendarEnabled: this.options.calendarEnabled, holidayEnabled: this.options.holidayEnabled,
+      festivalEnabled: festival, solarTermEnabled: solarTerm,
+      disabledFestivalCategories: this.options.disabledFestivalCategories, historyDays: this.options.historyDays,
+      selected: this.selected, maxMessages: this.options.maxMessages };
+    this.busy = true;
+    try {
+      await PersonalSources.saveOptions('calendar', next); this.options = next;
+      this.calendar = await PersonalSources.snapshot('calendar');
+      await this.loadCalendars();
+      this.status = '设置已保存，请重新“读取并同步日历记忆”以更新节日与节气。';
+    } catch (e) { this.status = '设置未完成：' + (e as Error).message; }
+    finally { this.busy = false; }
+  }
+
+  /** 切换某个节日类别（中国/西方/国际）。 */
+  private async toggleFestivalCategory(key: string, on: boolean): Promise<void> {
+    let disabled: string[] = this.options.disabledFestivalCategories === undefined ? [] : this.options.disabledFestivalCategories.slice(0);
+    if (on) { disabled = disabled.filter((value: string): boolean => value !== key); }
+    else if (disabled.indexOf(key) < 0) { disabled = disabled.concat([key]); }
+    if (disabled.length >= 3) { this.status = '至少保留一个节日类别。'; return; }
+    let next: SourceOptions = { calendarEnabled: this.options.calendarEnabled, holidayEnabled: this.options.holidayEnabled,
+      festivalEnabled: this.festivalEnabled(), solarTermEnabled: this.solarTermEnabled(),
+      disabledFestivalCategories: disabled, historyDays: this.options.historyDays, selected: this.selected,
+      maxMessages: this.options.maxMessages };
+    this.busy = true;
+    try {
+      await PersonalSources.saveOptions('calendar', next); this.options = next;
+      this.calendar = await PersonalSources.snapshot('calendar');
+      await this.loadCalendars();
+    } catch (e) { this.status = '节日类别保存失败：' + (e as Error).message; }
+    finally { this.busy = false; }
+  }
+
+  /** 节日/节气开关的取值：未设置时视为开启（与后端默认一致）。 */
+  private festivalEnabled(): boolean { return this.options.festivalEnabled !== false; }
+
+  private solarTermEnabled(): boolean { return this.options.solarTermEnabled !== false; }
+
+  private festivalOn(key: string): boolean {
+    let disabled: string[] = this.options.disabledFestivalCategories === undefined ? [] : this.options.disabledFestivalCategories;
+    return disabled.indexOf(key) < 0;
+  }
+
   private async run(): Promise<void> {
     if (PersonalSources.busy || this.busy) { return; }
     this.busy = true;
@@ -127,9 +190,19 @@ struct PersonalSourcesPage {
       this.analysis = ''; this.status = '正在读取，请稍候…'; this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
       let next = await this.sync.run('calendar', (message: string): void => { this.status = message; });
       this.calendar = next;
-      let systemCount = 0; let holidayCount = 0;
-      next.items.forEach((item: SourceItem): void => { if (item.source === 'holiday') { holidayCount++; } else { systemCount++; } });
-      this.status = '已同步 ' + next.items.length + ' 项（' + SYSTEM_SOURCE + ' ' + systemCount + ' 项、' + HOLIDAY_SOURCE + ' ' + holidayCount + ' 项）。' +
+      let systemCount = 0; let holidayCount = 0; let festivalCount = 0; let termCount = 0;
+      next.items.forEach((item: SourceItem): void => {
+        if (item.source === 'holiday') { holidayCount++; }
+        else if (item.source === 'festival') { festivalCount++; }
+        else if (item.source === 'solarTerm') { termCount++; }
+        else { systemCount++; }
+      });
+      let parts: string[] = [];
+      if (systemCount > 0 || this.options.calendarEnabled) { parts.push(SYSTEM_SOURCE + ' ' + systemCount + ' 项'); }
+      if (holidayCount > 0 || this.options.holidayEnabled) { parts.push(HOLIDAY_SOURCE + ' ' + holidayCount + ' 项'); }
+      if (festivalCount > 0 || this.festivalEnabled()) { parts.push(FESTIVAL_SOURCE + ' ' + festivalCount + ' 项'); }
+      if (termCount > 0 || this.solarTermEnabled()) { parts.push(SOLAR_TERM_SOURCE + ' ' + termCount + ' 项'); }
+      this.status = '已同步 ' + next.items.length + ' 项（' + parts.join('、') + '）。' +
         '日程不代表已完成；首页“为你提醒”已显示未来7天安排。' +
         (next.partial ? '本次未完整覆盖，部分记录超过上限，请在原应用核对。' : '');
     } catch (e) { this.status = (e as Error).message + '；未将本次失败记为同步成功。'; }
@@ -173,7 +246,17 @@ struct PersonalSourcesPage {
   }
 
   private sourceName(item: SourceItem): string {
-    return item.source === 'holiday' ? HOLIDAY_SOURCE : SYSTEM_SOURCE;
+    if (item.source === 'holiday') { return HOLIDAY_SOURCE; }
+    if (item.source === 'festival') { return FESTIVAL_SOURCE; }
+    if (item.source === 'solarTerm') { return SOLAR_TERM_SOURCE; }
+    return SYSTEM_SOURCE;
+  }
+
+  private sourceColor(item: SourceItem): string {
+    if (item.source === 'holiday') { return '#B4690E'; }
+    if (item.source === 'festival') { return '#A3447A'; }
+    if (item.source === 'solarTerm') { return '#2C7A6B'; }
+    return '#3978E8';
   }
 
   /** 小日历选中日期当天的记忆条目（跨天日程在每一天都算）。 */
@@ -208,12 +291,16 @@ struct PersonalSourcesPage {
       let date = new Date(this.cursorYear, this.cursorMonth - 1, 1 - offset + index);
       let key = this.keyOf(date.getTime());
       let dayItems = this.itemsOnKey(key);
+      if (dayItems.length > 0 && index < 42) {
+      }
       let cell: CalendarCell = {
         date: key,
         day: date.getDate(),
         inMonth: date.getMonth() === this.cursorMonth - 1,
-        hasEvent: dayItems.some((item: SourceItem): boolean => item.source !== 'holiday'),
+        hasEvent: dayItems.some((item: SourceItem): boolean => item.source === 'system' || item.source === undefined),
         hasHoliday: dayItems.some((item: SourceItem): boolean => item.source === 'holiday'),
+        hasFestival: dayItems.some((item: SourceItem): boolean => item.source === 'festival'),
+        hasTerm: dayItems.some((item: SourceItem): boolean => item.source === 'solarTerm'),
         isToday: key === todayKey,
         isSelected: key === this.selectedDate,
       };
@@ -231,7 +318,38 @@ struct PersonalSourcesPage {
     });
   }
 
-  private monthTitle(): string { return this.cursorYear + '年' + this.cursorMonth + '月'; }
+  /** 来源卡片的小字说明：单独成方法，避免 build 里出现多层三目。 */
+  private sourceDetail(source: SourceCalendar): string {
+    if (source.kind === 'holiday') { return '国务院放假安排（法定节假日与调休上班日），不含普通周末。'; }
+    if (source.kind === 'festival') { return '中国传统节日、西方节日、国际日，日期按农历与规则换算。'; }
+    if (source.kind === 'solarTerm') { return '二十四节气，按太阳黄经计算，覆盖 1900—2099 年。'; }
+    if (source.memberNames !== undefined && source.memberNames.length > 0) { return '包含：' + source.memberNames; }
+    return '共 ' + (source.count === undefined ? 0 : source.count) + ' 个日历';
+  }
+
+  /** 按日期现算单元格状态：@Builder 的值参数会被冻结，不能依赖传入的 cell 快照。 */
+  private cellFor(date: string): CalendarCell {
+    let dayItems = this.itemsOnKey(date);
+    let todayKey = this.keyOf(Date.now());
+    let parts = date.split('-');
+    let year = Number(parts[0]);
+    let month = Number(parts[1]);
+    return {
+      date: date,
+      day: Number(parts[2]),
+      inMonth: year === this.cursorYear && month === this.cursorMonth,
+      hasEvent: dayItems.some((item: SourceItem): boolean => item.source === 'system' || item.source === undefined),
+      hasHoliday: dayItems.some((item: SourceItem): boolean => item.source === 'holiday'),
+      hasFestival: dayItems.some((item: SourceItem): boolean => item.source === 'festival'),
+      hasTerm: dayItems.some((item: SourceItem): boolean => item.source === 'solarTerm'),
+      isToday: date === todayKey,
+      isSelected: date === this.selectedDate,
+    };
+  }
+
+  private monthTitle(): string {
+    return this.cursorYear + '年' + this.cursorMonth + '月';
+  }
 
   private shiftMonth(delta: number): void {
     let month = this.cursorMonth + delta;
@@ -265,26 +383,29 @@ struct PersonalSourcesPage {
     Circle({ width: 4, height: 4 }).fill(color).margin({ right: 2 })
   }
 
-  @Builder DayCell(cell: CalendarCell) {
+  @Builder DayCell(dateKeyValue: string) {
     Column({ space: 3 }) {
-      Text(String(cell.day))
+      Text(String(this.cellFor(dateKeyValue).day))
         .fontSize(15)
-        .fontWeight(cell.isSelected || cell.isToday ? FontWeight.Bold : FontWeight.Normal)
-        .fontColor(AppTheme.text(!cell.inMonth ? '#C2C8D2' : cell.isSelected ? '#FFFFFF' : cell.isToday ? '#3978E8' : '#161B28'))
+        .fontWeight(this.cellFor(dateKeyValue).isSelected || this.cellFor(dateKeyValue).isToday ? FontWeight.Bold : FontWeight.Normal)
+        .fontColor(AppTheme.text(!this.cellFor(dateKeyValue).inMonth ? '#C2C8D2' : this.cellFor(dateKeyValue).isSelected ? '#FFFFFF' : this.cellFor(dateKeyValue).isToday ? '#3978E8' : '#161B28'))
       Row() {
-        if (cell.hasEvent) { this.Dot('#3F7BF6') }
-        if (cell.hasHoliday) { this.Dot('#E08A2B') }
-        if (!cell.hasEvent && !cell.hasHoliday) { Blank().width(4).height(4) }
+        if (this.cellFor(dateKeyValue).hasEvent) { this.Dot('#3F7BF6') }
+        if (this.cellFor(dateKeyValue).hasHoliday) { this.Dot('#E08A2B') }
+        if (this.cellFor(dateKeyValue).hasFestival) { this.Dot('#C05299') }
+        if (this.cellFor(dateKeyValue).hasTerm) { this.Dot('#2C9A85') }
+        if (!this.cellFor(dateKeyValue).hasEvent && !this.cellFor(dateKeyValue).hasHoliday && !this.cellFor(dateKeyValue).hasFestival && !this.cellFor(dateKeyValue).hasTerm) { Blank().width(4).height(4) }
       }.height(6)
     }
     .justifyContent(FlexAlign.Center)
     .width('100%')
     .height(46)
     .borderRadius(12)
-    .backgroundColor(cell.isSelected ? '#3978E8' : cell.isToday ? '#EEF2FF' : Color.Transparent)
-    .accessibilityText(cell.date + (cell.hasEvent ? ' 有日程' : '') + (cell.hasHoliday ? ' 有节假日' : ''))
+    .backgroundColor(this.cellFor(dateKeyValue).isSelected ? '#3978E8' : this.cellFor(dateKeyValue).isToday ? '#EEF2FF' : Color.Transparent)
+    .accessibilityText(this.cellFor(dateKeyValue).date + (this.cellFor(dateKeyValue).hasEvent ? ' 有日程' : '') + (this.cellFor(dateKeyValue).hasHoliday ? ' 有节假日' : '') +
+      (this.cellFor(dateKeyValue).hasFestival ? ' 有节日' : '') + (this.cellFor(dateKeyValue).hasTerm ? ' 有节气' : ''))
     .onClick(() => {
-      this.selectedDate = cell.date;
+      this.selectedDate = this.cellFor(dateKeyValue).date;
       this.expanded = true;
     })
   }
@@ -310,14 +431,22 @@ struct PersonalSourcesPage {
       ForEach([0, 1, 2, 3, 4, 5], (row: number) => {
         Row() {
           ForEach(this.monthCells().slice(row * 7, row * 7 + 7), (cell: CalendarCell) => {
-            Column() { this.DayCell(cell) }.layoutWeight(1)
+            Column() { this.DayCell(cell.date) }.layoutWeight(1)
           }, (cell: CalendarCell): string => cell.date + ':' + String(cell.isSelected) + ':' + String(cell.hasEvent) + ':' + String(cell.hasHoliday))
         }.width('100%')
       }, (row: number): string => 'row' + row)
 
-      Row({ space: 14 }) {
+      Row({ space: 10 }) {
         Row({ space: 4 }) { this.Dot('#3F7BF6'); Text('日程').fontSize(11).fontColor(AppTheme.text('#7C879A')) }
-        Row({ space: 4 }) { this.Dot('#E08A2B'); Text('节假日').fontSize(11).fontColor(AppTheme.text('#7C879A')) }
+        if (this.options.holidayEnabled) {
+          Row({ space: 4 }) { this.Dot('#E08A2B'); Text('节假日').fontSize(11).fontColor(AppTheme.text('#7C879A')) }
+        }
+        if (this.festivalEnabled()) {
+          Row({ space: 4 }) { this.Dot('#C05299'); Text('节日').fontSize(11).fontColor(AppTheme.text('#7C879A')) }
+        }
+        if (this.solarTermEnabled()) {
+          Row({ space: 4 }) { this.Dot('#2C9A85'); Text('节气').fontSize(11).fontColor(AppTheme.text('#7C879A')) }
+        }
         Blank()
         Text(this.calendar.syncedAt > 0 ? '已同步 ' + this.calendar.items.length + ' 项' : '尚未同步')
           .fontSize(11).fontColor(AppTheme.text('#9AA2B1'))
@@ -342,8 +471,8 @@ struct PersonalSourcesPage {
             ForEach(this.itemsOnKey(this.selectedDate), (item: SourceItem) => {
               Column({ space: 4 }) {
                 Row({ space: 6 }) {
-                  Text(item.source === 'holiday' ? '常用节假日' : '系统日历')
-                    .fontSize(10).fontColor(AppTheme.text(item.source === 'holiday' ? '#B4690E' : '#3978E8'))
+                  Text(this.sourceName(item))
+                    .fontSize(10).fontColor(AppTheme.text(this.sourceColor(item)))
                     .padding({ left: 6, right: 6, top: 2, bottom: 2 })
                     .backgroundColor(AppTheme.background(item.source === 'holiday' ? '#FDF3E3' : '#EEF2FF')).borderRadius(6)
                   Text(this.timeOf(item)).fontSize(11).fontColor(AppTheme.text('#7C879A'))
@@ -406,8 +535,47 @@ struct PersonalSourcesPage {
           .accessibilityText(HOLIDAY_SOURCE)
           .onChange((value: boolean) => { if (value !== this.options.holidayEnabled) { this.setCalendar(this.options.calendarEnabled, value, this.options.historyDays, this.selected); } })
       }.width('100%').padding(16)
+      this.Line()
+      Row() {
+        Column({ space: 4 }) {
+          Text(FESTIVAL_SOURCE).fontSize(16).fontColor(AppTheme.text('#161B28')).width('100%')
+          Text('中国传统节日、主流西方节日与常见国际日；日期由农历和规则换算，不联网。')
+            .fontSize(12).lineHeight(18).fontColor(AppTheme.text('#7C879A')).width('100%')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.festivalEnabled() }).selectedColor('#3978E8').enabled(!this.busy)
+          .accessibilityText(FESTIVAL_SOURCE)
+          .onChange((value: boolean) => {
+            if (value !== this.festivalEnabled()) { this.setBuiltIn(value, this.solarTermEnabled()); }
+          })
+      }.width('100%').padding(16)
+      this.Line()
+      Row() {
+        Column({ space: 4 }) {
+          Text(SOLAR_TERM_SOURCE).fontSize(16).fontColor(AppTheme.text('#161B28')).width('100%')
+          Text('按太阳黄经计算的二十四节气，例如立冬、小雪；覆盖 1900—2099 年。')
+            .fontSize(12).lineHeight(18).fontColor(AppTheme.text('#7C879A')).width('100%')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.solarTermEnabled() }).selectedColor('#3978E8').enabled(!this.busy)
+          .accessibilityText(SOLAR_TERM_SOURCE)
+          .onChange((value: boolean) => {
+            if (value !== this.solarTermEnabled()) { this.setBuiltIn(this.festivalEnabled(), value); }
+          })
+      }.width('100%').padding(16)
     }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20)
-    this.Hint({ message: '两个来源可以同时开启：系统日历读取日程，常用节假日提供节假日与调休信息。' +
+    if (this.festivalEnabled()) {
+      Column() {
+        ForEach(this.festivalRows, (row: FestivalCategoryRow, index: number) => {
+            if (index > 0) { this.Line(); }
+            Row() {
+              Text(row.label).fontSize(15).fontColor(AppTheme.text('#161B28')).layoutWeight(1)
+              Toggle({ type: ToggleType.Switch, isOn: this.festivalOn(row.key) }).selectedColor('#3978E8').enabled(!this.busy)
+                .accessibilityText(row.label)
+                .onChange((on: boolean) => { if (on !== this.festivalOn(row.key)) { this.toggleFestivalCategory(row.key, on); } })
+            }.width('100%').padding({ left: 16, right: 12, top: 8, bottom: 8 })
+          }, (row: FestivalCategoryRow): string => row.key + ':' + String(this.festivalOn(row.key)))
+      }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).margin({ top: 12 })
+    }
+    this.Hint({ message: '四个来源可以同时开启：系统日历读取日程；常用节假日给出放假与调休；节日与节气回答“今天是什么日子”。' +
       (this.options.calendarEnabled && !this.granted ? '尚未获得系统日历权限，请再次开启以授权。' : '') })
     this.Section('记忆与提醒')
     Column() {
@@ -435,35 +603,38 @@ struct PersonalSourcesPage {
           Column({ space: 3 }) {
             Row({ space: 8 }) {
               Text(source.name).fontSize(15).fontColor(AppTheme.text('#161B28'))
-              if (source.kind === 'holiday') {
+              if (source.kind !== 'system' && source.kind !== 'group') {
                 Text('内置').fontSize(10).fontColor(AppTheme.text('#B4690E')).padding({ left: 5, right: 5, top: 1, bottom: 1 })
                   .backgroundColor(AppTheme.background('#FDF3E3')).borderRadius(5)
               }
             }.width('100%')
-            Text(source.kind === 'holiday' ? '放假与调休安排，默认全部读取。'
-              : (source.memberNames ? '包含：' + source.memberNames : '共 ' + source.count + ' 个日历'))
+            Text(this.sourceDetail(source))
               .fontSize(11).fontColor(AppTheme.text('#8A91A1')).width('100%').maxLines(2)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          if (source.kind === 'holiday') {
-            Text('始终读取').fontSize(12).fontColor(AppTheme.text('#8993A4'))
-          } else {
+          // 内置来源（节假日/节日/节气）在上面统一开关，这里只标注状态；
+          // 只有系统日历分组才给单独开关。ArkUI 的 builder 中不支持 if/else if 链，改用嵌套 if。
+          if (source.kind === 'system' || source.kind === 'group') {
             Toggle({ type: ToggleType.Switch, isOn: source.enabled }).selectedColor('#3978E8').enabled(!this.busy)
               .accessibilityText(source.name)
               .onChange((on: boolean) => {
                 if (on !== source.enabled) { this.toggleGroup(source, on); }
               })
+          } else {
+            Text(source.enabled ? '已开启' : '已关闭').fontSize(12).fontColor(AppTheme.text('#8993A4'))
           }
         }.width('100%').padding({ left: 16, right: 12, top: 10, bottom: 10 }).constraintSize({ minHeight: 60 })
       }, (source: SourceCalendar): string => source.group + ':' + String(source.enabled) + ':' + String(this.calendar.syncedAt))
       this.Line()
-      this.Action({ label: '刷新日历来源', enabled: !this.busy && (this.options.calendarEnabled || this.options.holidayEnabled),
+      this.Action({ label: '刷新日历来源', enabled: !this.busy && (this.options.calendarEnabled || this.options.holidayEnabled ||
+        this.festivalEnabled() || this.solarTermEnabled()),
         action: () => { this.setCalendar(this.options.calendarEnabled, this.options.holidayEnabled, this.options.historyDays, this.selected); } })
     }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20)
-    this.Hint({ message: '系统日历按类别汇总显示，打开某一类就会读取该类下的日历；常用节假日始终全部读取。' })
+    this.Hint({ message: '系统日历按类别汇总显示，打开某一类就会读取该类下的日历；常用节假日、节日、节气由内置数据提供。' })
     Column() {
-      this.Action({ label: '读取并同步日历记忆', enabled: !this.busy && this.options.holidayEnabled ||
-        (this.options.calendarEnabled && this.selected.length > 0), action: () => { this.run(); } })
+      this.Action({ label: '读取并同步日历记忆', enabled: !this.busy && (this.options.holidayEnabled ||
+        this.festivalEnabled() || this.solarTermEnabled() || (this.options.calendarEnabled && this.selected.length > 0)),
+        action: () => { this.run(); } })
     }.width('100%').backgroundColor(AppTheme.background('#FFFFFF')).borderRadius(20).margin({ top: 20 })
   }
 
@@ -488,7 +659,7 @@ struct PersonalSourcesPage {
     ForEach(this.itemsOfSelectedDay(), (item: SourceItem) => {
       Column({ space: 8 }) {
         Row({ space: 8 }) {
-          this.SourceTag(this.sourceName(item), item.source === 'holiday' ? '#B4690E' : '#3978E8')
+          this.SourceTag(this.sourceName(item), this.sourceColor(item))
           Text(item.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(AppTheme.text('#161B28')).layoutWeight(1)
         }.width('100%')
         Text((item.allDay ? '全天 ' + this.dayLabel(item.start) : new Date(item.start).toLocaleString()) +

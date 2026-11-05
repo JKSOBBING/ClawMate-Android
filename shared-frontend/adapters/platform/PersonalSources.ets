@@ -5,7 +5,8 @@ import { AiServiceAccess } from '../utils/AiServiceAccess';
 import { PrivacyConsent } from '../utils/PrivacyConsent';
 
 // disabledGroups：按类别停用的系统日历分组（birthday/anniversary/countdown），本机日历始终可读。
-export interface SourceOptions { calendarEnabled: boolean; holidayEnabled: boolean; historyDays: number; selected: number[]; maxMessages: number; disabledGroups?: string[]; }
+export interface SourceOptions { calendarEnabled: boolean; holidayEnabled: boolean; festivalEnabled?: boolean; solarTermEnabled?: boolean;
+  disabledFestivalCategories?: string[]; historyDays: number; selected: number[]; maxMessages: number; disabledGroups?: string[]; }
 export interface MailConfiguration { host: string; port: number; username: string; mode: string; client: string; tenant: string; }
 // source: 'system'（手机系统日历）或 'holiday'（常用节假日）。两类来源始终分开标注。
 export interface SourceItem { id: string; title: string; body: string; start: number; end: number; location: string; allDay: boolean; timeZone: string; calendarId: number; source: string; }

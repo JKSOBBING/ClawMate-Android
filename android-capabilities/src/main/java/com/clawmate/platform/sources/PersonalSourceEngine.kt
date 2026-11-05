@@ -30,6 +30,17 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private fun calendarEnabled() = optionsPrefs.getBoolean("calendarEnabled", File(root, "calendar.json").exists())
     /** 常用节假日来源默认开启；与“接入系统日历”相互独立。 */
     private fun holidayEnabled() = optionsPrefs.getBoolean("holidayEnabled", true)
+    /** 内置节日（中国传统/西方/国际日）默认开启。 */
+    private fun festivalEnabled() = optionsPrefs.getBoolean("festivalEnabled", true)
+    /** 内置节气默认开启。 */
+    private fun solarTermEnabled() = optionsPrefs.getBoolean("solarTermEnabled", true)
+    /** 节日里被停用的类别（chinese/western/international）。 */
+    private fun disabledFestivalCategories(): Set<String> =
+        (optionsPrefs.getString("disabledFestivalCategories", "") ?: "").split(',').filter { it.isNotBlank() }.toSet()
+    private fun activeFestivalCategories(): Set<Festivals.Category> =
+        Festivals.Category.values().filter { it.key !in disabledFestivalCategories() }.toSet()
+    /** 任一内置来源开启即可读取节假日/节日/节气。 */
+    private fun builtInEnabled() = holidayEnabled() || festivalEnabled() || solarTermEnabled()
     private fun calendarSelection(): JSONArray = JSONArray(optionsPrefs.getString("selected", null)
         ?: runCatching { JSONObject(File(root, "calendar.json").readText()).optJSONArray("selected")?.toString() }.getOrNull() ?: "[]")
     /** 已停用的日历类别（生日/纪念日/倒计时等），与“本机日历”分开控制。 */
@@ -107,6 +118,9 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     private fun CalendarMeta.rawNameForApi(): String = name.ifBlank { label }
     @Synchronized fun options(): String = JSONObject().put("calendarEnabled", calendarEnabled())
         .put("holidayEnabled", holidayEnabled())
+        .put("festivalEnabled", festivalEnabled())
+        .put("solarTermEnabled", solarTermEnabled())
+        .put("disabledFestivalCategories", JSONArray(disabledFestivalCategories().sorted()))
         .put("disabledGroups", JSONArray(disabledGroups().sorted()))
         .put("historyDays", optionsPrefs.getInt("historyDays", 90)).put("selected", calendarSelection())
         .put("maxMessages", optionsPrefs.getInt("maxMessages", 50)).toString()
@@ -116,6 +130,12 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
             "calendar", "holiday" -> {
                 val enabled = value.getBoolean("calendarEnabled")
                 val holiday = value.optBoolean("holidayEnabled", holidayEnabled())
+                val festival = value.optBoolean("festivalEnabled", festivalEnabled())
+                val solarTerm = value.optBoolean("solarTermEnabled", solarTermEnabled())
+                val festivalCategories = value.optJSONArray("disabledFestivalCategories")
+                val disabledFestival = if (festivalCategories == null) disabledFestivalCategories() else
+                    (0 until festivalCategories.length()).map { festivalCategories.getString(it) }
+                        .filter { Festivals.categoryOf(it) != null }.toSet()
                 val days = value.getInt("historyDays"); require(days in listOf(0, 30, 90, 365))
                 val selected = value.getJSONArray("selected"); require(selected.length() <= 100)
                 for (i in 0 until selected.length()) require(selected.getLong(i) >= 0)
@@ -124,12 +144,17 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
                     .map { groups.getString(it) }
                     .filter { it in CalendarSourceLabels.GROUP_ORDER && it != "local" && it != "other" }
                     .toSet()
+                check(enabled || holiday || festival || solarTerm) { "至少保留一个日历来源：系统日历、常用节假日、节日或节气。" }
                 val changed = enabled != calendarEnabled() || holiday != holidayEnabled() ||
+                    festival != festivalEnabled() || solarTerm != solarTermEnabled() ||
                     days != optionsPrefs.getInt("historyDays", 90) || selected.toString() != calendarSelection().toString() ||
-                    disabled.sorted() != disabledGroups().sorted()
+                    disabled.sorted() != disabledGroups().sorted() ||
+                    disabledFestival.sorted() != disabledFestivalCategories().sorted()
                 check(optionsPrefs.edit().putBoolean("calendarEnabled", enabled).putBoolean("holidayEnabled", holiday)
+                    .putBoolean("festivalEnabled", festival).putBoolean("solarTermEnabled", solarTerm)
                     .putInt("historyDays", days).putString("selected", selected.toString())
-                    .putString("disabledGroups", disabled.sorted().joinToString(",")).commit())
+                    .putString("disabledGroups", disabled.sorted().joinToString(","))
+                    .putString("disabledFestivalCategories", disabledFestival.sorted().joinToString(",")).commit())
                 // A disabled/changed source must not remain available to chat from an older snapshot.
                 if (changed) clear("calendar")
             }
@@ -203,8 +228,13 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
             "calendar" -> calendar(argument)
             // 只读探测：不读取事件、不保存，只回答来源开关与系统日历授权状态，供首页卡片使用。
             "calendarStatus" -> JSONObject().put("calendarEnabled", calendarEnabled()).put("holidayEnabled", holidayEnabled())
+                .put("festivalEnabled", festivalEnabled()).put("solarTermEnabled", solarTermEnabled())
                 .put("granted", calendarGranted()).put("selected", calendarSelection().length()).put("effective", effectiveIds().size).toString()
             // 只读：节假日数据范围与依据，供设置页核对；不读取系统日历、不联网。
+            "festival" -> JSONObject().put("name", Festivals.SOURCE_NAME)
+                .put("categories", JSONArray(Festivals.Category.values().map { JSONObject().put("key", it.key).put("label", it.label) })).toString()
+            "solarTerm" -> JSONObject().put("name", SolarTerms.SOURCE_NAME)
+                .put("terms", JSONArray(SolarTerms.of(java.time.LocalDate.now().year).map { it.second })).toString()
             "holiday" -> JSONObject().put("name", ChinaHolidays.SOURCE_NAME)
                 .put("sections", JSONArray().put("2025年放假安排（国办发明电〔2024〕7号）").put("2026年放假安排（国办发明电〔2025〕6号）"))
                 .put("note", "只收录官方通知中的放假日与调休上班日；未覆盖年份只显示常规周末。").toString()
@@ -237,7 +267,7 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
         if (args.optBoolean("quick", false)) return quickCalendar(now)
         val useSystem = calendarEnabled()
         val useHoliday = holidayEnabled()
-        check(useSystem || useHoliday) { "请先开启系统日历或常用节假日来源" }
+        check(useSystem || builtInEnabled()) { "请先开启至少一个日历来源：系统日历、常用节假日、节日或节气" }
         if (useSystem) check(calendarGranted()) { "请先授权读取系统日历" }
         val historyDays = optionsPrefs.getInt("historyDays", 90)
         val start = now.toLocalDate().minusDays(historyDays.toLong()).atStartOfDay(now.zone).toInstant().toEpochMilli()
@@ -246,7 +276,12 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
         require(selected.length() <= 100)
         val ids = if (listOnly) emptySet() else effectiveIds()
         val sources = JSONArray()
-        if (useSystem) sources.put(JSONObject().put("id", ChinaHolidays.SOURCE_ID).put("name", ChinaHolidays.SOURCE_NAME).put("kind", "holiday"))
+        sources.put(JSONObject().put("id", ChinaHolidays.SOURCE_ID).put("name", ChinaHolidays.SOURCE_NAME).put("kind", "holiday")
+            .put("enabled", useHoliday))
+        sources.put(JSONObject().put("id", Festivals.SOURCE_ID).put("name", Festivals.SOURCE_NAME).put("kind", "festival")
+            .put("enabled", festivalEnabled()).put("categories", JSONArray(activeFestivalCategories().map { it.key })))
+        sources.put(JSONObject().put("id", SolarTerms.SOURCE_ID).put("name", SolarTerms.SOURCE_NAME).put("kind", "solarTerm")
+            .put("enabled", solarTermEnabled()))
         // 来源按用户看得懂的类别汇总，同时附上每个类别的具体日历 id，读取仍逐日历进行。
         groupedSources().let { grouped -> for (i in 0 until grouped.length()) sources.put(grouped.getJSONObject(i)) }
         val items = JSONArray()
@@ -266,21 +301,37 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
                 }
             } ?: error("日历查询失败")
         }
-        if (useHoliday && !listOnly) {
-            ChinaHolidays.entries(java.time.Instant.ofEpochMilli(start).atZone(now.zone).toLocalDate(),
-                java.time.Instant.ofEpochMilli(end).atZone(now.zone).toLocalDate()).forEach { h ->
+        if (!listOnly) {
+            val fromDate = java.time.Instant.ofEpochMilli(start).atZone(now.zone).toLocalDate()
+            val toDate = java.time.Instant.ofEpochMilli(end).atZone(now.zone).toLocalDate()
+            val builtIn = ArrayList<HolidayEntry>()
+            if (useHoliday) builtIn.addAll(ChinaHolidays.entries(fromDate, toDate))
+            if (festivalEnabled()) builtIn.addAll(Festivals.entries(fromDate, toDate, activeFestivalCategories()))
+            if (solarTermEnabled()) builtIn.addAll(SolarTerms.entries(fromDate, toDate))
+            builtIn.forEach { h ->
                 check(items.length() < 10000) { "日程过多，请减少选择的日历" }
                 val dayStart = java.time.LocalDate.parse(h.start).atStartOfDay(now.zone).toInstant().toEpochMilli()
                 val dayEnd = java.time.LocalDate.parse(h.end).plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
+                val sourceId = when (h.kind) {
+                    ChinaHolidays.KIND -> ChinaHolidays.SOURCE_ID
+                    Festivals.KIND -> Festivals.SOURCE_ID
+                    else -> SolarTerms.SOURCE_ID
+                }
+                val sourceTag = when (h.kind) {
+                    ChinaHolidays.KIND -> "holiday"
+                    Festivals.KIND -> "festival"
+                    else -> "solarTerm"
+                }
                 items.put(JSONObject().put("id", h.id).put("title", h.title).put("body", h.description).put("location", "")
                     .put("start", dayStart).put("end", dayEnd).put("allDay", true).put("timeZone", now.zone.id)
-                    .put("calendarId", ChinaHolidays.SOURCE_ID).put("source", "holiday").put("kind", ChinaHolidays.KIND))
+                    .put("calendarId", sourceId).put("source", sourceTag).put("kind", h.kind))
             }
         }
         if (useSystem) check(calendarGranted())
         return JSONObject().put("sources", sources).put("items", items).put("syncedAt", System.currentTimeMillis())
             .put("windowStart", start).put("windowEnd", end).put("selected", selected)
-            .put("systemEnabled", useSystem).put("holidayEnabled", useHoliday).toString()
+            .put("systemEnabled", useSystem).put("holidayEnabled", useHoliday)
+            .put("festivalEnabled", festivalEnabled()).put("solarTermEnabled", solarTermEnabled()).toString()
     }
     /** 首页快速浏览：未来 [QUICK_DAYS] 天的系统日历日程（需已勾选来源且已授权）＋常用节假日。 */
     private fun quickCalendar(now: java.time.ZonedDateTime): String {
@@ -308,13 +359,27 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
                 }
             }
         }
-        if (holiday) {
-            ChinaHolidays.entries(startDate, endDate).forEach { h ->
+        val builtIn = ArrayList<HolidayEntry>()
+        if (holiday) builtIn.addAll(ChinaHolidays.entries(startDate, endDate))
+        if (festivalEnabled()) builtIn.addAll(Festivals.entries(startDate, endDate, activeFestivalCategories()))
+        if (solarTermEnabled()) builtIn.addAll(SolarTerms.entries(startDate, endDate))
+        if (builtIn.isNotEmpty()) {
+            builtIn.forEach { h ->
                 val dayStart = java.time.LocalDate.parse(h.start).atStartOfDay(now.zone).toInstant().toEpochMilli()
                 val dayEnd = java.time.LocalDate.parse(h.end).plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
+                val sourceId = when (h.kind) {
+                    ChinaHolidays.KIND -> ChinaHolidays.SOURCE_ID
+                    Festivals.KIND -> Festivals.SOURCE_ID
+                    else -> SolarTerms.SOURCE_ID
+                }
+                val sourceTag = when (h.kind) {
+                    ChinaHolidays.KIND -> "holiday"
+                    Festivals.KIND -> "festival"
+                    else -> "solarTerm"
+                }
                 items.put(JSONObject().put("id", h.id).put("title", h.title).put("body", h.description).put("location", "")
-                    .put("start", dayStart).put("end", dayEnd).put("allDay", true).put("calendarId", ChinaHolidays.SOURCE_ID)
-                    .put("source", "holiday").put("kind", ChinaHolidays.KIND))
+                    .put("start", dayStart).put("end", dayEnd).put("allDay", true).put("calendarId", sourceId)
+                    .put("source", sourceTag).put("kind", h.kind))
             }
         }
         val memoryFile = File(root, "calendar.json")
@@ -329,14 +394,14 @@ class PersonalSourceEngine(private val context: Context) : AutoCloseable {
     }
     @Synchronized fun write(kind: String, value: String) {
         require(kind in listOf("calendar", "mail") && value.length < 12 * 1024 * 1024)
-        if (kind == "calendar") check((calendarEnabled() || holidayEnabled()) && (holidayEnabled() || calendarGranted()))
+        if (kind == "calendar") check((calendarEnabled() || builtInEnabled()) && (builtInEnabled() || calendarGranted()))
         JSONObject(value)
         val file = AtomicFile(File(root, "$kind.json")); val out = file.startWrite()
         try { out.write(value.toByteArray()); file.finishWrite(out) } catch (e: Exception) { file.failWrite(out); throw e }
     }
     @Synchronized fun read(kind: String): String {
         require(kind in listOf("calendar", "mail"))
-        if (kind == "calendar" && !calendarEnabled() && !holidayEnabled()) return "{}"
+        if (kind == "calendar" && !calendarEnabled() && !builtInEnabled()) return "{}"
         val file = AtomicFile(File(root, "$kind.json"))
         if (!file.baseFile.exists()) return "{}"
         val text = file.openRead().use { it.readBytes().toString(Charsets.UTF_8) }
