@@ -1,4 +1,4 @@
-﻿# 共享版后续待办
+# 共享版后续待办
 
 更新：2026-11-04。目标是把鸿蒙版ClawMate的全部功能迁移并适配Android，继续采用共享ArkTS/ArkUI-X前端和Kotlin平台能力。会议语音接入与专项测试放在最后；当前优先补齐ClawMate自身功能。先在fork继续验证，PR安排沿用既有约定。
 已完成项、关键阶段与验证统一见 [迁移日志](MIGRATION_STATUS.md)；本文只维护后续工作。
@@ -30,6 +30,12 @@
 - [ ] U00：分叉两端审计（目标侧25/旧侧8提交）、隐私调用链冲突核查、源码锁升级与准备补丁兼容。
 - [ ] U01–U03：增量记忆/索引恢复、日历来源、邮件独立分析及真实验收。
 - [ ] U04/U05：Codex工作台、聊天委托、审批/文件交付与断线恢复。
+  - 2026-11-06 用户已定方向：Codex 走**独立第六个 Tab**（首页/汇总/聊天/**Codex**/任务/我的），前端参考鸿蒙 `pages/codex/` 移植；PC 桥接 `bridge/codex/` **原样复用不改**；聊天委托按 U05-A 接入共享 `SharedAgent`。
+  - [ ] C0 源码锁升级：`shared-frontend/upstream-lock.json` 由 `cd69b68` 升到 `coevomind-app@4e86f62`，`prepare.mjs` 补丁命中检查通过，codex 20 个 ets 可入清单。
+  - [ ] C1 传输与凭据：`android-capabilities` 新增 OkHttp 传输（禁重定向/禁自动重试/CA 单连接注入/gzip 降级/代次取消）与 Keystore 凭据；**同时先落 `ChatBackend` 接口**，`CodexBackend` 按该接口实现。
+  - [ ] C2 Codex Tab：六 Tab 导航、`pages/codex/` 全量 UI、扫码/拍照/选图/FileProvider、手册六入口更新。
+  - [ ] C3 聊天委托（U05-A）：`SharedAgent` 加 `run_codex_task`、**独立于日历/邮箱的委托预算**、`codex-<runId>` 持久化结果卡片与手动同步；`disconnected/failed` 一律不自动重发。
+  - [ ] 统一层：只统一编排接口，不合并实现。`ChatBackend/CloudBackend/CodexBackend` 逐步接入；**本地聊天（`LocalBackend`）由其他负责人并行开发**，本线只保留诚实的 `NOT_AVAILABLE` 占位，不并入本地推理工作。
 - [ ] U06：手机微信采集、部分覆盖与批次完成后的记忆同步；依赖GUI与增量基础。所有新增能力在会议最终阶段之前完成适配。
 
 - [x] 建立[全功能迁移代码规划与类关系指南](docs/MIGRATION_ARCHITECTURE_GUIDE.md)：30个用户功能领域、现有/共享/拟新增类关系、接口边界、W00–W08工作包及出口验收。此项为规划交付，不增加功能完成数量。
