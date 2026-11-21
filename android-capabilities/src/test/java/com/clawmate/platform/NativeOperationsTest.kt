@@ -1,0 +1,97 @@
+package com.clawmate.platform
+
+import org.junit.Assert.*
+import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+class NativeOperationsTest {
+    @Test fun progressIsScopedToTheRunningOperation() {
+        NativeOperations<String>().use { jobs ->
+            val reported = CountDownLatch(1)
+            val finish = CountDownLatch(1)
+            val id = jobs.startWithProgress { report ->
+                report("reading the screen")
+                reported.countDown()
+                finish.await(2, TimeUnit.SECONDS)
+                "done"
+            }
+            assertTrue(reported.await(2, TimeUnit.SECONDS))
+            assertEquals("reading the screen", jobs.poll(id).progress)
+            jobs.cancel(id)
+            finish.countDown()
+            assertEquals("", jobs.poll(id).progress)
+        }
+    }
+
+    @Test fun resultIsDeliveredOnce() {
+        NativeOperations<String>().use { jobs ->
+            val completed = CountDownLatch(1)
+            val id = jobs.start { completed.countDown(); "real-result" }
+            assertTrue(completed.await(2, TimeUnit.SECONDS))
+            var result = jobs.poll(id)
+            val deadline = System.nanoTime() + 2_000_000_000
+            while (result.state == "running" && System.nanoTime() < deadline) { Thread.yield(); result = jobs.poll(id) }
+            assertEquals("done", result.state)
+            assertEquals("real-result", result.value)
+            assertEquals("missing", jobs.poll(id).state)
+        }
+    }
+
+    @Test fun cancelledWorkCannotPublishLateResults() {
+        NativeOperations<String>().use { jobs ->
+            val started = CountDownLatch(1)
+            val finish = CountDownLatch(1)
+            val exited = CountDownLatch(1)
+            val id = jobs.start {
+                started.countDown()
+                try { finish.await(2, TimeUnit.SECONDS) } catch (_: InterruptedException) { }
+                exited.countDown()
+                "late-result"
+            }
+            assertTrue(started.await(2, TimeUnit.SECONDS))
+            jobs.cancel(id); finish.countDown()
+            assertTrue(exited.await(2, TimeUnit.SECONDS))
+            assertEquals("missing", jobs.poll(id).state)
+        }
+    }
+
+    @Test fun cancelReturnsLastReadPageEvenBetweenPolls() {
+        NativeOperations<String>().use { jobs ->
+            val published = CountDownLatch(1)
+            val finishing = CountDownLatch(1)
+            val id = jobs.startWithUpdates { progress, evidence ->
+                evidence("first and second page")
+                progress("scrolling")
+                published.countDown()
+                finishing.await(3, TimeUnit.SECONDS)
+                "done"
+            }
+            assertTrue(published.await(2, TimeUnit.SECONDS))
+            assertEquals("first and second page", jobs.poll(id).evidence)
+            assertEquals("first and second page", jobs.cancel(id))
+            finishing.countDown()
+            assertEquals("missing", jobs.poll(id).state)
+        }
+    }
+
+    @Test fun concurrencyAndLifecycleAreBounded() {
+        val jobs = NativeOperations<String>(1)
+        val finish = CountDownLatch(1)
+        val id = jobs.start { finish.await(2, TimeUnit.SECONDS); "done" }
+        assertThrows(IllegalStateException::class.java) { jobs.start { "overflow" } }
+        jobs.cancel(id); finish.countDown(); jobs.close()
+        assertThrows(IllegalStateException::class.java) { jobs.start { "closed" } }
+    }
+
+    @Test fun failureNeverBecomesSuccessfulText() {
+        NativeOperations<String>().use { jobs ->
+            val id = jobs.start { throw IllegalArgumentException("private details") }
+            var result = jobs.poll(id)
+            val deadline = System.nanoTime() + 2_000_000_000
+            while (result.state == "running" && System.nanoTime() < deadline) { Thread.yield(); result = jobs.poll(id) }
+            assertEquals("failed", result.state)
+            assertNull(result.value)
+        }
+    }
+}

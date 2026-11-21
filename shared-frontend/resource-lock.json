@@ -1,0 +1,508 @@
+{
+  "repository": "doulujiyao12/mobiinfra-oh",
+  "ref": "cd69b68bf16b9ed352be5073939eb24d042de583",
+  "scope": "Reviewed display resources and bundled default workflows only; no profile/configuration, models or private data.",
+  "files": [
+    {
+      "path": "AppScope/resources/base/media/Icon.png",
+      "gitBlob": "b2eae7cbbae7d5cba65ded5cf49b1e759b44ac9c",
+      "target": "AppScope/resources/base/media/app_icon.png",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/element/color.json",
+      "gitBlob": "3683a7526be3a968f6f452f9589445a879127e08",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/element/float.json",
+      "gitBlob": "33ea22304f9b1485b5f22d811023701b5d4e35b6",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/element/string.json",
+      "gitBlob": "af09a612d6f38fc1ea4493df53cae2049b4d5dc8",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/chat_assistant_avatar.png",
+      "gitBlob": "bff93834c51658ccbe8f30e4d5e4d656659fae8b",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/chat_card_flow.svg",
+      "gitBlob": "a2285795aec5b164f8fb47ca498a889f37f80519",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/chat_card_image.svg",
+      "gitBlob": "02e9b389a2b6d658301cfd91f6ab98214d965589",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/chat_card_search.svg",
+      "gitBlob": "b3e45d3edd98a4d4d742910941d50827079f2245",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_close.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "43241a162f853105b6c876d007bada568d370ba0"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_computer.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "aeab8135fe8963b7d81250e80f98a739789a86ee"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_document.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "785489899e57c3cca1d4a04465d069cc13a647b2"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_download.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "ac322dbc06ed31b92fc9ee69d758347baaebd3bc"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_folder.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "f333aa71d869fde3f6b9ba5b18fda47548079231"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_history.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "c58bc30664528463bbe1a9e02075add39c175395"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_network.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "2a641074f96a7acf9a3edca321f4660abe86cf30"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_openai.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "258da22b8b68c1f31f21075679214a64b7e409d0"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_plus.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "a6819f0502abc17f3a2b247d39a62415cabac34f"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_scan.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "96dced1efffe98d7459198d5c0361524fa9c19cf"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_send.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "0e9fcfe7190b7093421797ef4a49231686190e13"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_settings.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "ca81e29cfc052b9590d9ebd868a7ebf0272d0941"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/codex_user.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "d270c7c75a5b78fdaeee904bbb7f90b8f39addda"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/digital_avatar.png",
+      "gitBlob": "e571741aac3d9440cef9e55bc2a56686cb44a0d4",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/header_companion.svg",
+      "gitBlob": "f52fce6084b51dc86cc94832197175f3479b3191",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/header_footprint.svg",
+      "gitBlob": "e635a49a200f988f055875e0449f691e656924dc",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/header_mine.svg",
+      "gitBlob": "85366ae65400f8b0fb57ca17eb53d7f5b0d486a6",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/header_settings.svg",
+      "gitBlob": "c88e20f2dfd2701245fd4117d290da2e2cf1ab9a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/header_task.svg",
+      "gitBlob": "f0c9de8e3e330c8ffdba99d8bd9c39867330a22e",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_category_icons.png",
+      "gitBlob": "dbacba6288bac27b27e38a44d610a9b14ffb837c",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_explorer_mascot.png",
+      "gitBlob": "568f4c9fc888cc091ef3bfa477fd63ac12606c78",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_feature_companion.svg",
+      "gitBlob": "6fc0b5027c66b643d62c48b9baa24727a8af6166",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_feature_growth.svg",
+      "gitBlob": "83fc1673375f2af1f95335f665fce7409a5dc001",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_feature_protect.svg",
+      "gitBlob": "f6b7ab91e5ad24392420d45a271843eea6af5c24",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_feature_understand.svg",
+      "gitBlob": "3a00ad0122d80d523e430dba263248f2b19d0e4a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_overview_background_compact.png",
+      "gitBlob": "0e1a5e416e62d7f3d8226404beea0eee860ca98a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/home_overview_background.png",
+      "gitBlob": "02e1a3534c05ea85ebd0e9b593e376fc2c8b6ac2",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_chat.svg",
+      "gitBlob": "569206b84528320b3fc000b4a38f8b634bcf488d",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_codex.svg",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "bdea7a460c1b3d1ee585416518a28b0ca2adfb9e"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_home.svg",
+      "gitBlob": "6fb97e4ae18a3a8f79cfc8dac50a7b5ac2cada67",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_mine.svg",
+      "gitBlob": "b0847359f530f041faa9895e500729edca70160b",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_settings.svg",
+      "gitBlob": "c646204c67e1e910505e06d9ff490bdb7253122f",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_summary.svg",
+      "gitBlob": "94e28ec590e8d61dcb51c60dbad21ff42c171ab1",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/tab_task.svg",
+      "gitBlob": "f122e27ee6cda75bbbd5e38c6da9418557062d43",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/voice_microphone_light.svg",
+      "gitBlob": "95c995bb9409c35cd07f7847acb4fe6181fecc2c",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/voice_pause_light.svg",
+      "gitBlob": "5d575e0573b76d43838d912fb74bdecc770de74a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/voice_replay_blue.svg",
+      "gitBlob": "92d3fcdeefa6b0a7968bdc3794efecd378792c87",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/voice_speaker_blue.svg",
+      "gitBlob": "e66fc3793bf6906f332b901f504a708a6afccf61",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/voice_speaker_light.svg",
+      "gitBlob": "c780ecc8a952c78b200538b4176222b96bf6dbb7",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/element/color.json",
+      "gitBlob": "22c74ab390e14c3d7f7227d8261a695893d532de",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/chat_card_flow.svg",
+      "gitBlob": "dfbc244ac77362ae0bd0cea3d68a7a9bcbad226f",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/chat_card_image.svg",
+      "gitBlob": "55705c1b70949862645e20360f8e67140e6038e3",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/chat_card_search.svg",
+      "gitBlob": "5190a46f2c07dc3c248a648f696e72da6408c97c",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/header_companion.svg",
+      "gitBlob": "ac31decfadbc8e3ce26d1d4a8b361b04d5d3e589",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/header_footprint.svg",
+      "gitBlob": "81a6807cd15f0e92e7d8e4ad0db3340a12ee1ae0",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/header_mine.svg",
+      "gitBlob": "08e3573bf0b465c74a266e1e3851ab53e0538d27",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/header_settings.svg",
+      "gitBlob": "c84e45895e00ec76465657de0d53b1dc077bdac9",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/header_task.svg",
+      "gitBlob": "72d47f6431ac35f36e5ebe4f6c70bb5a632b6250",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/home_feature_companion.svg",
+      "gitBlob": "0859f4d24ec1a6eb58588205c54b8333f0ffdc4f",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/home_feature_growth.svg",
+      "gitBlob": "e6a4d35c9df14f4b5f61ed00136405f63ef60391",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/home_feature_protect.svg",
+      "gitBlob": "c6c294f7ac3c5c453cb1f3fd4fdd5ec185031d46",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/home_feature_understand.svg",
+      "gitBlob": "829bba4d98848048d1c1037ce935bc7f62338c03",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/voice_replay_blue.svg",
+      "gitBlob": "fc781d91123d77bcbfdbffc7fc87b0465f1763bd",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/voice_speaker_blue.svg",
+      "gitBlob": "9e683e8ade6270756f83549ed8f5b63a85921de9",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_alipay_bill.json",
+      "gitBlob": "71cafd2ea262acc72ab7c2195b1d3ef62265013e",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_bilibili_history.json",
+      "gitBlob": "414952f23d41bd88296e28faa2380a0d62ceac36",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_ctrip_order.json",
+      "gitBlob": "14cb73f5d17ce86d224138033ffda11aa61a674a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_dianping_order.json",
+      "gitBlob": "dcfa986b7d94d09bac4f6f721d640cb241a2a05a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_ele_order.json",
+      "gitBlob": "654ad702e15e247df6044db52e43e2ef4c058d20",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_meituan_order.json",
+      "gitBlob": "3ccf2d3ac6d105ffb63eeb5b9cfce517142815e6",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_tencent_video_history.json",
+      "gitBlob": "d805443fb5215bdc12fcbe8a043df7ebd965d7ba",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_weibo_hot_search.json",
+      "gitBlob": "00f1ba4c5cbde066130c4eaf9bc3d18fe6f0d4bd",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_weixin_chat.json",
+      "gitBlob": "0833b72080f3bedc19018dc9dadb54a4645a6d14",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_weixin_today_chat.json",
+      "gitBlob": "24458f7ddb56f482ad68d7ff90eee18adc63f1cf",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/workflows/configs/default_xiaohongshu_history.json",
+      "gitBlob": "d1eeed8e60137f9f5dfc0ba0f3253fb1825f09d8",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/clawmate_secretary.webp",
+      "gitBlob": "f674db22394bd1137ce9e0cffe7245a44382c98e",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/collection_secretary.webp",
+      "gitBlob": "a0019f8e49fbbef96f46ad1f61ca3d0d22bb5b5f",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_account.svg",
+      "gitBlob": "fc424a8dab31b21f2c85da603849081c712e0fb0",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_automation.svg",
+      "gitBlob": "ef2359475d92a27ec8a98d9aa62922e742b3ae88",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_collection.svg",
+      "gitBlob": "1cd229d0c43bf0f72c0868ec4c075adccaf9488a",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_debug.svg",
+      "gitBlob": "838efe6edeeb99b614127cb6f87ca911a333ba7e",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_desktop.svg",
+      "gitBlob": "e29a5f820fb2e5e6ac81cc0dff313597d16726bf",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_model.svg",
+      "gitBlob": "41e1099808de5aef0b9fb914dd1e07a45d59bcfc",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_people.svg",
+      "gitBlob": "a53641c4b603daeb8e7eb9e4961ca136a5e69aa3",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_phone.svg",
+      "gitBlob": "8f184c7ce9c748f109ffe41b68535b4dd89f4801",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_privacy.svg",
+      "gitBlob": "f8c1a84494d240b51f4e7531b52d8a5a41d25d66",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/settings_storage.svg",
+      "gitBlob": "75423d12faccfe4f8491c854663f20ad723a25c6",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/source_recording_white.svg",
+      "gitBlob": "7893e68a380ee1a4d96d6f798f3eb208c3ec2b17",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_account.svg",
+      "gitBlob": "f9df95b8b437b9112dc39134e69ccf09f2fd4e86",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_automation.svg",
+      "gitBlob": "8d43584e3989ccfa8659e5194dafa478e2c16d26",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_collection.svg",
+      "gitBlob": "c3578bdc494645237e8de0c16d6ef2e6a36803f7",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_debug.svg",
+      "gitBlob": "1255c5e9f05655bfb52c40a99f51ebbd1d3691c0",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_desktop.svg",
+      "gitBlob": "787c449426516ed1d9429498038869bfc238c40e",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_model.svg",
+      "gitBlob": "accf359bf0284aea3bc7b2379de1c74e8f0acc19",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_people.svg",
+      "gitBlob": "3b4671c6df76afe0464fa46ab8d4c8d00bfc51f8",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_phone.svg",
+      "gitBlob": "afa183fe91b898e88a5dd429542985b2009d9475",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_privacy.svg",
+      "gitBlob": "08f4f8eb0197f2bd342ab420a4205537b6844a84",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/dark/media/settings_storage.svg",
+      "gitBlob": "d1cb97ae462d30b969a3385cc6e55d9850a46c21",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/source_gallery.svg",
+      "gitBlob": "b673bb4dac2f4bf6e581c26d934ebfda5028d479",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/source_wechat.svg",
+      "gitBlob": "b21cbbe7e9ece154822c6d2b5090e3e71391ef13",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/source_calendar.svg",
+      "gitBlob": "5827ecfe11be9cb51503ed2139b2c37b85ca67b9",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/source_mail.svg",
+      "gitBlob": "dba559a097ac48c6edb892043913af329eb03a01",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    }
+  ]
+}

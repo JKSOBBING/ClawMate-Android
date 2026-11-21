@@ -1,0 +1,24 @@
+<resources>
+    <color name="clawmate_dialog_surface">#1C222D</color>
+    <color name="clawmate_dialog_text">#ECF1FA</color>
+    <color name="clawmate_dialog_secondary">#C0C9D9</color>
+    <color name="clawmate_dialog_accent">#B5C1FF</color>
+    <color name="clawmate_dialog_outline">#465166</color>
+    <style name="ClawMateSetup" parent="@android:style/Theme.Material">
+        <item name="android:windowBackground">#11151D</item>
+        <item name="android:colorAccent">@color/clawmate_dialog_accent</item>
+        <item name="android:colorPrimary">@color/clawmate_dialog_surface</item>
+        <item name="android:textColorPrimary">@color/clawmate_dialog_text</item>
+        <item name="android:textColorSecondary">@color/clawmate_dialog_secondary</item>
+        <item name="android:alertDialogTheme">@style/ClawMateDialog</item>
+    </style>
+    <style name="ClawMateDialog" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/clawmate_dialog_surface</item>
+        <item name="android:colorAccent">@color/clawmate_dialog_accent</item>
+        <item name="android:textColorPrimary">@color/clawmate_dialog_text</item>
+        <item name="android:textColorSecondary">@color/clawmate_dialog_secondary</item>
+        <item name="android:backgroundDimAmount">0.38</item>
+        <item name="android:windowElevation">10dp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+</resources>

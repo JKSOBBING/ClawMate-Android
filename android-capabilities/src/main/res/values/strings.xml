@@ -1,0 +1,4 @@
+<resources>
+    <string name="clawmate_gui_accessibility_name">ClawMate 界面控制</string>
+    <string name="clawmate_gui_accessibility_description">手动控制在你选择的应用中执行浮窗点按、滑动和返回。可选择仅本次或始终允许，并在「手动控制授权」管理权限。点停止、离开目标应用、锁屏或断开服务会结束控制。空闲时单击悬浮便签可看提醒，双击可采集当前应用的可见文字并保存到本机。「界面采集与规划」可以关闭便签。Mika 云端任务可按已配置的应用访问规则操作虚拟屏。需要 Android 14 及以上。</string>
+</resources>

@@ -1,0 +1,641 @@
+{
+  "repository": "doulujiyao12/mobiinfra-oh",
+  "ref": "cd69b68bf16b9ed352be5073939eb24d042de583",
+  "files": [
+    {
+      "path": "entry/src/main/ets/agent/PersonalMemoryAccess.ets",
+      "gitBlob": "099c984844e2870ba1728352e7e924e898598430",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/components/AiLoginGuard.ets",
+      "gitBlob": "592a9faca8fdf9f710d4807c056f03059c25a019",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/components/CollectionReminderPanel.ets",
+      "gitBlob": "197fa8153deb3dc5a23857f91c9cd8b640ec0337",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/components/GalleryHdcBatchOptions.ets",
+      "gitBlob": "6a2e7418706eb7eea190e9672a09080c5aaf6ba6",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/components/GalleryPreviewImage.ets",
+      "gitBlob": "cd61518ba2e7ad395ba7215762234df3423b1fa7",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/components/PrivacyConsentDialog.ets",
+      "gitBlob": "9d584321bfe5bae59dbe57f4d67bc2158f2639a0",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/components/TaskDeviceControlPanel.ets",
+      "gitBlob": "cc4671af9a8b5a0c92a512c41bb42b5b924feb9a",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/config/ModelDownloadConfig.ets",
+      "gitBlob": "76839e9da0afb906ad97fa1eb1872c1b260838a4",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/chat/ChatContextBudget.ets",
+      "gitBlob": "cdaef0cb6b62f7a2ed6bf7e6bf0da7492e575623",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexApprovalCard.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "fb7bab66f244e5e527435720bebff89a95345e1d"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexArtifactActions.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "3d40f737d33dd8004bad16536de1235199077aa5"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexArtifactCard.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "f5384e67a73a7fc6bc999f75cac31311554610b3"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexArtifactStore.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "bdd92e37d3864a6086a0078393c25432f61edc6a"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexChatRunCard.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "3f9a7490a50b929a00dceda22ad519abef43adb1"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexChatService.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "8645bf0c91ae7eac1e12a6c840281646e05532b7"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexChatStore.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "9c3807c4097a9b62e3e8dcd85ce785829c724a70"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexChatTargetPicker.ets",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054",
+      "gitBlob": "e0a4acfac21c503f048d72ee3ded6dd8453a3845"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexChatTypes.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "6ba807fda0c5c429fff7710dadb0295b2e49580f"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexChatViews.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "db0933abe761637d176a972e6e4b5bc682c52a48"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexClient.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "a12ca241af00d71328305d545e590804ee9b9615"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexConnectionViews.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "08f1c91f19f0d0376fe33d3dca57b2a0975c042d"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexCredentialStore.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "24769f1a6dfe9f940749e4777a9c4c402b9d1caf"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexHelpContent.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "1eb9fc3434d5131d143853bff69559f2a96f7766"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexHelpPage.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "68ea132f898dcdab6679faeb6b4eea1e470b5b38"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexPage.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "b1c71519f2f9f0f0e21febb41ed7a801ceabd83f"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexPairingInput.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "175d12bbe27e9fcdce9d0679de05b3070ac39bcf"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexResponseText.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "660461f2be46f3ad98f37a0f12c95babf264cc07"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexSelectionDialog.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "57b6fc508388c7b142135c0511431ea28879ee88"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexTypes.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "41e18ec2030130c91b34ef9309d86a94e23e5ff4"
+    },
+    {
+      "path": "entry/src/main/ets/pages/collection/CollectionGroupDetailPage.ets",
+      "gitBlob": "305d2236aa372e71cd3bebfea6e646ad6206d3ec",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/collection/CollectionPage.ets",
+      "gitBlob": "9403dbc9c74f2402e95286c333197c80c9bb83ea",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/gallery/GalleryPage.ets",
+      "gitBlob": "b5ffdd9480f1d51c618dd3afd3ffbfdedbda86fa",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/Index.ets",
+      "gitBlob": "e45bdd78156f8b54109c4b41ebbd378fbc1654da",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/main/FloatingMainTabs.ets",
+      "gitBlob": "6d24794295ed8ae6aafc273eaa58dbc58d94b7b6",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/main/MainTabConfig.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "737988264536422e21b61aab447aee43196bc6d6"
+    },
+    {
+      "path": "entry/src/main/ets/pages/onboarding/FirstLaunchOnboarding.ets",
+      "gitBlob": "0ca46e7907d92d63b707a41546ef6e40cb8b1555",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/settings/DesktopCompanionPage.ets",
+      "gitBlob": "5fe7ede9a291161b7915b304eb1204dab76e1e2f",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/settings/SettingsCenterControls.ets",
+      "gitBlob": "bd31c4e5f3566f6408f641cb72b8853db30e71c3",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/settings/SettingsCenterPage.ets",
+      "gitBlob": "c04390d097263c4c2da34ca3ebd3af783dce31a4",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/settings/SettingsCenterTheme.ets",
+      "gitBlob": "dd5d8e9bdf68843b6de9e37932a7f732eef2c069",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/settings/SettingsCenterTypes.ets",
+      "gitBlob": "c64d64bd00104ea51838de7ff246760993150a73",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/task/TaskPage.ets",
+      "gitBlob": "842f6ff4dbdf172ddcff300a5a34f496b88bed49",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/task/WorkflowFileViewer.ets",
+      "gitBlob": "b8d9ccbe3d51d72d9b4a6004188081f8adb96f1e",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/AppRequests.ets",
+      "ref": "4e86f6250c7739d0ea922e2379eeedad2d35d450",
+      "gitBlob": "b6fd8e8d6c5ac26be03a84b904580eb4d7e295a6"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CollectionReminderPolicy.ets",
+      "gitBlob": "49818b2a8c00178856cee2bbb7d1428eee0f9609",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/DefaultSettingVisibility.ets",
+      "gitBlob": "6cf2e25f4a4947ab770e976a1ace7dff1fba9115",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryAnalyzer.ets",
+      "gitBlob": "e22ac3c28f32879c5110b5af5e4ebee0e4c51343",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryExifUtils.ets",
+      "gitBlob": "9dc82fb1ecad8c5b62ed89d6411de4ae84d733d7",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryHdcPolicy.ets",
+      "gitBlob": "5fd57d0f52a7d29982848da82b5244e5d4ff0d39",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryHdcReader.ets",
+      "gitBlob": "921cd1c72f24d58724c7eb6c589813527442cd44",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryImageStore.ets",
+      "gitBlob": "ef4b991dd93932e45fb25f891466c324a5d7cac2",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryKeywordFilter.ets",
+      "gitBlob": "86cc54e084b9fb10668383c9c01dbd9a4501755f",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryMonthlyInsights.ets",
+      "gitBlob": "75dd540d42e4790f600812724331842488568f99",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryOcrService.ets",
+      "gitBlob": "1bdbd54c8efc949e471405f7bb70dc3c117ebdb9",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryReverseGeocoder.ets",
+      "gitBlob": "b407a5c6b8e6a2715077f2069f9a1d18defd1399",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GallerySearchService.ets",
+      "gitBlob": "ff3092a6c72c3c0dc592f6cebed92f84e88753c8",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryStorage.ets",
+      "gitBlob": "f18dfee713f04ce7c8ccf18156b3d8f135350608",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/gallery/GalleryWorkQueue.ets",
+      "gitBlob": "7b200f7aba952bf2c8129acf799da6c4368c4d80",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/HuaweiAccountSession.ets",
+      "gitBlob": "f35f387851e64ccdc26453fbfa023d7a0d69427a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/PageStatusBar.ets",
+      "gitBlob": "ffcd515e5b2b5438ad766f4761ae7b453a43a612",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/selfhdc/SelfHdcTaskSettings.ets",
+      "gitBlob": "f5278b188ad410c284a3bf63b9cf8fee3e060db8",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/SensitiveValueUtils.ets",
+      "gitBlob": "bc6cf00e1618d1f6ebb1aa4e44682f8ab0783dd4",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/voice/MimoVoiceClient.ets",
+      "gitBlob": "08c7277d9d5db9b729ead30bd5f329ff1bc4a307",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/voice/PcmWav.ets",
+      "gitBlob": "a31ca60d8d47bf7e29e2659dd94fc0099599a7ab",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/voice/VoiceTtsPresets.ets",
+      "gitBlob": "47c582cc53c92aeebc1bc2a7a59a4a0dcdadba09",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/wechat/WechatAutoSummaryTypes.ets",
+      "gitBlob": "e1c9ae7135493d3835cb5b8dd9b6e0f05a776bed",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/WorkflowSceneConfig.ets",
+      "gitBlob": "1b952f31de1885c3c71180847602de174543c6ad",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/WorkflowStorage.ets",
+      "gitBlob": "2c51ef355739c47904d86427b6feb5d79ff5ff1a",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/utils/WorkflowTypes.ets",
+      "gitBlob": "041f9e0ddcbc041c7c73423389e13f2e82460102",
+      "ref": "cd69b68bf16b9ed352be5073939eb24d042de583"
+    },
+    {
+      "path": "entry/src/main/ets/pages/codex/CodexMarkdownLinks.ets",
+      "ref": "e876199f382f32530af850dff20cfd6178a55554",
+      "gitBlob": "7fc3f681364af1305b306d045a559ec68643424d"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CodexRequestBudget.ets",
+      "ref": "e876199f382f32530af850dff20cfd6178a55554",
+      "gitBlob": "5c52f9ff5b004d2855c72ac81a290d9b49552720"
+    },
+    {
+      "path": "entry/src/main/ets/pages/home/HomeSecretary.ets",
+      "gitBlob": "79fc4b734b6d5aa351a911864dde2fd08617a217",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/home/HomeSecretaryDesk.ets",
+      "gitBlob": "bb6d846d912384eff3f372cee05ac8c42ae27fcc",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/home/SecretaryNoteCard.ets",
+      "gitBlob": "17fca42aa95c6f48b91183d712a077ecf5541c47",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/home/SecretaryPortrait.ets",
+      "gitBlob": "8a62ce4554c4772757f82c166b1c76a5cecc26b0",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/home/HomeCodexHandoff.ets",
+      "gitBlob": "58dbf69bf96c9da93d54661a5c3551ec69b4df6a",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/collection/PersonalInfoSection.ets",
+      "gitBlob": "b261d7787557f8537592ae1b071d6602b9d5e7bb",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/collection/PeopleInfoPage.ets",
+      "gitBlob": "40680b1329aa039708009f3dfd795b5345703131",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/collection/PersonInfoPage.ets",
+      "gitBlob": "7b339a4318d27edc444f9e93e7253d579bd94b7c",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/PersonMemory.ets",
+      "gitBlob": "a609b0bf617e706eb3250a2db63f095c73cb03d3",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/PersonMemoryStore.ets",
+      "gitBlob": "a3df7b9146fc92e21c3949023d231fe2cb636b0a",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/CollectionProfileNote.ets",
+      "gitBlob": "465e7a1bccf753da3bb55a4fceb8f8b64eadb615",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/HomeCodexContext.ets",
+      "gitBlob": "0445655caa8bf030ca61138c57c8f24ae577d68a",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/components/WorkflowFileManager.ets",
+      "gitBlob": "ec40a933174202cb2d874eece811f37ec7d6c410",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/WorkflowFileCatalog.ets",
+      "gitBlob": "0cf89470dd683154ff2c545e8ddb6d72ad7b91a8",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/components/CollectionFormControls.ets",
+      "gitBlob": "b3d75a8b4f05206da2af0eed0b161a4b19c16cc7",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/pages/settings/ModelSettingsField.ets",
+      "gitBlob": "9731eed53c6a453ad3d4ad3ebf926af878ad6f1d",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/LocalModelRecommendation.ets",
+      "gitBlob": "8b192b5c9c15c0e381b239cccc4e33ef9d838d3e",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ChatCloudConfig.ets",
+      "gitBlob": "6d9b1cce9fd894bdd8e1c34a1bd6510f3e8c1e31",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CloudSettingsConfig.ets",
+      "gitBlob": "7132922e58d0834c7aa10a3a0189be3ca2fab453",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/wechat/WechatAutoSummarySettings.ets",
+      "gitBlob": "7cd25047110481f21d4c1ec1111ed5eb819cb6fc",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CloudApiCompatibility.ets",
+      "gitBlob": "397f1ca5b271f1f4f5ef070bf7a1e38b7f6c231a",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/components/CalendarWeekDialog.ets",
+      "gitBlob": "64abd254a3a8dd6b7a7c491ea7540e6e8e0fc530",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/calendar/CalendarMemoryPolicy.ets",
+      "gitBlob": "a8c0dd504c14c42f6022eeb319f25eb83b660e56",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/wechat/PhoneWechatAutoSummaryClient.ets",
+      "gitBlob": "b5a76b06dcdf967119f294d9ab1b8618508b1b4e",
+      "ref": "49fc716ab6775642f96a44a499b12e772a4af5d0"
+    },
+    {
+      "path": "entry/src/main/ets/utils/wechat/WechatUiParser.ets",
+      "gitBlob": "7ad57b6ea74ed9d9d28d072591e8328c991b9d9b",
+      "ref": "49fc716ab6775642f96a44a499b12e772a4af5d0"
+    },
+    {
+      "path": "entry/src/main/ets/utils/wechat/WechatAutoSummaryStorage.ets",
+      "gitBlob": "0a45c8328b876b66fdb3c0e648664aab0c9f8615",
+      "ref": "49fc716ab6775642f96a44a499b12e772a4af5d0"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ModelJsonResponse.ets",
+      "gitBlob": "c84d2947b4ad79b54bfa2b4c4e4b734123ab7919",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/recording/RecordingSummaryLists.ets",
+      "gitBlob": "ce7c64ce41b40b305b1cc96643f76682ef26c8fe",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/recording/RecordingSummaryResponse.ets",
+      "gitBlob": "a678eb8292ba879c37da3c7884a4563486214133",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/recording/RecordingSummaryText.ets",
+      "gitBlob": "a6fb8ef962e1c04e7ee247a8967ac2b5fa3394ec",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/recording/RecordingSummaryTitle.ets",
+      "gitBlob": "78c2af8051320ad40e007f47998c0c028800f94c",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/recording/RecordingTypes.ets",
+      "gitBlob": "1601e3d002c74f43ba08940c386c33143eb3607e",
+      "ref": "ba8e250ffdb4c7b1724e04028029c9d4998b4054"
+    },
+    {
+      "path": "entry/src/main/ets/utils/CloudHttpDiagnostics.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "feb67539d2ad20f2afeb2e85d7d8afb58b7a4cdf"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/MemoryChangeJournal.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "1a64b298266c236bd30d0de4c5df4c2f25077cad"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ChatCollectionContext.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "8e3ba31aa59d7a2ed567a4b5e641383bc137205d"
+    },
+    {
+      "path": "entry/src/main/ets/utils/DailyLogEntryIdentity.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "89164e9d8ffcd31c2d5a69bd38b460518de6920d"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/HomeRecommendationRequestCodec.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "ea5b8a4904592ae31c93bf88948ed723cc67c9da"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ProfileRequestCodec.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "0ce5c83ec39e51ee02982cad40a12fc28d1bcadd"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ProfileEvidence.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "deec97e973c14eb6e6054501e0cd3b8890420a5c"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ProfileBlockCache.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "b7fc5eef61d32aa7546c777a29f35f920692e370"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/CollectionChatIdentity.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "0b8c1e6aa9662ce2599fbfe79a95d6ade380f7fe"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ChatMessageEvidence.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "b7d08d471e62feb780e9bb9c27792887a2107f40"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/EventAnalysisPolicy.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "2515310c44a21f656e1cff36a72a4472b10b7f76"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/EventStreamParser.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "e4f4ce9d68fb60bddd6f5f12839c339ddab7c2cc"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ModelStreamActivity.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "b5cfa1b535ac5053d1454e94783bb3f4f21635af"
+    },
+    {
+      "path": "entry/src/main/ets/utils/ChatMessageTime.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "091a2121e047149bbe7ef30af5514d87ff8c47a2"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/ChatFactDedup.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "916aee49da31f405c0f16587fc62f9c0cf5fae85"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/DailyLogReferenceCompatibility.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "67178ab9de938a7102da8a1e74be9860b60ff09e"
+    },
+    {
+      "path": "entry/src/main/ets/utils/calendar/CalendarMemoryStore.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "3f013195617c679452d9a56d3b13422d43cdaf6a"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/IndexWriteBatch.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "a6d71264a2ed43b74f8ab362200e4032ae0bc030"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/SyncWorkSlice.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "62de004953e44604106f7ea4eb0b3c84aeba9d0d"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/WorkflowRunEvidenceTask.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "3b93b30d6430c3a9b177f4767f133c4e5fcd8a7d"
+    },
+    {
+      "path": "entry/src/main/ets/datamanager/WorkflowRunEvidence.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "dc71b31b14890d8538f68ae9744664e64049f72c"
+    },
+    {
+      "path": "entry/src/main/ets/utils/WechatSummaryConsistency.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "428f931f6a36af45ea375f269a42e15f5f707059"
+    },
+    {
+      "path": "entry/src/main/ets/utils/WechatSummaryPrompt.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "d7b1319a2c694d0fcd665d478eaa91400c9b4135"
+    },
+    {
+      "path": "entry/src/main/ets/config/TaskExecutionConfig.ets",
+      "ref": "de19a91564fb02cf2bd4a9778856fb1113c1fd87",
+      "gitBlob": "7d2f457461c33b6a36372218c8cd9449ae7ff800"
+    }
+  ]
+}
