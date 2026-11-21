@@ -1,0 +1,214 @@
+// Android adaptation of pages/codex/CodexClient.ets.
+//
+// The HarmonyOS implementation used the RCP session for every request. On Android the
+// request itself must be performed by the native side, because only Kotlin can supply a
+// trust store scoped to one paired connection and a cancellation model that survives the
+// ArkTS page being rebuilt. The native transport owns the HarmonyOS retry policy.
+//
+// Native methods (see CodexPlatformBridge.kt):
+//   codexRequestStart/Poll      performs a bounded HTTP exchange without blocking ArkUI
+//   codexCancel(id)              cancels the in-flight request with that id
+//   codexConnectionSave/list/load/forget  encrypted credential storage
+
+import Bridge from '@arkui-x.bridge';
+import { util } from '@kit.ArkTS';
+import { codexResponseText } from './CodexResponseText';
+import { checkCodexJsonBudget } from '../../utils/CodexRequestBudget';
+import {
+  CodexConnection, CodexEnvelope, CodexCreateBody, CodexTurnBody, CodexUploadBody, CodexApprovalBody,
+  normalizeCodexOrigin, validCodexToken, validCodexCa, CodexPairBody, CodexPairingBundle, validateCodexPairing,
+  CodexForkBody, CodexResumeBody
+} from './CodexTypes';
+
+/** Wire shape of one native request. */
+interface CodexNativeRequest {  id: string;
+  origin: string;
+  method: string;
+  route: string;
+  body?: string;
+  authenticated: boolean;
+  caCertificate: string;
+  token: string;
+  timeoutMs: number;
+  expectGzip: boolean;
+}
+
+/** Wire shape of the native answer. */
+interface CodexNativeResponse {
+  status: number;
+  text: string;
+  gzipUnsupported: boolean;
+  failure: string;
+  transportFailure: boolean;
+}
+
+/** Ticket returned when the native side starts an exchange on a coroutine. */
+interface CodexTicket { ticket: string; }
+
+/** A poll of a pending exchange: either a marker or the finished reply. */
+interface CodexPolledReply {
+  status?: string;
+  failure?: string;
+  text?: string;
+  gzipUnsupported?: boolean;
+  transportFailure?: boolean;
+}
+
+// How long one exchange may take, and how often to ask. The native side keeps its own
+// timeouts; these only bound how long the page keeps polling for the answer.
+const EXCHANGE_DEADLINE_MS: number = 60000;
+const EXCHANGE_POLL_MS: number = 120;
+
+export class CodexClient {
+  private origin: string = '';
+  private token: string = '';
+  private caCertificate: string = '';
+  private generation: number = 0;
+  private pending: string[] = [];
+  private updatePending: string[] = [];
+  private compressionEnabled: boolean = true;
+  private chunkBytes: number = 1024 * 1024;
+  onReachability: (reachable: boolean, message: string) => void = () => {};
+
+  /**
+   * Performs one exchange through the native side without blocking its thread.
+   *
+   * A long poll can occupy the transport for tens of seconds, and holding the bridge thread
+   * that long is reported as an ANR. The native side therefore starts the exchange and
+   * returns a ticket, and this polls until the answer is ready.
+   */
+  private static async exchangeOnce(payload: string): Promise<string> {
+    const raw = await CodexClient.bridge().callMethod('codexRequestStart', payload) as string;
+    const started = JSON.parse(raw) as CodexTicket;
+    if (started === null) { throw new Error('无法开始请求，请重新连接'); }
+    if (!started.ticket) {
+      // The native side answered immediately (a validation failure with no exchange).
+      return raw;
+    }
+    const deadline = Date.now() + EXCHANGE_DEADLINE_MS;
+    while (Date.now() < deadline) {
+      const polled = JSON.parse(
+        await CodexClient.bridge().callMethod('codexRequestPoll', started.ticket) as string) as CodexPolledReply;
+      if (polled !== null && polled.status === 'pending') {
+        await new Promise<void>((resolve): void => { setTimeout(resolve, EXCHANGE_POLL_MS); });
+        continue;
+      }
+      if (polled !== null && polled.status === 'expired') {
+        throw new Error('请求超时，请同步会话后重试');
+      }
+      // Anything that is not a pending/expired marker is the exchange result itself.
+      return JSON.stringify(polled);
+    }
+    await CodexClient.bridge().callMethod('codexRequestCancel', started.ticket);
+    throw new Error('请求超时，请同步会话后重试');
+  }
+
+  private static bridge(): ESObject { return Bridge.createBridge('ClawMatePlatform'); }
+
+  setArtifactChunkBytes(bytes: number): void {
+    this.chunkBytes = Number.isSafeInteger(bytes) && bytes >= 16384 && bytes <= 1048576 ? bytes : 1048576;
+  }
+  artifactChunkBytes(): number { return this.chunkBytes; }
+
+  configure(connection: CodexConnection): void {
+    this.close();
+    this.origin = normalizeCodexOrigin(connection.origin);
+    if (!validCodexToken(connection.token)) { throw new Error('桥接令牌格式无效，请使用服务器生成的 token'); }
+    this.token = connection.token;
+    if (connection.caCertificate && !validCodexCa(connection.caCertificate)) { throw new Error('配对证书格式无效'); }
+    this.caCertificate = connection.caCertificate || '';
+    this.generation++;
+  }
+
+  close(): void {
+    this.generation++;
+    this.cancelPending(this.pending);
+    this.cancelPending(this.updatePending);
+    this.pending = []; this.updatePending = [];
+    this.token = ''; this.origin = ''; this.caCertificate = '';
+    this.chunkBytes = 1024 * 1024; this.compressionEnabled = true;
+  }
+
+  private cancelPending(ids: string[]): void {
+    const bridge: ESObject = CodexClient.bridge();
+    ids.forEach((id: string): void => { bridge.callMethod('codexCancel', id).catch((): void => {}); });
+  }
+
+  cancelTaskUpdates(): void {
+    this.cancelPending(this.updatePending); this.updatePending = [];
+  }
+
+  async pair(bundle: CodexPairingBundle): Promise<CodexConnection> {
+    validateCodexPairing(bundle);
+    this.configure({ origin: bundle.origin, token: bundle.code, caCertificate: bundle.caCertificate });
+    const result: CodexEnvelope = await this.request('/v1/pair',
+      { code: bundle.code, deviceName: '我的安卓手机' }, false);
+    if (!result.token || !validCodexToken(result.token) || result.serverId !== bundle.serverId) {
+      this.close(); throw new Error('配对响应不匹配，请重新生成配对信息');
+    }
+    const connection: CodexConnection = { origin: bundle.origin, token: result.token, caCertificate: bundle.caCertificate };
+    this.configure(connection); return connection;
+  }
+
+  async call(route: string,
+    body?: CodexCreateBody | CodexTurnBody | CodexUploadBody | CodexApprovalBody | CodexForkBody | CodexResumeBody
+  ): Promise<CodexEnvelope> {
+    return this.request(route, body, true);
+  }
+
+  private async request(route: string,
+    body: CodexCreateBody | CodexTurnBody | CodexUploadBody | CodexApprovalBody | CodexPairBody | CodexForkBody | CodexResumeBody | undefined,
+    authenticated: boolean): Promise<CodexEnvelope> {
+    if (!this.origin || !this.token) { throw new Error('请先连接 Codex 服务器'); }
+    const generation = this.generation;
+    const id = util.generateRandomUUID(true);
+    this.pending.push(id);
+    const isUpdate = route.includes('waitMs=');
+    if (isUpdate) { this.updatePending.push(id); }
+    try {
+      const encoded = body === undefined ? undefined : JSON.stringify(body);
+      if (encoded !== undefined) { checkCodexJsonBudget(route, encoded); }
+      const payload: CodexNativeRequest = {
+        id: id, origin: this.origin, method: body === undefined ? 'GET' : 'POST', route: route,
+        body: encoded, authenticated: authenticated,
+        caCertificate: this.caCertificate, token: this.token,
+        // The deadline includes any native retry and stays below the bridge polling deadline.
+        timeoutMs: route === '/v1/health' ? 15000 : route === '/v1/pair' ? 18000 : 45000,
+        expectGzip: this.compressionEnabled
+      };
+      const raw = await CodexClient.exchangeOnce(JSON.stringify(payload));
+      if (generation !== this.generation) { throw new Error('连接已更换'); }
+      const response = JSON.parse(raw) as CodexNativeResponse;
+      if (response.failure && response.failure.length > 0) {
+        if (response.transportFailure) { this.onReachability(false, response.failure); }
+        throw new Error(response.failure);
+      }
+      if (response.gzipUnsupported && this.compressionEnabled) {
+        this.compressionEnabled = false;
+        throw new Error('压缩响应未能解析，将改用普通传输，请同步会话后重试');
+      }
+      if (response.status !== 401) { this.onReachability(true, ''); }
+      if (response.status >= 300 && response.status < 400) {
+        throw new Error('服务器重定向已拒绝，请填写最终 HTTPS 地址');
+      }
+      if (response.status === 401) {
+        if (!authenticated && route === '/v1/pair') {
+          const pairingError = JSON.parse(response.text) as CodexEnvelope;
+          throw new Error(pairingError.error || '配对码无效，请在电脑端重新生成');
+        }
+        this.onReachability(false, '连接授权已失效，请重新配对');
+        throw new Error('令牌无效或已撤销，请在连接设置中更新');
+      }
+      if (response.status === 429) { throw new Error('请求过于频繁，请稍后重试'); }
+      const text = codexResponseText(undefined, response.text);
+      const envelope = JSON.parse(text) as CodexEnvelope;
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(envelope.error || '服务器请求失败');
+      }
+      return envelope;
+    } finally {
+      this.pending = this.pending.filter((item: string): boolean => item !== id);
+      this.updatePending = this.updatePending.filter((item: string): boolean => item !== id);
+    }
+  }
+}

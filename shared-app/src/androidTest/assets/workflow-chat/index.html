@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang=zh>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<title>工作流验收样本</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:20px sans-serif;color:#17212b;background:#f5f7fa}
+header{height:64px;display:grid;place-items:center;background:white;border-bottom:1px solid #ddd}
+#directory{padding:20px}
+input,button{font:inherit;padding:12px;width:100%;margin-bottom:18px}
+main{height:calc(100dvh - 64px);overflow-y:auto;overscroll-behavior:contain}
+.page{height:100%;display:flex;flex-direction:column;justify-content:space-around;padding:12px}
+time{align-self:center;color:#455568;font-size:16px}
+p{padding:13px;background:white;border-radius:12px;align-self:flex-start}
+p.right{align-self:flex-end;background:#a8eda8}
+[hidden]{display:none!important}
+</style>
+<header id=title>工作流验收样本 · 联系人</header>
+<section id=directory>
+<input aria-label="搜索联系人" placeholder="搜索联系人">
+<button id=contact>小赵</button>
+</section>
+<main hidden id=chat>
+<section class=page>
+<time>昨天 下午 3:10</time>
+<p>蓝色样卡已经归档。</p>
+<time>昨天 下午 3:12</time>
+<p class=right>收到蓝色样卡。</p>
+</section>
+<section class=page>
+<time>上午 9:15</time>
+<p>绿色样卡已经送达。</p>
+<time>上午 9:18</time>
+<p class=right>收到绿色样卡。</p>
+</section>
+</main>
+<script>
+  const contacts = document.getElementById('directory');
+  const messages = document.getElementById('chat');
+  document.getElementById('contact').onclick = () => {
+    contacts.hidden = true;
+    messages.hidden = false;
+    document.getElementById('title').textContent = '小赵';
+    messages.scrollTop = messages.scrollHeight;
+    // Expose visible rows to accessibility, like a recycled native conversation list.
+    const updateRows = () => {
+      const viewport = messages.getBoundingClientRect();
+      for (const row of messages.querySelectorAll('time, p')) {
+        const bounds = row.getBoundingClientRect();
+        row.setAttribute('aria-hidden', String(bounds.bottom <= viewport.top || bounds.top >= viewport.bottom));
+      }
+    };
+    updateRows();
+    messages.addEventListener('scroll', updateRows);
+  };
+</script>
+</html>

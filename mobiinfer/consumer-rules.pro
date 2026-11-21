@@ -1,0 +1,1 @@
+-keep class com.clawmate.inference.NativeGguf { native <methods>; }

@@ -1,0 +1,73 @@
+package com.clawmate.shared;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+/** SDK-only disposable fixture application; no host/Kotlin/runtime dependency. */
+public class GuiControlFixtureActivity extends Activity {
+    private int count;
+    private ScrollView scroll;
+    private void describe() { scroll.setContentDescription("Fixture scroll offset: " + scroll.getScrollY() + ", count: " + count); }
+    @Override public void onCreate(Bundle state) {
+        setTheme(android.R.style.Theme_Material_Light_NoActionBar);super.onCreate(state);
+        if (getFileStreamPath("collection-fixture").isFile()) {
+            showStore();
+            return;
+        }
+        LinearLayout column=new LinearLayout(this);column.setOrientation(LinearLayout.VERTICAL);column.setPadding(16,40,16,40);
+        TextView title=new TextView(this);title.setText("ClawMate GUI Fixture");title.setTextSize(24);column.addView(title);
+        TextView counter=new TextView(this);counter.setText("Count: 0");counter.setTextSize(24);column.addView(counter);
+        scroll=new ScrollView(this);
+        Button increment=new Button(this);increment.setText("Increment fixture");increment.setContentDescription("Increment fixture");increment.setOnClickListener(v->{count++;counter.setText("Count: "+count);describe();});column.addView(increment);
+        EditText edit = new EditText(this);
+        edit.setText("Fixture editable value");
+        edit.setShowSoftInputOnFocus(false);
+        column.addView(edit);
+        column.setFocusableInTouchMode(true);
+        column.requestFocus();
+        for(int i=0;i<40;i++){TextView row=new TextView(this);row.setText("Fixture row "+i);row.setTextSize(22);row.setPadding(0,12,0,12);column.addView(row);}
+        scroll.addView(column);scroll.setOnScrollChangeListener((v,x,y,oldX,oldY)->describe());describe();setContentView(scroll);
+    }
+
+    private void showStore() {
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        TextView heading = new TextView(this);
+        heading.setText("验收商店");
+        menu.addView(heading);
+        boolean moved = getFileStreamPath("moved-entry").isFile();
+        for (String title : moved ? new String[]{"优惠券", "购买记录", "收货地址"} :
+                new String[]{"我的订单", "收货地址", "优惠券"}) {
+            Button button = new Button(this);
+            button.setText(title);
+            button.setOnClickListener(v -> {
+                if (title.equals("购买记录") || title.equals("我的订单")) {
+                    showOrders();
+                } else {
+                    TextView other = new TextView(this);
+                    other.setText(title);
+                    setContentView(other);
+                }
+            });
+            menu.addView(button);
+        }
+        setContentView(menu);
+    }
+
+    private void showOrders() {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        for (String line : new String[]{"订单明细", "验收订单 VC-731", "合计 42.80 元"}) {
+            TextView row = new TextView(this);
+            row.setText(line);
+            row.setTextSize(22);
+            list.addView(row);
+        }
+        setContentView(list);
+    }
+}

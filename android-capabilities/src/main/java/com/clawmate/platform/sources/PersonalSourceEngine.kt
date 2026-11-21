@@ -1,0 +1,501 @@
+package com.clawmate.platform.sources
+
+import android.Manifest
+import android.content.Context
+import android.content.ContentUris
+import android.content.pm.PackageManager
+import android.provider.CalendarContract
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.AtomicFile
+import android.util.Base64
+import com.clawmate.platform.gui.MikaCalendarWriter
+import com.wangzan101.mika.core.uistate.ActionResult
+import com.wangzan101.mika.core.uistate.SystemAction
+import org.json.JSONObject
+import org.json.JSONArray
+import java.io.File
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/** Data owned by this install. No credentials are returned through the ArkTS bridge. */
+class PersonalSourceEngine(private val context: Context) : AutoCloseable {
+    companion object {
+        /** 首页“为你提醒”快速浏览读取的未来天数。 */
+        const val QUICK_DAYS = 7
+    }
+    private val prefs = context.getSharedPreferences("personal_sources", Context.MODE_PRIVATE)
+    private val root = File(context.filesDir, "personal-sources").apply { mkdirs() }
+    private val optionsPrefs = context.getSharedPreferences("personal_source_options", Context.MODE_PRIVATE)
+    init {
+        if (prefs.getString("host", "").equals(JAccountOAuth.MAIL_HOST, ignoreCase = true) &&
+            prefs.getString("mode", "password") == "password") {
+            // Keep the account and local mail when upgrading. The next network read requires jAccount.
+            check(prefs.edit().putString("mode", "jaccount").remove("secret").remove("iv").commit())
+        }
+        if (!optionsPrefs.getBoolean("systemUnified", false)) {
+            val enabled = optionsPrefs.getBoolean("calendarEnabled", false)
+            check(optionsPrefs.edit().putBoolean("systemUnified", true).putBoolean("calendarEnabled", enabled)
+                .putBoolean("holidayEnabled", enabled).putBoolean("festivalEnabled", enabled).putBoolean("solarTermEnabled", enabled)
+                .putString("selected", "[]").putString("disabledGroups", "").putString("disabledFestivalCategories", "").commit())
+            // Source semantics changed; discard only the regenerable local snapshot, never device events.
+            AtomicFile(File(root, "calendar.json")).delete()
+        }
+    }
+    private fun calendarEnabled() = optionsPrefs.getBoolean("calendarEnabled", File(root, "calendar.json").exists())
+    private fun mailEnabled() = optionsPrefs.getBoolean("mailEnabled", !prefs.getString("user", "").isNullOrEmpty())
+    /** 常用节假日来源默认开启；与“接入系统日历”相互独立。 */
+    private fun holidayEnabled() = calendarEnabled()
+    /** 内置节日（中国传统/西方/国际日）默认开启。 */
+    private fun festivalEnabled() = calendarEnabled()
+    /** 内置节气默认开启。 */
+    private fun solarTermEnabled() = calendarEnabled()
+    /** 节日里被停用的类别（chinese/western/international）。 */
+    private fun disabledFestivalCategories(): Set<String> =
+        (optionsPrefs.getString("disabledFestivalCategories", "") ?: "").split(',').filter { it.isNotBlank() }.toSet()
+    private fun activeFestivalCategories(): Set<Festivals.Category> =
+        Festivals.Category.values().filter { it.key !in disabledFestivalCategories() }.toSet()
+    /** 任一内置来源开启即可读取节假日/节日/节气。 */
+    private fun builtInEnabled() = holidayEnabled() || festivalEnabled() || solarTermEnabled()
+    private fun calendarSelection(): JSONArray = JSONArray(optionsPrefs.getString("selected", null)
+        ?: runCatching { JSONObject(File(root, "calendar.json").readText()).optJSONArray("selected")?.toString() }.getOrNull() ?: "[]")
+    /** 已停用的日历类别（生日/纪念日/倒计时等），与“本机日历”分开控制。 */
+    private fun disabledGroups(): Set<String> = (optionsPrefs.getString("disabledGroups", "") ?: "")
+        .split(',').filter { it.isNotBlank() }.toSet()
+    @Volatile private var cachedCalendars: List<CalendarMeta> = emptyList()
+    @Volatile private var cachedCalendarsAt: Long = 0L
+    private data class CalendarMeta(
+        val id: Long, val name: String, val accountType: String, val owner: String,
+        val readOnly: Boolean, val visible: Boolean, val group: String, val label: String, val detail: String,
+    )
+    private fun calendars(): List<CalendarMeta> {
+        val cached = cachedCalendars
+        if (cached.isNotEmpty() && System.currentTimeMillis() - cachedCalendarsAt < 10 * 60 * 1000L) return cached
+        val out = ArrayList<CalendarMeta>()
+        context.contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            arrayOf("_id", "calendar_displayName", "account_type", "ownerAccount", "calendar_access_level", "visible"),
+            null, null, "_id",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                // 系统日历 id 必须为非负整数，才能与节假日的 -1 区分来源。
+                val id = c.getLong(0)
+                if (id < 0) continue
+                val name = c.getString(1) ?: ""
+                val type = c.getString(2) ?: ""
+                val owner = c.getString(3) ?: ""
+                val readOnly = c.getInt(4) <= CalendarContract.Calendars.CAL_ACCESS_READ
+                val info = CalendarSourceLabels.describe(id, name, type, owner, readOnly)
+                out.add(CalendarMeta(id, name, type, owner, readOnly, c.getInt(5) != 0, info.group, info.name, info.detail))
+            }
+        } ?: run { if (calendarEnabled()) error("无法读取日历来源") }
+        cachedCalendars = out
+        cachedCalendarsAt = System.currentTimeMillis()
+        return out
+    }
+    /** 实际读取的日历：只取勾选且类别启用的系统日历。 */
+    private fun effectiveIds(): Set<Long> {
+        // Include read-only subscriptions and OEM calendars, even when their UI visibility is false.
+        return calendars().map { it.id }.toSet()
+    }
+    /** 按类别汇总的来源（界面用中文名展示，逗号分隔具体日历）。 */
+    private fun groupedSources(): JSONArray {
+        val groups = calendars().groupBy { it.group }
+        val disabled = disabledGroups()
+        val array = JSONArray()
+        for (group in CalendarSourceLabels.GROUP_ORDER) {
+            val members = groups[group] ?: continue
+            if (members.isEmpty()) continue
+            val enabled = group !in disabled
+            val ids = JSONArray()
+            members.forEach { ids.put(it.id) }
+            array.put(JSONObject().put("id", -2L - CalendarSourceLabels.GROUP_ORDER.indexOf(group))
+                .put("name", CalendarSourceLabels.groupTitle(group))
+                .put("kind", if (group == "local") "system" else "group")
+                .put("group", group)
+                .put("groupLabel", CalendarSourceLabels.groupTitle(group))
+                .put("groupHint", CalendarSourceLabels.groupHint(group))
+                .put("enabled", enabled)
+                .put("members", ids)
+                .put("memberNames", describeMembers(members))
+                .put("count", members.size))
+        }
+        return array
+    }
+    private fun describeMembers(members: List<CalendarMeta>): String {
+        // 同一类别里的日历常是同一含义的不同账户（如“生日提醒”“新建生日”），只显示一次。
+        val labels = members.map { it.label.removeSuffix("新建").removeSuffix("提醒") }.distinct().filter { it.isNotBlank() }
+        return if (labels.size <= 1) labels.joinToString("") else labels.joinToString("、")
+    }
+    private fun CalendarMeta.rawNameForApi(): String = name.ifBlank { label }
+    @Synchronized fun options(): String = JSONObject().put("calendarEnabled", calendarEnabled())
+        .put("systemUnified", true)
+        .put("holidayEnabled", holidayEnabled())
+        .put("festivalEnabled", festivalEnabled())
+        .put("solarTermEnabled", solarTermEnabled())
+        .put("disabledFestivalCategories", JSONArray(disabledFestivalCategories().sorted()))
+        .put("disabledGroups", JSONArray(disabledGroups().sorted()))
+        .put("historyDays", optionsPrefs.getInt("historyDays", 90)).put("selected", calendarSelection())
+        .put("maxMessages", optionsPrefs.getInt("maxMessages", 50))
+        .put("mailEnabled", mailEnabled()).put("mailAiAllowed", optionsPrefs.getBoolean("mailAiAllowed", false))
+        .put("mailInterested", optionsPrefs.getString("mailInterested", ""))
+        .put("mailIgnored", optionsPrefs.getString("mailIgnored", "")).toString()
+    @Synchronized fun saveOptions(kind: String, raw: String) {
+        val value = JSONObject(raw)
+        when (kind) {
+            "calendar", "holiday" -> {
+                val enabled = value.getBoolean("calendarEnabled")
+                val holiday = value.optBoolean("holidayEnabled", holidayEnabled())
+                val festival = value.optBoolean("festivalEnabled", festivalEnabled())
+                val solarTerm = value.optBoolean("solarTermEnabled", solarTermEnabled())
+                val festivalCategories = value.optJSONArray("disabledFestivalCategories")
+                val disabledFestival = if (festivalCategories == null) disabledFestivalCategories() else
+                    (0 until festivalCategories.length()).map { festivalCategories.getString(it) }
+                        .filter { Festivals.categoryOf(it) != null }.toSet()
+                val days = value.getInt("historyDays"); require(days in listOf(0, 30, 90, 365))
+                val selected = value.getJSONArray("selected"); require(selected.length() <= 100)
+                for (i in 0 until selected.length()) require(selected.getLong(i) >= 0)
+                val groups = value.optJSONArray("disabledGroups")
+                val disabled = if (groups == null) disabledGroups() else (0 until groups.length())
+                    .map { groups.getString(it) }
+                    .filter { it in CalendarSourceLabels.GROUP_ORDER && it != "local" && it != "other" }
+                    .toSet()
+                val changed = enabled != calendarEnabled() || holiday != holidayEnabled() ||
+                    festival != festivalEnabled() || solarTerm != solarTermEnabled() ||
+                    days != optionsPrefs.getInt("historyDays", 90) || selected.toString() != calendarSelection().toString() ||
+                    disabled.sorted() != disabledGroups().sorted() ||
+                    disabledFestival.sorted() != disabledFestivalCategories().sorted()
+                check(optionsPrefs.edit().putBoolean("calendarEnabled", enabled).putBoolean("holidayEnabled", holiday)
+                    .putBoolean("festivalEnabled", festival).putBoolean("solarTermEnabled", solarTerm)
+                    .putInt("historyDays", days).putString("selected", selected.toString())
+                    .putString("disabledGroups", disabled.sorted().joinToString(","))
+                    .putString("disabledFestivalCategories", disabledFestival.sorted().joinToString(",")).commit())
+                // A disabled/changed source must not remain available to chat from an older snapshot.
+                if (changed) clear("calendar")
+            }
+            "mail" -> {
+                val limit = value.getInt("maxMessages"); require(limit in listOf(20, 50, 100))
+                val editor = optionsPrefs.edit().putInt("maxMessages", limit)
+                for (key in listOf("mailEnabled", "mailAiAllowed")) {
+                    if (value.has(key)) editor.putBoolean(key, value.getBoolean(key))
+                }
+                for (key in listOf("mailInterested", "mailIgnored")) {
+                    if (value.has(key)) {
+                        val text = value.getString(key)
+                        require(text.length <= 1000)
+                        editor.putString(key, text)
+                    }
+                }
+                check(editor.commit())
+            }
+            else -> error("未知来源设置")
+        }
+    }
+    @Volatile private var transport: ImapTransport? = null
+    @Volatile private var epoch = 0
+    var oauthToken: (String, String) -> String = { _, _ -> error("请先完成邮箱OAuth授权") }
+    private fun sameMailbox(host: String, port: Int, user: String): Boolean {
+        if (!host.equals(prefs.getString("host", ""), ignoreCase = true) || port != prefs.getInt("port", 993)) return false
+        val previous = prefs.getString("user", "") ?: return false
+        return when {
+            host.equals(JAccountOAuth.MAIL_HOST, ignoreCase = true) -> JAccountOAuth.normalizeAccount(previous) == user
+            host.equals("imap.gmail.com", ignoreCase = true) || host.equals("outlook.office365.com", ignoreCase = true) ->
+                previous.equals(user, ignoreCase = true)
+            else -> previous == user
+        }
+    }
+    @Synchronized fun configureOAuth(provider: String, user: String, client: String = "", tenant: String = "common") {
+        require(provider in listOf("google", "microsoft", "jaccount")); ImapTransport.quoted(user)
+        require(user.contains('@'))
+        val host = when (provider) {
+            "google" -> "imap.gmail.com"
+            "jaccount" -> "mail.sjtu.edu.cn"
+            else -> "outlook.office365.com"
+        }
+        val tenantChanged = provider == "microsoft" && prefs.getString("mode", "") == provider &&
+            !tenant.equals(prefs.getString("tenant", "common"), ignoreCase = true)
+        if (sameMailbox(host, 993, user) && !tenantChanged) close() else clear("mail")
+        check(prefs.edit().clear().putString("mode", provider).putString("host", host).putInt("port", 993)
+            .putString("user", user).putString("client", client).putString("tenant", tenant).putString("account", "$host:993:$user").commit())
+    }
+    fun calendarGranted() = context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+    @Synchronized fun saveCredentials(host: String, port: Int, user: String, secret: String) {
+        require(!host.equals(JAccountOAuth.MAIL_HOST, ignoreCase = true)) { "请选择上海交大邮箱登录方式" }
+        savePasswordAccount(host, port, user, secret, "password")
+    }
+    @Synchronized fun saveCampusCredentials(account: String, password: String) {
+        val user = requireNotNull(JAccountOAuth.normalizeAccount(account)) { "请填写有效的交大邮箱账号" }
+        savePasswordAccount(JAccountOAuth.MAIL_HOST, 993, user, password, "sjtu_imap")
+    }
+    private fun savePasswordAccount(host: String, port: Int, user: String, secret: String, mode: String) {
+        require(host.matches(Regex("[A-Za-z0-9][A-Za-z0-9.-]{0,251}[A-Za-z0-9]")) && port in 1..65535 && user.length in 1..254)
+        val account = "$host:$port:$user"
+        val same = sameMailbox(host, port, user)
+        val actual = if (secret.isEmpty()) {
+            require(same && prefs.getString("mode", "password") == mode) { "新邮箱需要授权码" }
+            decrypt()
+        } else secret
+        ImapTransport.quoted(actual); ImapTransport.quoted(user)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key())
+        val encrypted = Base64.encodeToString(cipher.doFinal(actual.toByteArray()), Base64.NO_WRAP)
+        if (same) close() else clear("mail")
+        check(prefs.edit().clear().putString("mode", mode).putString("account", account).putString("host", host).putInt("port", port).putString("user", user)
+            .putString("secret", encrypted)
+            .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).commit())
+    }
+    fun settings(): String = JSONObject().put("host", prefs.getString("host", "imap.qq.com"))
+        .put("port", prefs.getInt("port", 993)).put("username", prefs.getString("user", "")).put("mode", prefs.getString("mode", "password"))
+        .put("client", prefs.getString("client", "")).put("tenant", prefs.getString("tenant", "common"))
+        .put("mailEnabled", mailEnabled()).toString()
+    private fun key(): SecretKey {
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (store.getKey("clawmate_mail", null) as? SecretKey)?.let { return it }
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
+            init(KeyGenParameterSpec.Builder("clawmate_mail", KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
+        }.generateKey()
+    }
+    private fun decrypt(): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(prefs.getString("iv", ""), Base64.NO_WRAP)))
+        return cipher.doFinal(Base64.decode(prefs.getString("secret", ""), Base64.NO_WRAP)).toString(Charsets.UTF_8)
+    }
+    fun execute(operation: String, argument: String): String {
+        val generation = epoch
+        val result = when (operation) {
+            "calendar" -> calendar(argument)
+            "calendarTargets" -> JSONArray(MikaCalendarWriter.writableTargets(context).map {
+                JSONObject().put("id", it.id.toString()).put("name", CalendarSourceLabels.writableName(it.name))
+            }).toString()
+            "calendarInsert" -> return insertCalendarEvent(JSONObject(argument))
+            // 只读探测：不读取事件、不保存，只回答来源开关与系统日历授权状态，供首页卡片使用。
+            "calendarStatus" -> JSONObject().put("calendarEnabled", calendarEnabled()).put("holidayEnabled", holidayEnabled())
+                .put("festivalEnabled", festivalEnabled()).put("solarTermEnabled", solarTermEnabled())
+                .put("granted", calendarGranted()).put("selected", calendarSelection().length()).put("effective", effectiveIds().size).toString()
+            // 只读：节假日数据范围与依据，供设置页核对；不读取系统日历、不联网。
+            "festival" -> JSONObject().put("name", Festivals.SOURCE_NAME)
+                .put("categories", JSONArray(Festivals.Category.values().map { JSONObject().put("key", it.key).put("label", it.label) })).toString()
+            "solarTerm" -> JSONObject().put("name", SolarTerms.SOURCE_NAME)
+                .put("terms", JSONArray(SolarTerms.of(java.time.LocalDate.now().year).map { it.second })).toString()
+            "holiday" -> JSONObject().put("name", ChinaHolidays.SOURCE_NAME)
+                .put("sections", JSONArray().put("2025年放假安排（国办发明电〔2024〕7号）").put("2026年放假安排（国办发明电〔2025〕6号）"))
+                .put("note", "只收录官方通知中的放假日与调休上班日；未覆盖年份只显示常规周末。").toString()
+            "mailOpen" -> {
+                check(mailEnabled()) { "请先开启邮件提醒并保存设置" }
+                if (prefs.getString("mode", "") == "jaccount") oauthToken("jaccount", prefs.getString("user", "")!!)
+                val t = ImapTransport(); synchronized(this) { check(generation == epoch); transport?.close(); transport = t }
+                t.open(prefs.getString("host", "")!!, prefs.getInt("port", 993)); "{}"
+            }
+            "mailCommand" -> {
+                val t = transport ?: error("邮箱未连接")
+                val mode = prefs.getString("mode", "password")!!; val user = prefs.getString("user", "")!!
+                if (argument == "@LOGIN" && mode in listOf("google", "microsoft")) JSONArray(t.authenticate(user, oauthToken(mode, user))).toString()
+                else if (argument == "@LOGIN" && mode == "jaccount") {
+                    val token = oauthToken(mode, user)
+                    JSONArray(t.authenticateBearer(user, token, prefs.getString("host", "")!!, prefs.getInt("port", 993))).toString()
+                } else {
+                    val command = if (argument == "@LOGIN") "LOGIN " + ImapTransport.quoted(user) + " " + ImapTransport.quoted(decrypt()) else argument
+                    JSONArray(t.command(command)).toString()
+                }
+            }
+            else -> error("未知来源操作")
+        }
+        check(generation == epoch) { "操作已取消" }; return result
+    }
+    private fun insertCalendarEvent(args: JSONObject): String {
+        check(MikaCalendarWriter.hasAccess(context)) { "请先允许读写系统日历" }
+        val title = args.getString("title").trim()
+        require(title.length in 1..500) { "请填写 1 至 500 字的日程标题" }
+        val begin = args.getLong("start")
+        val end = args.getLong("end")
+        require(end > begin) { "结束时间必须晚于开始时间" }
+        val calendarId = args.getString("calendarId").toLong()
+        val target = MikaCalendarWriter.writableTargets(context).firstOrNull { it.id == calendarId }
+            ?: error("所选日历已不可写，请重新选择日历")
+        val event = SystemAction.AddCalendarEvent(title, begin, end)
+        val saved = MikaCalendarWriter.insert(context, target, listOf(event))
+        check(saved.result is ActionResult.Ok) { "系统未确认保存，请在系统日历中核对后再试" }
+        cachedCalendarsAt = 0
+        return JSONObject().put("uri", saved.eventUris.single()).toString()
+    }
+    private fun calendar(argument: String): String {
+        val args = JSONObject(argument); val now = java.time.ZonedDateTime.now()
+        val listOnly = args.optBoolean("listOnly", false)
+        // 快速浏览只返回未来7天的日历安排与节假日，供首页“为你提醒”使用：
+        // 不读取正文、不写入日历记忆，也不要求勾选来源。
+        if (args.optBoolean("quick", false)) return quickCalendar(now)
+        val useSystem = calendarEnabled()
+        val useHoliday = holidayEnabled()
+        check(listOnly || useSystem) { "请先开启读取手机系统日历" }
+        check(calendarGranted()) { "请先授权读取系统日历" }
+        val historyDays = optionsPrefs.getInt("historyDays", 90)
+        val start = now.toLocalDate().minusDays(historyDays.toLong()).atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val end = now.plusDays(30).toInstant().toEpochMilli()
+        val selected = if (listOnly) JSONArray() else calendarSelection()
+        require(selected.length() <= 100)
+        val ids = if (listOnly) emptySet() else effectiveIds()
+        val sources = JSONArray()
+        sources.put(JSONObject().put("id", ChinaHolidays.SOURCE_ID).put("name", ChinaHolidays.SOURCE_NAME).put("kind", "holiday")
+            .put("enabled", useHoliday))
+        sources.put(JSONObject().put("id", Festivals.SOURCE_ID).put("name", Festivals.SOURCE_NAME).put("kind", "festival")
+            .put("enabled", festivalEnabled()).put("categories", JSONArray(activeFestivalCategories().map { it.key })))
+        sources.put(JSONObject().put("id", SolarTerms.SOURCE_ID).put("name", SolarTerms.SOURCE_NAME).put("kind", "solarTerm")
+            .put("enabled", solarTermEnabled()))
+        // 来源按用户看得懂的类别汇总，同时附上每个类别的具体日历 id，读取仍逐日历进行。
+        groupedSources().let { grouped -> for (i in 0 until grouped.length()) sources.put(grouped.getJSONObject(i)) }
+        val items = JSONArray()
+        if (useSystem && ids.isNotEmpty()) {
+            val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
+            ContentUris.appendId(uri, start); ContentUris.appendId(uri, end)
+            context.contentResolver.query(uri.build(), arrayOf("event_id", "calendar_id", "title", "description", "eventLocation", "begin", "end", "allDay", "eventTimezone"),
+                "calendar_id IN (${ids.joinToString(",") { "?" }})", ids.map { it.toString() }.toTypedArray(), "begin ASC")?.use { c ->
+                while (c.moveToNext()) {
+                    check(!Thread.currentThread().isInterrupted && calendarGranted())
+                    check(items.length() < 10000) { "日程过多，请减少选择的日历" }
+                    items.put(JSONObject().put("id", "${c.getLong(1)}:${c.getLong(0)}:${c.getLong(5)}")
+                        .put("title", (c.getString(2) ?: "未命名日程").take(500)).put("body", (c.getString(3) ?: "").take(3000))
+                        .put("location", (c.getString(4) ?: "").take(500)).put("start", c.getLong(5)).put("end", c.getLong(6))
+                        .put("allDay", c.getInt(7) != 0).put("timeZone", c.getString(8) ?: "").put("calendarId", c.getLong(1))
+                        .put("source", "system"))
+                }
+            } ?: error("日历查询失败")
+        }
+        if (!listOnly) {
+            val fromDate = java.time.Instant.ofEpochMilli(start).atZone(now.zone).toLocalDate()
+            val toDate = java.time.Instant.ofEpochMilli(end).atZone(now.zone).toLocalDate()
+            val builtIn = ArrayList<HolidayEntry>()
+            if (useHoliday) builtIn.addAll(ChinaHolidays.entries(fromDate, toDate))
+            if (festivalEnabled()) builtIn.addAll(Festivals.entries(fromDate, toDate, activeFestivalCategories()))
+            if (solarTermEnabled()) builtIn.addAll(SolarTerms.entries(fromDate, toDate))
+            builtIn.forEach { h ->
+                if (hasSystemDay(items, h.title, h.start, now.zone)) return@forEach
+                check(items.length() < 10000) { "日程过多，请减少选择的日历" }
+                val dayStart = java.time.LocalDate.parse(h.start).atStartOfDay(now.zone).toInstant().toEpochMilli()
+                val dayEnd = java.time.LocalDate.parse(h.end).plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
+                val sourceId = when (h.kind) {
+                    ChinaHolidays.KIND -> ChinaHolidays.SOURCE_ID
+                    Festivals.KIND -> Festivals.SOURCE_ID
+                    else -> SolarTerms.SOURCE_ID
+                }
+                val sourceTag = when (h.kind) {
+                    ChinaHolidays.KIND -> "holiday"
+                    Festivals.KIND -> "festival"
+                    else -> "solarTerm"
+                }
+                items.put(JSONObject().put("id", h.id).put("title", h.title).put("body", h.description).put("location", "")
+                    .put("start", dayStart).put("end", dayEnd).put("allDay", true).put("timeZone", now.zone.id)
+                    .put("calendarId", sourceId).put("source", sourceTag).put("kind", h.kind))
+            }
+        }
+        if (useSystem) check(calendarGranted())
+        return JSONObject().put("sources", sources).put("items", items).put("syncedAt", System.currentTimeMillis())
+            .put("windowStart", start).put("windowEnd", end).put("selected", selected)
+            .put("systemEnabled", useSystem).put("holidayEnabled", useHoliday)
+            .put("festivalEnabled", festivalEnabled()).put("solarTermEnabled", solarTermEnabled()).toString()
+    }
+    /** 首页快速浏览：未来 [QUICK_DAYS] 天的系统日历日程（需已勾选来源且已授权）＋常用节假日。 */
+    private fun quickCalendar(now: java.time.ZonedDateTime): String {
+        val system = calendarEnabled() && calendarGranted()
+        val holiday = system && holidayEnabled()
+        val ids = if (system) effectiveIds() else emptySet()
+        val today = now.toLocalDate()
+        val startDate = today.minusDays(1)
+        val endDate = today.plusDays(QUICK_DAYS.toLong())
+        val windowStart = startDate.atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val windowEnd = endDate.atStartOfDay(now.zone).toInstant().toEpochMilli()
+        val items = JSONArray()
+        if (system && ids.isNotEmpty()) {
+            val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
+            ContentUris.appendId(uri, windowStart); ContentUris.appendId(uri, windowEnd)
+            context.contentResolver.query(uri.build(), arrayOf("event_id", "calendar_id", "title", "eventLocation", "begin", "end", "allDay"),
+                "calendar_id IN (${ids.joinToString(",") { "?" }})", ids.map { it.toString() }.toTypedArray(), "begin ASC")?.use { c ->
+                while (c.moveToNext()) {
+                    check(!Thread.currentThread().isInterrupted && calendarGranted())
+                    check(items.length() < 500) { "日程过多，请减少选择的日历" }
+                    items.put(JSONObject().put("id", "${c.getLong(1)}:${c.getLong(0)}:${c.getLong(4)}")
+                        .put("title", (c.getString(2) ?: "未命名日程").take(120)).put("body", "")
+                        .put("location", (c.getString(3) ?: "").take(120)).put("start", c.getLong(4)).put("end", c.getLong(5))
+                        .put("allDay", c.getInt(6) != 0).put("calendarId", c.getLong(1)).put("source", "system"))
+                }
+            }
+        }
+        val builtIn = ArrayList<HolidayEntry>()
+        if (holiday) builtIn.addAll(ChinaHolidays.entries(startDate, endDate))
+        if (system && festivalEnabled()) builtIn.addAll(Festivals.entries(startDate, endDate, activeFestivalCategories()))
+        if (system && solarTermEnabled()) builtIn.addAll(SolarTerms.entries(startDate, endDate))
+        if (builtIn.isNotEmpty()) {
+            builtIn.forEach { h ->
+                if (hasSystemDay(items, h.title, h.start, now.zone)) return@forEach
+                val dayStart = java.time.LocalDate.parse(h.start).atStartOfDay(now.zone).toInstant().toEpochMilli()
+                val dayEnd = java.time.LocalDate.parse(h.end).plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
+                val sourceId = when (h.kind) {
+                    ChinaHolidays.KIND -> ChinaHolidays.SOURCE_ID
+                    Festivals.KIND -> Festivals.SOURCE_ID
+                    else -> SolarTerms.SOURCE_ID
+                }
+                val sourceTag = when (h.kind) {
+                    ChinaHolidays.KIND -> "holiday"
+                    Festivals.KIND -> "festival"
+                    else -> "solarTerm"
+                }
+                items.put(JSONObject().put("id", h.id).put("title", h.title).put("body", h.description).put("location", "")
+                    .put("start", dayStart).put("end", dayEnd).put("allDay", true).put("calendarId", sourceId)
+                    .put("source", sourceTag).put("kind", h.kind))
+            }
+        }
+        val memoryFile = File(root, "calendar.json")
+        val memorySyncedAt = if (memoryFile.exists()) {
+            runCatching { JSONObject(AtomicFile(memoryFile).openRead().use { s -> s.readBytes().toString(Charsets.UTF_8) }).optLong("syncedAt", 0) }.getOrDefault(0)
+        } else 0L
+        return JSONObject().put("items", items).put("syncedAt", System.currentTimeMillis())
+            .put("memorySyncedAt", memorySyncedAt)
+            .put("windowStart", windowStart).put("windowEnd", windowEnd)
+            .put("systemEnabled", calendarEnabled()).put("holidayEnabled", holiday)
+            .put("systemGranted", calendarGranted()).put("selectedCount", ids.size).toString()
+    }
+    private fun hasSystemDay(items: JSONArray, title: String, date: String, zone: java.time.ZoneId): Boolean {
+        val day = java.time.LocalDate.parse(date)
+        val start = day.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        return (0 until items.length()).any { i ->
+            val item = items.getJSONObject(i)
+            item.optString("source") == "system" && item.optBoolean("allDay") &&
+                item.optString("title").trim() == title && item.optLong("start") < end && item.optLong("end") > start
+        }
+    }
+    @Synchronized fun write(kind: String, value: String) {
+        require(kind in listOf("calendar", "mail") && value.length < 12 * 1024 * 1024)
+        if (kind == "calendar") check(calendarEnabled() && calendarGranted())
+        JSONObject(value)
+        val file = AtomicFile(File(root, "$kind.json")); val out = file.startWrite()
+        try { out.write(value.toByteArray()); file.finishWrite(out) } catch (e: Exception) { file.failWrite(out); throw e }
+    }
+    @Synchronized fun read(kind: String): String {
+        require(kind in listOf("calendar", "mail"))
+        if (kind == "calendar" && (!calendarEnabled() || !calendarGranted())) return "{}"
+        val file = AtomicFile(File(root, "$kind.json"))
+        if (!file.baseFile.exists()) return "{}"
+        val text = file.openRead().use { it.readBytes().toString(Charsets.UTF_8) }
+        if (kind != "mail") return text
+        val snapshot = JSONObject(text)
+        val cutoff = java.time.LocalDate.now().minusDays(2).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val original = snapshot.optJSONArray("items") ?: JSONArray()
+        val retained = JSONArray()
+        for (i in 0 until original.length()) if (original.getJSONObject(i).optLong("start") >= cutoff) retained.put(original.getJSONObject(i))
+        if (retained.length() != original.length()) { snapshot.put("items", retained); write("mail", snapshot.toString()) }
+        return snapshot.toString()
+    }
+    @Synchronized fun clear(kind: String) {
+        require(kind in listOf("calendar", "mail")); close(); AtomicFile(File(root, "$kind.json")).delete()
+    }
+    @Synchronized fun forgetMail() {
+        clear("mail")
+        check(prefs.edit().clear().commit())
+        check(optionsPrefs.edit().remove("mailEnabled").remove("mailAiAllowed")
+            .remove("mailInterested").remove("mailIgnored").commit())
+    }
+    @Synchronized override fun close() { epoch++; transport?.close(); transport = null }
+}
