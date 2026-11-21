@@ -4,6 +4,8 @@ ClawMate 可以把手机上的资料整理成本地记录，在首页查看提�
 
 ## 中文
 
+在 Android 8.0 及以上的 ARM64 手机上，可以直接安装这个测试版。安装包使用 ClawMate 内部测试签名。[下载 v1.1.0-rc.1 测试 APK](https://github.com/JKSOBBING/clawmate-android/releases/download/v1.1.0-rc.1/ClawMate-v1.1.0-rc.1-arm64-v8a-test.apk) · [版本说明](https://github.com/JKSOBBING/clawmate-android/releases/tag/v1.1.0-rc.1)
+
 ### 使用入口
 
 - **首页**可以查看提醒、开始对话和使用已连接的助手。
@@ -21,6 +23,8 @@ ClawMate 可以把手机上的资料整理成本地记录，在首页查看提�
 
 
 ## English
+
+The test APK runs on ARM64 phones with Android 8.0 or later and is signed with the ClawMate internal QA certificate. [Download the v1.1.0-rc.1 test APK](https://github.com/JKSOBBING/clawmate-android/releases/download/v1.1.0-rc.1/ClawMate-v1.1.0-rc.1-arm64-v8a-test.apk) · [Release notes](https://github.com/JKSOBBING/clawmate-android/releases/tag/v1.1.0-rc.1)
 
 ClawMate turns information from your Android phone into local records, shows reminders on the home screen, and connects to a model service or desktop Codex instance you configure.
 
