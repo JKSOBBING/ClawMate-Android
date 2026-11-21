@@ -1,0 +1,23 @@
+[
+  {
+    "name": "libmp3lame",
+    "filename": "lame-4.0.tar.gz",
+    "sha256": "3df5124d5ad3a98312ffd7ba6a9b36230e4f8a3e66d3ce0f425e336c32d216eb",
+    "sourceUrl": "https://downloads.sourceforge.net/project/lame/lame/4.0/lame-4.0.tar.gz",
+    "recipes": "https://api.github.com/repos/termux/termux-packages/contents/packages/libmp3lame"
+  },
+  {
+    "name": "libmpg123",
+    "filename": "mpg123-1.33.7.tar.bz2",
+    "sha256": "31d0e35a4ca567ec9b5ebda6c3062bb4435d6d3eacd6ef0d95cadd7854dc03ee",
+    "sourceUrl": "https://downloads.sourceforge.net/sourceforge/mpg123/mpg123-1.33.7.tar.bz2",
+    "recipes": "https://api.github.com/repos/termux/termux-packages/contents/packages/libmpg123"
+  },
+  {
+    "name": "libsndfile",
+    "filename": "libsndfile-1.2.2.tar.gz",
+    "sha256": "ffe12ef8add3eaca876f04087734e6e8e029350082f3251f565fa9da55b52121",
+    "sourceUrl": "https://codeload.github.com/libsndfile/libsndfile/tar.gz/refs/tags/1.2.2",
+    "recipes": "https://api.github.com/repos/termux/termux-packages/contents/packages/libsndfile"
+  }
+]

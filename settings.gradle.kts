@@ -26,12 +26,6 @@ include(":mika-core")
 project(":mika-core").projectDir = file("third_party/mika/core")
 include(":gui-control-fixture") // Disposable SDK-only cross-app test actor, not a product host.
 val meetingSdkRoot = providers.gradleProperty("meetingSdkRoot")
-    .orElse(providers.environmentVariable("MEETING_SDK_ROOT")).orNull
-if (meetingSdkRoot != null) {
-    val sdkDirectory = file(meetingSdkRoot).resolve("android/meeting-sdk")
-    require(sdkDirectory.resolve("build.gradle.kts").isFile || sdkDirectory.resolve("build.gradle").isFile) {
-        "meetingSdkRoot must contain android/meeting-sdk; see docs/MEETING_INTEGRATION.md"
-    }
-    include(":meeting-sdk")
-    project(":meeting-sdk").projectDir = sdkDirectory
-}
+    .orElse(providers.environmentVariable("MEETING_SDK_ROOT")).orElse("meeting")
+include(":meeting-sdk")
+project(":meeting-sdk").projectDir = file(meetingSdkRoot.get()).resolve("android/meeting-sdk")

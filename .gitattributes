@@ -8,3 +8,8 @@ third_party/mika/licenses/** -text
 third_party/android-complex-math/upstream-netbsd/lib/libm/complex/cephes_subrl.h whitespace=-blank-at-eof
 shared-app/src/main/assets/notices/android-complex-math.txt text eol=lf
 scripts/build-shared.sh text eol=lf
+
+meeting/android/meeting-sdk/src/main/assets/chaquopy/** -text
+meeting/android/meeting-sdk/src/main/jniLibs/** -text
+meeting/android/meeting-sdk/libs/** -text
+meeting/android/meeting-sdk/src/main/python/** text eol=lf

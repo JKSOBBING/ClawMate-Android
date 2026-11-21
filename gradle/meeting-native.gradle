@@ -1,4 +1,4 @@
-// Applied only to the optional meeting SDK, never the Compose baseline.
+// Applied to the bundled meeting SDK and compatible external SDK checkouts.
 plugins.withId('com.android.library') {
     // Ninja on Windows cannot use the SDK checkout's non-ASCII output path.
     // All dependency outputs stay in this host's ignored build workspace.

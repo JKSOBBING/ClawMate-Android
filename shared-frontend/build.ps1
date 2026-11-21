@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$JavaHome,
     [Parameter(Mandatory=$true)][string]$AndroidSdk,
-    [Parameter(Mandatory=$true)][string]$MeetingSdkRoot,
+    [string]$MeetingSdkRoot,
     [string]$SourceRoot,
     [string]$ArkuiXSdk,
     [string]$OpenHarmonySdk,
@@ -32,6 +32,9 @@ $buildNodeExe = ResolveTool $BuildNode 'buildNode' (Join-Path $scratchRoot 'node
 $env:JAVA_HOME = (Resolve-Path -LiteralPath $JavaHome).Path
 $env:ANDROID_HOME = (Resolve-Path -LiteralPath $AndroidSdk).Path
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+if (-not $MeetingSdkRoot) {
+    $MeetingSdkRoot = if ($env:MEETING_SDK_ROOT) { $env:MEETING_SDK_ROOT } else { Join-Path $repoRoot 'meeting' }
+}
 $env:MEETING_SDK_ROOT = (Resolve-Path -LiteralPath $MeetingSdkRoot).Path
 # Local SDK paths are build parameters, never application source or committed state.
 [System.IO.File]::WriteAllText((Join-Path $repoRoot 'local.properties'),
@@ -44,6 +47,11 @@ Push-Location $repoRoot
 try {
     $bootstrapArguments = @('shared-frontend/bootstrap.mjs', '--check-toolchain', '--arkuix-sdk', $resolvedArkuiSdk,
         '--openharmony-sdk', $resolvedOhSdk, '--build-tools', $resolvedBuildTools, '--build-node', $buildNodeExe)
+    if (-not $SourceRoot -and -not ((Test-Path -LiteralPath (Join-Path $scratchRoot 'reference')) -and (Test-Path -LiteralPath $toolFile))) {
+        & $buildNodeExe scripts/export-frontend-inputs.mjs
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to download pinned public frontend sources' }
+        $SourceRoot = Join-Path $scratchRoot 'upstream-inputs'
+    }
     if ($SourceRoot) { $bootstrapArguments += @('--source-root', (Resolve-Path -LiteralPath $SourceRoot).Path) }
     & $buildNodeExe @bootstrapArguments
     if ($LASTEXITCODE -ne 0) { throw 'Pinned toolchain/source bootstrap failed' }

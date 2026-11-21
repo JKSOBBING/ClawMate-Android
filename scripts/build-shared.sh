@@ -28,8 +28,12 @@ for name in ARKUIX_SDK_HOME OpenHarmony_HOME ARKUI_BUILD_TOOLS JAVA_HOME ANDROID
 done
 bootstrap=(--check-toolchain --arkuix-sdk "$ARKUIX_SDK_HOME" --openharmony-sdk "$OpenHarmony_HOME"
            --build-tools "$ARKUI_BUILD_TOOLS" --build-node "$build_node")
-[ -z "$upstream" ] || bootstrap+=(--source-root "$upstream")
 cd "$repo"
+if [ -z "$upstream" ] && { [ ! -d "$repo/.arkui-x-validation/reference" ] || [ ! -f "$repo/.arkui-x-validation/toolchain.local.json" ]; }; then
+    "$build_node" scripts/export-frontend-inputs.mjs
+    upstream="$repo/.arkui-x-validation/upstream-inputs"
+fi
+[ -z "$upstream" ] || bootstrap+=(--source-root "$upstream")
 "$build_node" shared-frontend/bootstrap.mjs "${bootstrap[@]}"
 "$build_node" shared-frontend/prepare.mjs
 (
@@ -48,7 +52,7 @@ if [ "$skip_gradle" -eq 0 ]; then
     apk_name="shared-app-debug.apk"
     if [ "$mode" = release ]; then apk_name="shared-app-release-unsigned.apk"; fi
     apk="$repo/shared-app/build/outputs/apk/$mode/$apk_name"
-    python3 -B shared-frontend/verify-meeting-native.py --sdk-root "${MEETING_SDK_ROOT:?Set MEETING_SDK_ROOT to the meeting checkout}" \
+    python3 -B shared-frontend/verify-meeting-native.py --sdk-root "${MEETING_SDK_ROOT:-$repo/meeting}" \
         --ndk "$ANDROID_HOME/ndk/25.2.9519653" --apk "$apk"
     python3 -B shared-frontend/audit-apk.py "$apk" --runtime-root "$runtime" \
         --output "$repo/.arkui-x-validation/application/apk-native-audit.json" --require-16kb

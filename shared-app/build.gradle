@@ -68,7 +68,7 @@ dependencies {
     implementation libs.androidx.datastore.preferences
     implementation libs.okhttp
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
-    if (findProject(':meeting-sdk') != null) implementation project(':meeting-sdk')
+    implementation project(':meeting-sdk')
     implementation fileTree(dir: new File(runtimeDir, 'libs'), include: ['*.jar'])
     androidTestImplementation libs.androidx.junit
     androidTestImplementation project(':mika-core')
@@ -79,9 +79,6 @@ dependencies {
 }
 tasks.named('preBuild').configure {
     doFirst {
-        if (findProject(':meeting-sdk') == null) {
-            throw new GradleException('Shared host requires -PmeetingSdkRoot=<on-device-meeting-notes checkout> or MEETING_SDK_ROOT; see docs/MEETING_INTEGRATION.md')
-        }
         if (!new File(runtimeDir, 'src/main/assets/arkui-x/entry/ets/modules.abc').isFile()) {
             throw new GradleException('Compile and package shared-frontend first; see shared-frontend/README.md')
         }

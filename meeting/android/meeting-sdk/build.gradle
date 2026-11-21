@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'local.meetingnotes.sdk'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig {
+        minSdk 24
+        ndk { abiFilters 'arm64-v8a' }
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+
+def generatedAssets = layout.buildDirectory.dir('generated/meetingAssets')
+def packageScript = rootProject.file('meeting/package_backend.py')
+def summaryEngine = rootProject.file('gradle/meeting-python/clawmate_engine.py')
+def backendAssets = tasks.register('packageMeetingBackend', Exec) {
+    inputs.files(packageScript, summaryEngine, file('runtime-config.json'))
+    inputs.dir('src/main/python')
+    inputs.dir('src/main/assets/chaquopy')
+    outputs.dir(generatedAssets)
+    def python = System.getProperty('os.name').startsWith('Windows') ? 'python' : 'python3'
+    commandLine python, packageScript, projectDir, summaryEngine, generatedAssets.get().dir('chaquopy').asFile
+}
+android.sourceSets.main.assets.srcDir(generatedAssets)
+tasks.named('preBuild').configure { dependsOn(backendAssets) }
+
+dependencies {
+    implementation files('libs/meeting-chaquopy-17.1.0.jar')
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20160810'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+}

@@ -53,3 +53,40 @@ App、站点知识和技能不在这里,见 `knowledge/`、`skills/`。
 - `capabilities/general.md` 不点名任何能力的工具(由测试检查);「选哪条渠道」写在 `channels.md`,只在有两块以上的屏时拼进去。
 - 知识、技能、提示词里提到的工具名都必须是现在登记的(由测试检查)。改名前的旧名由 `LegacyNames` 按规则换成新名,
   只用于读旧东西(存下的路线、运行记录、个人技能与做法),模型调用旧名时只提示新名、不替它执行。
+
+## English
+
+This directory holds the fixed text sent to the model. Code reads it through `core.prompt.Prompts` and `core.prompt.Feedback`. The caller fills every `{{placeholder}}`, including limits, options and screen labels. An unfilled placeholder raises an error.
+
+### Directory layout
+
+| Location | Content and consumer |
+| --- | --- |
+| `system/identity.md` | P0 identity and conduct. Act on the user's behalf within authorization, observe first, and disclose uncertainty. Opens `SystemPrompt.identity()`. |
+| `system/principles.md` | P1 rules shared by all screens and capabilities, covering authority, task execution, evidence, obstacles, search and safety. Follows identity. |
+| `capabilities/` | P2 capability-specific rules assembled by `SystemPrompt.assemble()`. General tool and completion rules always follow the principles. Group entry points reflect available capabilities. Handover, phone, web and sandbox sections appear when their groups open. App-access rules accompany the phone section when an app is disabled. |
+| `tools/` | P3 tool descriptions, including usage, parameters and the meaning of results. Several tools can share a template. The registry attaches the text to the tool definition. |
+| `entries/` | Short descriptions of collapsed tool groups. Expanding a group restores the full tool text while preserving its parameters. |
+| `feedback/` | Keyed messages for tool results and the agent loop, including hints, errors, reminders and source labels. |
+| `roles/` | Instructions for verification, screen description, location, memory extraction, route matching, skill drafting and learning from demonstrations, app knowledge and outcome review. Each role uses its own request. |
+
+App and site knowledge lives under `knowledge/`. Skills live under `skills/`.
+
+### Editing rules
+
+- Keep broadly applicable rules in `system/`. Place capability-specific rules in `capabilities/<name>.md` and tool-specific instructions in `tools/<name>.md`. Lines gated on another tool start with `<!-- needs: tool_name -->`.
+- System prompts avoid tool names. Tests allow ordinary English words that also name tools, such as “tap” or “back”.
+- Put tool-result text in `feedback/tools.md` and loop feedback in `feedback/loop.md`. Each key is unique across both files and has a caller. Write self-contained messages without leading or trailing whitespace. Use separators and `{{placeholders}}` in the template when combining messages.
+- A task's system prompt changes when tool groups open, preserving cache reuse. Per-step details such as the current app or step count belong in the changing context.
+
+### Formats, sizes and verification
+
+Each file under `tools/`, `system/`, `capabilities/` or `roles/` is one text block, trimmed on read. A feedback file can start with an HTML comment. Each message begins with `## key` on its own line. Keys use lowercase letters, digits, underscores and dots. Text can span several lines. Deliberate separators belong inside the message template.
+
+UTF-8 sizes are recorded in `core/src/test/resources/prompt-surface/sizes.txt`. They show changes for review. When adding text, check for material that can be removed and explain significant increases.
+
+The prompt-surface golden files cover system text, tools, feedback and roles. The loop snapshots record message sequences with a fake model. In the upstream checkout, regenerate intentional changes with `./gradlew :core:test -PupdateSnapshots`, review the snapshot diff, and compare evaluations for behavior changes. A run's `prompt_version` hashes its system prompt and tool definitions.
+
+### Tool names
+
+Phone and web screen tools use the same verbs and parameters with `phone_*` and `web_*` prefixes. They share `tools/<verb>.md` templates with substituted names. Screen-specific descriptions live in `tools/<screen>_<verb>.md`. Channel selection belongs in `channels.md` and appears when at least two screens are available. Tests check that knowledge, skills and prompts reference registered tools. `LegacyNames` translates old names in saved routes, skills and demonstrations. A model calling an old name receives the current name to use.

@@ -128,12 +128,15 @@ export function stageSources(repo, sourceRoot) {
   // Check every source and existing destination before creating or changing files.
   const verified = verifySources(repo, sourceRoot);
   const destination = checkedPath(repo, '.arkui-x-validation/reference');
-  for (const file of verified.files) {
-    const target = checkedPath(repo, '.arkui-x-validation/reference/' + file.path);
+  const relativeTargets = verified.files.map(file => '.arkui-x-validation/reference/' + file.path);
+  const targets = checkedPaths(repo, relativeTargets);
+  for (const [index, file] of verified.files.entries()) {
+    const target = targets[index];
     if (fs.existsSync(target) && (!fs.statSync(target).isFile() || fs.statSync(target).size !== file.bytes.length || blob(fs.readFileSync(target)) !== file.gitBlob)) throw new Error(`Refuse to overwrite existing reference: ${file.path}`);
   }
-  for (const file of verified.files) {
-    const target = checkedPath(repo, '.arkui-x-validation/reference/' + file.path);
+  const writeTargets = checkedPaths(repo, relativeTargets);
+  for (const [index, file] of verified.files.entries()) {
+    const target = writeTargets[index];
     if (fs.existsSync(target)) continue;
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, file.bytes, { flag: 'wx' });

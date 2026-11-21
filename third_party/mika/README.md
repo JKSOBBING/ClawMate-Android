@@ -87,3 +87,24 @@ ClawMate opts screen tasks into the upstream AnswerReview and text Verifier.
 The host option in AgentLoop/AnswerReview also checks the association between a
 reported value and its subject when the literal text is present on the screen.
 CapsulePreview.kt is adapted from the pinned Android capsule implementation.
+
+## 中文
+
+本目录以 Mika 0.1.45（versionCode 46）的 `f881d83f` 为基线。`core/src/main` 保存 Kotlin/JVM 源码和资源，Gradle 工程接入 ClawMate 的依赖版本目录。模块保留上游的 `LICENSE`、`NOTICE` 和第三方声明。[上游版本](https://github.com/wangzan101/Mika/tree/f881d83f)
+
+### 构建与手机任务
+
+构建使用 Kotlin 1.9.24、coroutines 1.8.1 和 serialization 1.6.3。`LocalPortScan.kt`、`AppTools.kt`、`RequestConfirmation.kt`、`DeviceCode.kt` 和 `XaiAuth.kt` 内标有兼容调整。`TaskTools.kt` 与 `RunAssembler.kt` 支持按宿主限定可用能力，默认组装沿用上游。`assembly/ClawMateCollection.kt` 提供 `ToolDispatcher.collectPages`，任务页可直接调用 `phone_collect` 并在本地采集当前页及后续页面。
+
+`Tap.kt` 在描述屏幕后使用上游 `Locator` 定位坐标。描述若唯一匹配屏幕文字，就采用树中的位置；其他情况沿用现有视觉核对。这样可以检查目标一致性和画面的时效性。宿主把工作流目的和后续节点类型传入 `AgentLoop` 与 `Verifier`，步骤文字继续决定路线和成功条件。GUI 步骤前的单次点击须经既有屏幕验证。`TreeQuality` 对混合文字的大叶节点请求设备 OCR。`VisibleText` 保留这些区域内文字的位置，同时排除独立定位和敏感文字。`Locator` 将唯一匹配的 OCR 文字绑定到当前帧哈希和有时效的视觉引用。`ScreenJson` 及差异包含选中状态。跳转前的点击回执记录控件名或实际观察到的文字。
+
+本地配对的显示助手通过 `AdbConnection.openWireless` 连接回环地址，并在接受 ADB 连接前要求 TLS。
+
+### 同步与宿主适配
+
+- 2026-11-17 从 `eb10b34` 更新至 `9fd0be4`，涉及 `core/src/main` 下 18 个文件，资源保持一致。上游更新保留了五项兼容调整和能力限制。
+- 从 `9fd0be4` 更新至 `f881d83f`，整合 10 个上游提交，涉及 13 个主源码文件（增加 313 行、删除 45 行）。新增 `AppPacePlan.kt`（快、标准、拟人节奏）和 `SkillFollow.kt`（仅在任务使用技能后记录结果）。更新涉及 `TaskTools.kt`、`PhoneCapability.kt`、`AppDwell.kt`、`AppPacing.kt`、`OperatingPace.kt`、`ChildRuns.kt`、`SpawnAgent.kt`、`GuideCatalog.kt`、`RunContracts.kt` 和 `SkillDrafter.kt`，包括节奏上限和并行任务批次。冲突仅涉及 `TaskTools.kt` 的 `allowedToolNames`，已重新应用。当时与上游的核对结果为 7 个本地适配文件（增加 96 行、删除 27 行）。
+- 2026-11-18，`platform/mika/memory` 移植了 `EncryptedMemoryFile`、`TaskMemoryFile`、`KeyCipher` 和 `MemorySettings`，调整了包名。云端文字对话通过受限原生会话调用原记忆工具，话语来自用户输入。手机任务直接使用 `AgentLoop.memory`、`UserUtterances` 和任务记忆工具。`MemoryExtractor` 先暂存再发布，管理设置变化后拒绝过期写入。此次移植范围留待后续的部分包括画像与个人技能学习、跨轮确认引用和原版逐结果记忆卡。
+- 安卓宿主的 `MikaRouteStore` 将 `FileRouteStore` 接到按目录管理的单例。`MikaRouteLearning` 在结果交付后连接 `RouteRecorder`、`OutcomeJudge` 和 `LearnGate`。`MikaPhoneRun` 使用上游知识、`RouteMatcher` 和 `IdleScroll`。`MikaFieldText` 和输入路径沿用 `ScreenReader.fieldText` / `typeAndVerify`，并适配指定显示屏的事件与条件等待。当时另列的范围包括剪贴板与不可见编辑器回退、多应用所有权、接管、应用副本和滚轮。
+- `FileProfileBackend`、`PersonalSkillFiles` 和 `RunLearning` 来自同一固定安卓版本，调整了包名、导入及中文界面资源。画像和技能工具、起草及确认沿用上游算法。`MikaConversationHistory` 转换宿主保存的对话，`MikaMemoryRuntime` 提供 Android 存储、生命周期与后台学习。技能文本保存在应用私有存储，画像通过现有 Android Keystore 加密。
+- 屏幕任务启用上游 `AnswerReview` 和文字 `Verifier`。当屏幕上出现所报数值时，宿主还核对数值与对象的对应关系。`CapsulePreview.kt` 来自固定的上游 Android 实现。
