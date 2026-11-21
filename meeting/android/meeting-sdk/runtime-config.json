@@ -1,0 +1,7 @@
+{
+  "extract_packages": [
+    "meeting_host",
+    "sherpa_onnx"
+  ],
+  "python_version": "3.14"
+}

@@ -1,0 +1,102 @@
+{
+  "libandroid-complex-math.so": {
+    "file": "libandroid-complex-math.so",
+    "dependencies": [
+      "libm.so",
+      "libc.so"
+    ]
+  },
+  "libandroid-support.so": {
+    "file": "libandroid-support.so",
+    "dependencies": [
+      "libc.so"
+    ]
+  },
+  "libc++_shared.so": {
+    "file": "libc++_shared.so",
+    "dependencies": [
+      "libc.so",
+      "libm.so",
+      "libdl.so"
+    ]
+  },
+  "libffi.so": {
+    "file": "libffi.so",
+    "dependencies": [
+      "libc.so"
+    ]
+  },
+  "libFLAC.so": {
+    "file": "libFLAC.so",
+    "dependencies": [
+      "libogg.so",
+      "libc.so",
+      "libm.so"
+    ]
+  },
+  "libmp3lame.so": {
+    "file": "libmp3lame.so",
+    "dependencies": [
+      "libmpg123.so",
+      "libm.so",
+      "libc.so"
+    ]
+  },
+  "libmpg123.so": {
+    "file": "libmpg123.so",
+    "dependencies": [
+      "libm.so",
+      "libc.so"
+    ]
+  },
+  "libogg.so": {
+    "file": "libogg.so",
+    "dependencies": [
+      "libc.so"
+    ]
+  },
+  "libopenblas.so": {
+    "file": "libopenblas.so",
+    "dependencies": [
+      "libm.so",
+      "libc.so"
+    ]
+  },
+  "libopus.so": {
+    "file": "libopus.so",
+    "dependencies": [
+      "libm.so",
+      "libc.so"
+    ]
+  },
+  "libsndfile.so": {
+    "file": "libsndfile.so",
+    "dependencies": [
+      "libFLAC.so",
+      "libvorbis.so",
+      "libvorbisenc.so",
+      "libopus.so",
+      "libogg.so",
+      "libmpg123.so",
+      "libmp3lame.so",
+      "libm.so",
+      "libc.so"
+    ]
+  },
+  "libvorbis.so": {
+    "file": "libvorbis.so",
+    "dependencies": [
+      "libm.so",
+      "libogg.so",
+      "libc.so"
+    ]
+  },
+  "libvorbisenc.so": {
+    "file": "libvorbisenc.so",
+    "dependencies": [
+      "libvorbis.so",
+      "libogg.so",
+      "libc.so"
+    ]
+  }
+}

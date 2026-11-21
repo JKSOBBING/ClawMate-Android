@@ -1,6 +1,7 @@
 """Check pinned source, packaged ABI, notices and unchanged SDK native inputs."""
 import argparse
 import hashlib
+import io
 import json
 from pathlib import Path
 import re
@@ -54,6 +55,25 @@ def main():
     old_exports = exports(tool, original)
     assert len(old_exports) == 22, 'Reassess changed upstream ABI before replacing it'
     with zipfile.ZipFile(args.apk) as apk, tempfile.TemporaryDirectory(prefix='clawmate-native-') as temporary:
+        if args.sdk_root.resolve() == (ROOT / 'meeting').resolve():
+            base = 'assets/chaquopy/'
+            manifest = json.loads(apk.read(base + 'build.json'))
+            config = json.loads((args.sdk_root / 'android/meeting-sdk/runtime-config.json').read_text())
+            assert all(manifest[key] == value for key, value in config.items())
+            files = {name[len(base):] for name in apk.namelist()
+                     if name.startswith(base) and not name.endswith('/') and name != base + 'build.json'}
+            assert files == set(manifest['assets']), 'Missing or extra Python runtime assets'
+            for name, digest in manifest['assets'].items():
+                assert hashlib.sha1(apk.read(base + name)).hexdigest() == digest, name
+            source = args.sdk_root / 'android/meeting-sdk/src/main/python'
+            expected = {p.relative_to(source).as_posix(): p for p in source.rglob('*')
+                        if p.is_file() and p.suffix in {'.py', '.css', '.html', '.js'}}
+            expected['meeting_host/clawmate_engine.py'] = ROOT / 'gradle/meeting-python/clawmate_engine.py'
+            with zipfile.ZipFile(io.BytesIO(apk.read(base + 'app.imy'))) as backend:
+                assert set(backend.namelist()) == set(expected), 'Unexpected meeting backend payload'
+                for name, path in expected.items():
+                    assert backend.read(name) == path.read_bytes(), name
+            print(f'PASS all {len(files)} Python runtime assets and {len(expected)} meeting backend files')
         names = apk.namelist()
         member = 'lib/arm64-v8a/' + LIBRARY
         assert names.count(member) == 1, 'Exactly one replacement must be packaged'
@@ -82,7 +102,7 @@ def main():
             header = source.read_text(encoding='utf-8').split('#include', 1)[0].strip()
             assert header in notice, 'Missing source copyright: ' + source.name
         print('PASS the package contains the license and every per-source copyright notice')
-    print(json.dumps({'passed': 5, 'apkSha256': sha(args.apk.read_bytes()),
+    print(json.dumps({'passed': 6 if args.sdk_root.resolve() == ROOT / 'meeting' else 5, 'apkSha256': sha(args.apk.read_bytes()),
                       'scope': 'Source/ABI/package integrity; not numerical or 16 KB kernel execution'}))
 
 

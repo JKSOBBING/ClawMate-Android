@@ -1,0 +1,108 @@
+{
+  "chaquopy": {
+    "url": "https://raw.githubusercontent.com/chaquo/chaquopy/17.1.0/LICENSE.txt",
+    "sha256": "345a9fdfeed355d37b18569ef277ba56eb0ab7c0b17a08a90163ce8d33d2b862"
+  },
+  "cpython": {
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.8/LICENSE",
+    "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231"
+  },
+  "llama.cpp": {
+    "url": "https://raw.githubusercontent.com/ggml-org/llama.cpp/b11609/LICENSE",
+    "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+  },
+  "android-ndk": {
+    "url": "https://raw.githubusercontent.com/llvm/llvm-project/main/libcxx/LICENSE.TXT",
+    "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b"
+  },
+  "flac": {
+    "url": "https://raw.githubusercontent.com/xiph/flac/1.5.0/COPYING.Xiph",
+    "sha256": "7866ee98760fc1f0156b4fe6bf530257e02be487ab3fd94e2b63799dd32d6b2c"
+  },
+  "libffi": {
+    "url": "https://raw.githubusercontent.com/libffi/libffi/v3.8.0/LICENSE",
+    "sha256": "17b64dc60f3b6897a60f971e288b973f655c2edcdf08b25f3c3dd5549857881c"
+  },
+  "libogg": {
+    "url": "https://raw.githubusercontent.com/xiph/ogg/master/COPYING",
+    "sha256": "d2ab5758336489da61c12cc5bb757da5339c4ae9001f9bb0562b4370249af814"
+  },
+  "libopus": {
+    "url": "https://raw.githubusercontent.com/xiph/opus/v1.6.1/COPYING",
+    "sha256": "01e1167d54a096d123cf6dfbbeb19587278845c6481d2d66d545669846079551"
+  },
+  "libvorbis": {
+    "url": "https://raw.githubusercontent.com/xiph/vorbis/v1.3.7/COPYING",
+    "sha256": "ec1815db59fcd302846df949d7424876cb2e2dc5ed1606c5fb0b36787b1cf43a"
+  },
+  "openblas": {
+    "url": "https://raw.githubusercontent.com/OpenMathLib/OpenBLAS/v0.3.34/LICENSE",
+    "sha256": "190b5a9c8d9723fe958ad33916bd7346d96fab3c5ea90832bb02d854f620fcff"
+  },
+  "openssl": {
+    "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.9/LICENSE.txt",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  "libsndfile": {
+    "url": "https://codeload.github.com/libsndfile/libsndfile/tar.gz/refs/tags/1.2.2",
+    "member": "libsndfile-1.2.2/COPYING",
+    "sha256": "ad01ea5cd2755f6048383c8d54c88459cd6fcb17757c5c8892f8c5ea060f6140"
+  },
+  "lame": {
+    "url": "https://downloads.sourceforge.net/project/lame/lame/4.0/lame-4.0.tar.gz",
+    "member": "lame-4.0/LICENSE",
+    "sha256": "5c1f8d44f1eacbea3e1c31ff6ee11a4e1690ccbed4ee4af16de3b6eb61dc69a8"
+  },
+  "mpg123": {
+    "url": "https://downloads.sourceforge.net/sourceforge/mpg123/mpg123-1.33.7.tar.bz2",
+    "member": "mpg123-1.33.7/COPYING",
+    "sha256": "c22482728a634a8dfdb4ff72a96d4c1ed64cd8f3e79335c401751ac591609366"
+  },
+  "sqlite": {
+    "url": "https://www.sqlite.org/copyright.html",
+    "sha256": "386980aa7106f9a36d43fe9c1a238a34055a137485f790bc64a3f23922934e3d"
+  },
+  "androidx": {
+    "url": "https://raw.githubusercontent.com/androidx/androidx/androidx-main/LICENSE.txt",
+    "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+  },
+  "sherpa-onnx": {
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "xz": {
+    "url": "https://raw.githubusercontent.com/tukaani-project/xz/master/COPYING",
+    "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8"
+  },
+  "zlib": {
+    "url": "https://raw.githubusercontent.com/madler/zlib/develop/LICENSE",
+    "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2"
+  },
+  "android-support": {
+    "url": "https://raw.githubusercontent.com/termux/libandroid-support/master/LICENSE.txt",
+    "sha256": "76fc4416b6b20b4223bee8cc5b1ab41e1066a55ee23454f857c74bfbd9c3c2d5"
+  },
+  "bzip2": {
+    "url": "https://raw.githubusercontent.com/libarchive/bzip2/master/COPYING",
+    "sha256": "452871c08826ffb38b1a77960f23ef9c4b8b457887c3a6b691b7d42e882426e3"
+  },
+  "java-cacert": {
+    "url": "https://www.mozilla.org/media/MPL/2.0/index.815ca599c9df.txt",
+    "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+  },
+  "onnxruntime": {
+    "url": "https://files.pythonhosted.org/packages/cd/6d/738e50c47c2fd285b1e6c8083f15dac1a5f6199213378a5f14092497296d/onnxruntime-1.23.2-cp310-cp310-win_amd64.whl",
+    "member": "onnxruntime/LICENSE",
+    "sha256": "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
+  },
+  "onnxruntime-third-party": {
+    "url": "https://files.pythonhosted.org/packages/cd/6d/738e50c47c2fd285b1e6c8083f15dac1a5f6199213378a5f14092497296d/onnxruntime-1.23.2-cp310-cp310-win_amd64.whl",
+    "member": "onnxruntime/ThirdPartyNotices.txt",
+    "sha256": "e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6"
+  },
+  "lame-copying": {
+    "url": "https://downloads.sourceforge.net/project/lame/lame/4.0/lame-4.0.tar.gz",
+    "member": "lame-4.0/COPYING",
+    "sha256": "e64f9c5a18f56828c10a575df13ade641aa3af4512a7afe6c411256943b57aaf"
+  }
+}

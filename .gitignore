@@ -72,3 +72,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Public CA trust anchors shipped by the embedded Python runtime.
+!/meeting/android/meeting-sdk/src/main/assets/chaquopy/cacert.pem
