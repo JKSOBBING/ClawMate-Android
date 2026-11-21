@@ -91,14 +91,12 @@
     "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
   },
   "onnxruntime": {
-    "url": "https://files.pythonhosted.org/packages/cd/6d/738e50c47c2fd285b1e6c8083f15dac1a5f6199213378a5f14092497296d/onnxruntime-1.23.2-cp310-cp310-win_amd64.whl",
-    "member": "onnxruntime/LICENSE",
-    "sha256": "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
+    "url": "https://cdn.jsdelivr.net/gh/microsoft/onnxruntime@v1.28.2/LICENSE",
+    "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
   },
   "onnxruntime-third-party": {
-    "url": "https://files.pythonhosted.org/packages/cd/6d/738e50c47c2fd285b1e6c8083f15dac1a5f6199213378a5f14092497296d/onnxruntime-1.23.2-cp310-cp310-win_amd64.whl",
-    "member": "onnxruntime/ThirdPartyNotices.txt",
-    "sha256": "e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6"
+    "url": "https://cdn.jsdelivr.net/gh/microsoft/onnxruntime@v1.28.2/ThirdPartyNotices.txt",
+    "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
   },
   "lame-copying": {
     "url": "https://downloads.sourceforge.net/project/lame/lame/4.0/lame-4.0.tar.gz",
